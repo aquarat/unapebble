@@ -130,6 +130,7 @@ static int prv_configure(const struct pbl_gauge_max17262 *fg) {
     if (ret != 0) {
       return ret;
     }
+    fg->state->resets++;
   }
 
   fg->state->configured = true;
@@ -180,6 +181,10 @@ static int prv_read_gauge(const struct pbl_gauge *gauge, struct pbl_gauge_readin
   if (ret == -EAGAIN || ret == -EIO) {
     // Reset since, or another model: configure again on the next read
     fg->state->configured = false;
+  }
+  if (ret == 0) {
+    ret = prv_read(fg, MAX17262_QH, &reading->counter);
+    reading->resets = fg->state->resets;
   }
 
   return ret;

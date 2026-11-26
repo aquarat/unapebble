@@ -97,6 +97,36 @@ void test_max17262__decode(void) {
   cl_assert_equal_i(r.temp_mc, 25000);
 }
 
+void test_max17262__decode_capacity(void) {
+  struct pbl_gauge_reading r;
+
+  // 0.5 mAh and 156.25 uA a bit, 1% of a cycle
+  prv_set(MAX17262_REPCAP, 200U);
+  prv_set(MAX17262_FULLCAPREP, 380U);
+  prv_set(MAX17262_FULLCAPNOM, 390U);
+  prv_set(MAX17262_CYCLES, 1234U);
+  prv_set(MAX17262_AVGCURRENT, (uint16_t)(int16_t)-32);
+  cl_assert_equal_i(max17262_decode(s_block, s_model[MAX17262_MODEL_DESIGNCAP], &r), 0);
+  cl_assert_equal_i(r.remaining_uah, 100000);
+  cl_assert_equal_i(r.full_uah, 190000);
+  cl_assert_equal_i(r.full_nominal_uah, 195000);
+  cl_assert_equal_i(r.design_uah, 200000);
+  cl_assert_equal_i(r.cycles_pct, 1234);
+  cl_assert_equal_i(r.avg_current_ua, 5000);
+  cl_assert_equal_i(r.counter_uah, 500);
+}
+
+void test_max17262__capacity_registers(void) {
+  cl_assert_equal_i(MAX17262_REPCAP, 0x05);
+  cl_assert_equal_i(MAX17262_AVGCURRENT, 0x0B);
+  cl_assert_equal_i(MAX17262_FULLCAPREP, 0x10);
+  cl_assert_equal_i(MAX17262_CYCLES, 0x17);
+  cl_assert_equal_i(MAX17262_FULLCAPNOM, 0x23);
+  cl_assert_equal_i(MAX17262_QH, 0x4D);
+  // The block ends with FullCapNom
+  cl_assert_equal_i(MAX17262_READ_COUNT, 0x24);
+}
+
 void test_max17262__decode_signs_and_rounding(void) {
   struct pbl_gauge_reading r;
 

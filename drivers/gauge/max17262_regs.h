@@ -14,16 +14,22 @@
 #include <pbl/drivers/gauge.h>
 
 #define MAX17262_STATUS     0x00U
+#define MAX17262_REPCAP     0x05U
 #define MAX17262_REPSOC     0x06U
 #define MAX17262_TEMP       0x08U
 #define MAX17262_VCELL      0x09U
 #define MAX17262_CURRENT    0x0AU
+#define MAX17262_AVGCURRENT 0x0BU
+#define MAX17262_FULLCAPREP 0x10U
 #define MAX17262_FULLSOCTHR 0x13U
+#define MAX17262_CYCLES     0x17U
 #define MAX17262_DESIGNCAP  0x18U
 #define MAX17262_AVGVCELL   0x19U
 #define MAX17262_ICHGTERM   0x1EU
+#define MAX17262_FULLCAPNOM 0x23U
 #define MAX17262_VEMPTY     0x3AU
 #define MAX17262_FSTAT      0x3DU
+#define MAX17262_QH         0x4DU
 #define MAX17262_COMMAND    0x60U
 #define MAX17262_HIBCFG     0xBAU
 #define MAX17262_SOCHOLD    0xD3U
@@ -38,9 +44,12 @@
 // SOCHold: 99% hold on, so RepSOC reaches 100% only at end of charge; empty hold off
 #define MAX17262_SOCHOLD_VALUE 0x1000U
 
-// The registers read at once for a reading: Status to AvgVCell
+// The registers read at once for a reading: Status to FullCapNom; QH apart
 #define MAX17262_READ_FIRST MAX17262_STATUS
-#define MAX17262_READ_COUNT (MAX17262_AVGVCELL - MAX17262_STATUS + 1U)
+#define MAX17262_READ_COUNT (MAX17262_FULLCAPNOM - MAX17262_STATUS + 1U)
+
+// Capacity registers, QH among them, with the internal sense resistor: 5.0 uVh / 10 mOhm
+#define MAX17262_CAP_UAH 500U
 
 // A cell above this charge voltage is a high-voltage one, ModelCFG.VChg = 1
 #define MAX17262_VCHG_THRESHOLD_UV 4250000U
@@ -130,10 +139,18 @@ static inline int max17262_decode(const uint8_t *block, uint16_t design_cap,
   // 78.125 uV a bit
   r->voltage_mv = (int32_t)(((uint32_t)max17262_reg(block, MAX17262_VCELL) * 5U) / 64U);
   r->avg_voltage_mv = (int32_t)(((uint32_t)max17262_reg(block, MAX17262_AVGVCELL) * 5U) / 64U);
-  // 156.25 uA a bit, positive while charging
+  // 156.25 uA a bit, the register positive while charging
   r->current_ua = -(((int32_t)(int16_t)max17262_reg(block, MAX17262_CURRENT) * 625) / 4);
   // 1/256 degree Celsius a bit
   r->temp_mc = ((int32_t)(int16_t)max17262_reg(block, MAX17262_TEMP) * 1000) / 256;
+  r->avg_current_ua = -(((int32_t)(int16_t)max17262_reg(block, MAX17262_AVGCURRENT) * 625) / 4);
+  r->remaining_uah = max17262_reg(block, MAX17262_REPCAP) * MAX17262_CAP_UAH;
+  r->full_uah = max17262_reg(block, MAX17262_FULLCAPREP) * MAX17262_CAP_UAH;
+  r->full_nominal_uah = max17262_reg(block, MAX17262_FULLCAPNOM) * MAX17262_CAP_UAH;
+  r->design_uah = (uint32_t)design_cap * MAX17262_CAP_UAH;
+  // 1% of a cycle a bit
+  r->cycles_pct = max17262_reg(block, MAX17262_CYCLES);
+  r->counter_uah = MAX17262_CAP_UAH;
 
   if ((r->voltage_mv < MAX17262_MIN_MV) || (r->voltage_mv > MAX17262_MAX_MV) ||
       (r->temp_mc < MAX17262_MIN_TEMP_MC) || (r->temp_mc > MAX17262_MAX_TEMP_MC)) {

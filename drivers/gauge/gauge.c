@@ -27,7 +27,7 @@ int pbl_gauge_dev_init(const struct pbl_device *dev) {
 }
 
 int pbl_gauge_read(const struct pbl_gauge *gauge, struct pbl_gauge_reading *reading) {
-  struct pbl_gauge_reading r;
+  struct pbl_gauge_reading r = {0};
   int ret;
 
   if (!pbl_device_is_ready(&gauge->dev)) {

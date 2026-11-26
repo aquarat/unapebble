@@ -26,6 +26,8 @@
 struct pbl_gauge_max17262_state {
   // The model is in the gauge
   bool configured;
+  // Power-on resets of the gauge handled
+  uint8_t resets;
 };
 
 struct pbl_gauge_max17262 {
