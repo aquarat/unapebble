@@ -78,6 +78,16 @@ config BATTERY_WARNING_SECOND_PERCENT
       Battery percentage for the second warning. A value of 0 uses the
       default time-based threshold of 12 hours remaining.
 
+config BATTERY_TEST
+    bool "Battery capacity test"
+    depends on BATTERY_SOC_GAUGE
+    help
+      The Battery test app and its logger: charges to full, discharges
+      to the low battery power-off and charges again, counting the
+      charge with the fuel gauge's coulomb counter and an integral of
+      its current. Logs to the filesystem across the power-off; the
+      "battery test" shell commands print the log and the results.
+
 module = SERVICE_BATTERY
 module-str = Battery
 source "subsys/logging/Kconfig.template.log_level"
