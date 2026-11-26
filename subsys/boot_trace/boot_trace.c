@@ -10,10 +10,17 @@
 #include <pbl/kernel/time.h>
 #include <pbl/system/rtc_registers.h>
 #include <pbl/util/size.h>
-#include <pbl/version.h>
 
+#ifndef UNITTEST
+#include <pbl/version.h>
+#else
+#define PBL_VERSION_TAG "unittest"
+#endif
+
+#ifndef UNITTEST
 #include <devicetree/regs.h>
 #include <hardware/stm32u5_rcc.h>
+#endif
 
 #define RECORD_MAGIC     0x42545231U /* BTR1 */
 #define RECORD_MAGIC_END 0x31525442U
@@ -23,6 +30,10 @@ static_assert(sizeof(struct pbl_boot_trace_record) <= CONFIG_BOOT_TRACE_RAM_SIZE
               "boot trace record larger than its RAM");
 static_assert(CONFIG_BOOT_TRACE_BKP_CRUMB >= 24 && CONFIG_BOOT_TRACE_BKP_BOOT >= 24,
               "backup registers 0 to 23 are the stock firmware's");
+
+#ifdef UNITTEST
+extern uint8_t test_boot_trace_ram[];
+#endif
 
 #define RECORD ((struct pbl_boot_trace_record *)CONFIG_BOOT_TRACE_RAM_BASE)
 
@@ -60,6 +71,19 @@ static void prv_copy_str(char *dst, size_t size, const char *src) {
   dst[i] = '\0';
 }
 
+// How the run before ended: the SoC's reset flags, before they are cleared
+#ifdef UNITTEST
+uint32_t test_boot_trace_reset_flags;
+
+static uint32_t prv_reset_flags(void) {
+  return test_boot_trace_reset_flags;
+}
+#else
+static uint32_t prv_reset_flags(void) {
+  return pbl_readl(PBL_DT_REG_RCC + STM32U5_RCC_CSR_OFFSET);
+}
+#endif
+
 static bool prv_record_valid(const struct pbl_boot_trace_record *rec) {
   return rec->magic == RECORD_MAGIC && rec->magic_end == RECORD_MAGIC_END;
 }
@@ -68,7 +92,8 @@ void pbl_boot_trace_init(void) {
   struct pbl_boot_trace_record *rec = RECORD;
   uint32_t count;
 
-  s_boot.reset_flags = pbl_readl(PBL_DT_REG_RCC + STM32U5_RCC_CSR_OFFSET);
+  memset(&s_boot, 0, sizeof(s_boot));
+  s_boot.reset_flags = prv_reset_flags();
   s_boot.bkp_crumb = retained_read(CONFIG_BOOT_TRACE_BKP_CRUMB);
   s_boot.bkp_boot = retained_read(CONFIG_BOOT_TRACE_BKP_BOOT);
   s_boot.bkp_valid = (s_boot.bkp_boot >> 24) == BKP_MAGIC;
