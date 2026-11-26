@@ -23,6 +23,14 @@
 		};
 	};
 
+	// PWR_INT_L: the PMIC's INTB and the STUSB4500's ALERT, open drain
+	pwr_int_default: pwr-int-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 7, GPIO)>;
+			bias-pull-up;
+		};
+	};
+
 	// The body module: PPG, barometer, EEPROM
 	i2c2_default: i2c2-0 {
 		pins1 {

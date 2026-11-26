@@ -17,4 +17,5 @@ the battery voltage, current and temperature, and turns charging on and off.
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
 | Nordic nPM1300 | `nordic,npm1300` | `CONFIG_CHARGER_NPM1300` |
+| NXP PCA9420 | `nxp,pca9420` | `CONFIG_CHARGER_PCA9420` |
 | Simulator | — | `CONFIG_CHARGER_SIM` |

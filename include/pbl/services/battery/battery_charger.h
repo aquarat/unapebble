@@ -39,3 +39,14 @@ bool battery_charge_controller_thinks_we_are_charging(void);
  * @param is_charging True to allow charging, false to force it off.
  */
 void battery_force_charge_enable(bool is_charging);
+
+/**
+ * @brief Keep charging off, or let it be on, as the battery state allows.
+ *
+ * For the battery state service, e.g. outside the temperatures the battery may be charged at.
+ * Charging is on only while neither inhibited nor forced off with battery_force_charge_enable(),
+ * which cannot override it. Applied to the charger on each call.
+ *
+ * @param inhibited True to keep charging off.
+ */
+void battery_charger_set_inhibited(bool inhibited);

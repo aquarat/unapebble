@@ -536,17 +536,47 @@ the bootloader also runs on).
 | MCU STANDBY / SHUTDOWN | Not used. Idle is STOP2 only. |
 | Reboot | `NVIC_SystemReset()` (`System.cpp:210-213`) |
 
-### 4.4 Battery and charging (brief)
+### 4.4 Battery and charging
 
-- **Battery:** 200 mAh, charged to 4.40 V (`main.h:238-253`).
-- **Charger:** in the PCA9420 (above).
-- **MAX17262** at `0x36` in EZ mode, with `ModelCFG` = `0x8400` (4.4 V cell)
-  (`L/Source/Components/FuelGauge.cpp:66-118`).
+- **Battery:** 200 mAh, charged to 4.40 V at 150 mA by the stock firmware
+  (`main.h:238-253`). Its data sheet is not in the sources; a comment in
+  `Pmic.cpp:104` speaks of a 280 mAh cell with a 0.01C cut-off.
+- **Charger:** the PCA9420's linear charger, CC/CV up to 315 mA. Confirmed
+  from the PCA9420 data sheet (Rev. 3.1, section 9.5):
+  - CHG_CNTL0 (`0x10`): CHG_EN bit 0, CHG_TIMER_EN bit 1, NTC_EN bit 2,
+    CHG_LOCK bits 7:3. CHG_CNTL1 to CHG_CNTL6 only take writes while
+    CHG_LOCK = `10101b` (`0xA8` with the other bits clear).
+  - ICHG_CC (`0x11`) 5 mA steps, 0 to 315 mA; ICHG_TOPOFF (`0x12`),
+    ICHG_LOW (`0x13`) and ICHG_DEAD (`0x14`) 1 mA steps; VBAT_REG (`0x15`)
+    3.60 to 4.60 V in 20 mV steps, accurate to 0.75%, with VBAT_RESTART
+    (140 or 240 mV) in bit 6; CHG_CNTL6 (`0x16`) the top-off, pre-qualification
+    and fast charge timers; CHG_CNTL7 (`0x17`) THM_REG, the die temperature
+    the charge current folds back from. The defaults of most are
+    MTP-programmable.
+  - CHG_STATUS_0 (`0x18`) bit 5 IN_PWR_OK; CHG_STATUS_2 (`0x1A`) the charge
+    state in bits 2:0 (idle, dead, low, fast, top-off, done), valid only with
+    input power.
+  - VBAT_LOW 2.5 V and VBAT_DEAD 1.9 V are fixed. A watchdog can stop
+    charging, but resets the system when it expires.
+  - The stock firmware turns NTC_EN off, so the TS pin has no thermistor
+    (inferred): the PMIC cannot check the battery temperature itself.
+- **MAX17262** at `0x36`, internal sense resistor (0.5 mAh, 156.25 uA,
+  78.125 uV and 1/256 degree C a bit), in EZ mode: DesignCap `0x0190`,
+  IChgTerm `0x0059`, VEmpty `0xAA63`, FullSOCThr `0x5005`, SOCHold `0x1000`,
+  ModelCFG `0x0400` (4.4 V cell) (`L/Source/Components/FuelGauge.cpp:66-118`,
+  `MAX17262.hpp:261-333`). Its temperature is its own die's. Its ALRT (PC6)
+  is unused.
 - **STUSB4500** at `0x29`:
   - Runs on its factory NVM; no PDO programming is done.
   - Used for attach, debug-accessory (DAM) and fault detection.
-  - Its ALERT shares PG7 with the PMIC interrupt.
+  - Powered from VBUS: it dies at unplug, and read at that moment it can hold
+    I2C1 low (`Power.cpp:199-206`).
+  - Its ALERT shares PG7 with the PMIC interrupt, so the line can stay low
+    while USB is in.
 - **NX20P** USB protection switch: fault on PF0.
+
+PebbleOS drives the charger and the gauge as {doc}`index` describes, and
+leaves the STUSB4500 alone.
 
 ---
 
@@ -1214,3 +1244,8 @@ adaptation:**
 6. **Debug-accessory pinout:** which USB-C pins carry USART3 TX in DAM mode.
 7. **Bootloader menu entry and timings** (BL@0x08002ECC). Not traced in
    detail.
+8. **The cell.** Its capacity (200 or 280 mAh), its maximum charge voltage
+   and current and its charge temperatures, from its data sheet or its label.
+9. **Charging while off.** Whether the bootloader writes the PCA9420's
+   charger, and whether a watch powered off charges as PebbleOS left it.
+10. **The TS pin** of the PCA9420: whether a thermistor could be read there.

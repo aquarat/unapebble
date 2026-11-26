@@ -8,6 +8,7 @@ config SERVICE_BATTERY
 
 choice BATTERY_SOC
     prompt "State-of-charge estimation"
+    default BATTERY_SOC_GAUGE if GAUGE
     default NRF_FUEL_GAUGE if CHARGER_NPM1300
     default BATTERY_SOC_VOLTAGE
 
@@ -33,6 +34,14 @@ config BATTERY_SOC_FUEL_GAUGE
       Use the open fuel gauge (lib/fuel_gauge), with the capacity, the
       internal resistance and the open-circuit voltage curve of the battery
       in the devicetree.
+
+config BATTERY_SOC_GAUGE
+    bool "Fuel gauge chip"
+    depends on GAUGE
+    help
+      Take the state of charge from the board's fuel gauge chip
+      (pbl/drivers/gauge.h), and allow charging only while it reads a
+      battery temperature between 0 and 45 degrees C.
 
 endchoice
 

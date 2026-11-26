@@ -8,3 +8,6 @@ mmc: sdmmc1
 display: display
 backlight: backlight
 vibe: haptics
+battery: battery
+charger: pmic
+gauge: fuel_gauge

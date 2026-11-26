@@ -15,8 +15,9 @@ can be put back.
 
 The port runs the full firmware, on the gabbro platform of the Pebble Round
 2: the SoC with its clocks, console, system timer, RTC, watchdog, RNG and CRC
-unit, the buttons, the display, the haptics and storage on the eMMC.
-Bluetooth, USB, the sensors and the power management come next; see
+unit, the buttons, the display, the haptics, storage on the eMMC and the
+battery: its charger and its fuel gauge. Bluetooth, USB and the sensors come
+next; see
 [](#unawatch-status). None of it has run on a watch yet.
 
 {doc}`hardware` describes the hardware as the stock kernel drives it, with
@@ -131,11 +132,49 @@ the GNSS and the reset of the BLE module low, and, outside release builds,
 USB_DAM (PB15) high to route the console to the USB-C connector
 (`CONFIG_BOARD_UNAWATCH_CONSOLE_DAM`).
 
-The firmware writes nothing to the PCA9420 PMIC: the rails the display and
-the haptics need are on in its power-on mode, as the bootloader, which drives
-the display too, runs on them ({doc}`hardware`, section 4.2). The stock
-firmware also sets its ON-key long press, on Select, to 16 s, which the PMIC
-keeps until it loses power.
+The firmware leaves the rails of the PCA9420 PMIC alone: the ones the display
+and the haptics need are on in its power-on mode, as the bootloader, which
+drives the display too, runs on them ({doc}`hardware`, section 4.2). It only
+configures the PMIC's charger (see [](#unawatch-battery)). The stock firmware
+also sets its ON-key long press, on Select, to 16 s, which the PMIC keeps
+until it loses power.
+
+(unawatch-battery)=
+
+## Battery and charging
+
+The 200 mAh cell is charged by the PCA9420's linear charger
+(`drivers/charger/pca9420.c`) and measured by the MAX17262 fuel gauge
+(`drivers/gauge/max17262.c`), both on I2C1; the battery service takes the
+percentage from the gauge (`CONFIG_BATTERY_SOC_GAUGE`). The charge is set for
+the cell's life rather than its last few percent, gentler than the stock
+firmware's 150 mA to 4.40 V:
+
+| | PebbleOS | Stock firmware |
+| --- | --- | --- |
+| Charge current | 100 mA (0.5C) | 150 mA |
+| Charge voltage | 4.36 V | 4.40 V |
+| Termination | 14 mA, 6.4 min top-off | 10 mA, 19.2 min top-off |
+| Pre-charge, dead battery | 8 mA, 4 mA | PMIC defaults |
+| Safety timers | 5 h fast, 30 min pre-charge | 9 h fast |
+| Recharge | 240 mV below the charge voltage | 140 mV |
+| Charge temperature | 0 to 45 degrees C at the gauge, 3 degrees of hysteresis | stops above 45 degrees C ambient or 55 at the gauge |
+| Input current limit | 255 mA | 255 mA |
+
+The gauge runs the stock firmware's EZ model, loaded only after a power-on
+reset of the gauge or when its registers hold another model, so switching
+firmware keeps what it learned of the cell. Charging starts off at every boot
+and is allowed once the gauge reads a temperature in range; a gauge that
+cannot be read keeps it off. Unplugged, the watch shuts down below 1% or at
+an averaged 3.35 V, as the stock firmware does; it shows 5% until the gauge
+first answers. `CONFIG_CHARGER_PCA9420_CHARGE_LIMIT_MV` stops the charge at a
+lower voltage, 4100 for about 80%, for a longer life still.
+
+The interrupt of the PMIC, on PG7 with the STUSB4500's alert, reports plugging
+in and out; the battery service also polls every 30 s plugged in, 60 s
+otherwise. The STUSB4500 is left on its factory configuration. The reasons for
+each value are in the [decision log](decisions/index.md), from
+261126-173552-01.
 
 ## Display
 
@@ -224,8 +263,8 @@ firmware does not use; its update drive and files are left alone.
 
 | | |
 | --- | --- |
-| **Built, not yet run on a watch** | Display and frontlight, VCOM on LPTIM1/LPTIM3, buttons, haptics, the eMMC with the storage and the system resources on it, retained registers (TAMP 24 to 29; the stock firmware uses 0 to 23) |
-| **Stand-ins, which nothing feeds** | Accelerometer, ambient light, microphone, die temperature and charger are simulators: no steps, the battery always reads 100% and unplugged |
+| **Built, not yet run on a watch** | Display and frontlight, VCOM on LPTIM1/LPTIM3, buttons, haptics, the eMMC with the storage and the system resources on it, retained registers (TAMP 24 to 29; the stock firmware uses 0 to 23), PCA9420 charger and MAX17262 fuel gauge |
+| **Stand-ins, which nothing feeds** | Accelerometer, ambient light, microphone and die temperature are simulators: no steps |
 | **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS, buzzer or USB |
 | **Unknown** | Whether the panel is round (its round mask is a computed circle); whether the panel and haptics rails are on at power-on as expected |
 
@@ -246,10 +285,17 @@ Things to watch on a first boot:
   that turns itself off after the splash did not find them.
 - **Clocks**: PLL1 now also gives 80 MHz on Q for the eMMC, which the SoC
   start-up turns off first, whatever the bootloader left running.
+- **Battery**: `charger` and `gauge` in the shell, and `battery status`,
+  show what the drivers read. Check that the charge stops at about 4.36 V and
+  14 mA (`gauge` voltage and current), that the gauge's temperature is
+  plausible, that plugging in and out shows at once (the PMIC interrupt) and
+  that the percentage follows the stock firmware's. A watch that shows 5% and
+  does not charge cannot read its gauge.
 - **CPU time**: each display update takes about 40 ms of busy CPU,
   preemptible.
 - **Code space**: images of 1611 KiB in release and 1642 KiB in debug
   builds, of the 1664 KiB a 2 MiB part takes.
+
 ## Decisions
 
 The reasons behind the port's design are recorded in the
