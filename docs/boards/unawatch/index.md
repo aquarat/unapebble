@@ -293,7 +293,7 @@ Things to watch on a first boot:
   does not charge cannot read its gauge.
 - **CPU time**: each display update takes about 40 ms of busy CPU,
   preemptible.
-- **Code space**: images of 1611 KiB in release and 1642 KiB in debug
+- **Code space**: images of 1614 KiB in release and about 1644 KiB in debug
   builds, of the 1664 KiB a 2 MiB part takes.
 
 ## Decisions
