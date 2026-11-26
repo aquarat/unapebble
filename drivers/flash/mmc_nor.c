@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <inttypes.h>
 
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/devicetree.h>
 #include <pbl/drivers/flash/mmc_nor.h>
 #include <pbl/logging/logging.h>
@@ -52,9 +53,11 @@ static int prv_init(const struct pbl_flash *flash) {
     return -ENODEV;
   }
 
+  PBL_BOOT_TRACE(PBL_BT_NOR, PBL_BT_NOR_INIT);
   ret = pbl_mmc_get_num_blocks(mn->mmc, &num_blocks);
   if (ret != 0) {
     PBL_LOG_ERR("No card: %d", ret);
+    PBL_BOOT_TRACE(PBL_BT_NOR, PBL_BT_NOR_FAILED);
     return ret;
   }
 
@@ -64,6 +67,7 @@ static int prv_init(const struct pbl_flash *flash) {
   }
 
   blk_nor_init(mn->nor, &s_hw, (void *)mn);
+  PBL_BOOT_TRACE(PBL_BT_NOR, PBL_BT_NOR_READY);
 
   return 0;
 }
@@ -77,6 +81,7 @@ static int prv_write(const struct pbl_flash *flash, uint32_t addr, const void *b
 }
 
 static int prv_erase(const struct pbl_flash *flash, uint32_t addr, uint32_t size) {
+  PBL_BOOT_TRACE(PBL_BT_NOR, PBL_BT_NOR_ERASE | ((addr >> 12) & 0xFFFFU));
   int ret = blk_nor_erase(prv_mn(flash)->nor, addr, size);
 
   return (ret == 0) ? 1 : ret;

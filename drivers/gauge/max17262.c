@@ -5,6 +5,7 @@
 
 #include <errno.h>
 
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/devicetree.h>
 #include <pbl/drivers/gauge/max17262.h>
 #include <pbl/kernel/delay.h>
@@ -150,10 +151,12 @@ static int prv_init(const struct pbl_gauge *gauge) {
 
   // A gauge that does not answer yet stays up, to be configured on its next read: readings
   // fail until then
+  PBL_BOOT_TRACE(PBL_BT_BATT, PBL_BT_BATT_GAUGE);
   ret = prv_configure(fg);
   if (ret != 0) {
     PBL_LOG_ERR("Configuration failed (%d)", ret);
   }
+  PBL_BOOT_TRACE(PBL_BT_BATT, PBL_BT_BATT_GAUGE_READY);
 
   return 0;
 }

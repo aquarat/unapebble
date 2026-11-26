@@ -7,6 +7,7 @@
 
 #include <inttypes.h>
 
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/drivers/flash.h>
 #include <pbl/drivers/mmc.h>
 #include <pbl/fat_ro/fat_ro.h>
@@ -47,6 +48,7 @@ static bool prv_copy(struct install *inst, const SystemResourceBank *bank) {
   const uint32_t size = inst->file.size;
   int ret;
 
+  PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_ERASE);
   ret = pbl_flash_erase(FLASH, bank->begin,
                         PBL_DIV_ROUND_UP(size, SUBSECTOR_SIZE_BYTES) * SUBSECTOR_SIZE_BYTES);
   if (ret != 0) {
@@ -57,6 +59,8 @@ static bool prv_copy(struct install *inst, const SystemResourceBank *bank) {
   for (uint32_t offset = 0U; offset < size; offset += CHUNK_SIZE) {
     const uint32_t n = PBL_MIN(size - offset, CHUNK_SIZE);
 
+    PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_COPY | ((offset / CHUNK_SIZE) & 0xFFFFU));
+    PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_RES_COPIED, offset);
     ret = fat_ro_read(&inst->fs, &inst->file, offset, inst->chunk, n);
     if (ret != 0) {
       PBL_LOG_ERR("Reading the resources failed at %" PRIu32 ": %d", offset, ret);
@@ -86,12 +90,14 @@ bool resource_storage_volume_install(const SystemResourceBank *bank,
   inst->version = version;
   inst->max_size = bank->end - bank->begin;
 
+  PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_MOUNT);
   ret = fat_ro_mount(&inst->fs, prv_read_sectors, nullptr, CONFIG_RESOURCES_VOLUME_BLOCKS);
   if (ret != 0) {
     PBL_LOG_ERR("No update drive: %d", ret);
     goto out;
   }
 
+  PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_SEARCH);
   ret = fat_ro_foreach_root_file(&inst->fs, prv_match, inst);
   if (ret <= 0) {
     PBL_LOG_ERR("No resources <%#010" PRIx32 ", %" PRIu32 "> on the update drive: %d", version->crc,
@@ -101,6 +107,9 @@ bool resource_storage_volume_install(const SystemResourceBank *bank,
 
   PBL_LOG_INFO("Copying %" PRIu32 " bytes of resources from the update drive", inst->file.size);
   installed = prv_copy(inst, bank);
+  if (!installed) {
+    PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_INSTALL_FAILED);
+  }
 
 out:
   pbl_free(inst);

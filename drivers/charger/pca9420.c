@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <inttypes.h>
 
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/devicetree.h>
 #include <pbl/drivers/charger/pca9420.h>
 #include <pbl/kernel/work.h>
@@ -223,6 +224,7 @@ static int prv_init(const struct pbl_charger *charger) {
 
   // A PMIC that does not answer leaves the device up with charging off, to be configured again
   // on its next use: the battery service keeps polling it
+  PBL_BOOT_TRACE(PBL_BT_BATT, PBL_BT_BATT_CHARGER);
   ret = prv_configure(chg);
   if (ret != 0) {
     PBL_LOG_ERR("Configuration failed (%d)", ret);
@@ -235,6 +237,7 @@ static int prv_init(const struct pbl_charger *charger) {
   }
   // Events from before boot would hold INTB low
   prv_clear_irqs(chg);
+  PBL_BOOT_TRACE(PBL_BT_BATT, PBL_BT_BATT_CHARGER_READY);
 
   return 0;
 }

@@ -11,6 +11,7 @@
 #include <stdlib.h>
 
 #include <pbl/board/partitions.h>
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/drivers/flash.h>
 #include <pbl/logging/logging.h>
 #include <pbl/services/process_management/app_storage.h>
@@ -76,8 +77,10 @@ static void resource_storage_system_bank_init(void) {
   // a bank that's valid.
   for (s_active_bank = 0; s_active_bank < PBL_ARRAY_SIZE(s_resource_banks); ++s_active_bank) {
     PBL_LOG_INFO("Checking bank %u for system resources", s_active_bank);
+    PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_CHECK_BANK | s_active_bank);
     if (resource_storage_generic_check(SYSTEM_APP, 0, &entry, &SYSTEM_RESOURCE_VERSION)) {
       PBL_LOG_INFO("Valid system resources found!");
+      PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_FOUND | s_active_bank);
       s_valid_resources_found = true;
       return;
     }
@@ -86,9 +89,11 @@ static void resource_storage_system_bank_init(void) {
 #ifdef CONFIG_RESOURCES_FROM_VOLUME
   // Into the bank with no resources or the oldest, keeping the other for a firmware going back
   s_active_bank = prv_bank_to_replace();
+  PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_INSTALL | s_active_bank);
   if (resource_storage_volume_install(&BANK, &SYSTEM_RESOURCE_VERSION) &&
       resource_storage_generic_check(SYSTEM_APP, 0, &entry, &SYSTEM_RESOURCE_VERSION)) {
     PBL_LOG_INFO("System resources installed in bank %u", s_active_bank);
+    PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_INSTALLED);
     s_valid_resources_found = true;
     return;
   }

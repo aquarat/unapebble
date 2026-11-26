@@ -6,6 +6,7 @@
 #include <pbl/analytics/analytics.h>
 #include <pbl/bluetooth/init.h>
 #include <pbl/board/partitions.h>
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/drivers/flash.h>
 #include <pbl/drivers/hrm.h>
 #include <pbl/drivers/vibe.h>
@@ -87,6 +88,17 @@ static void uptime_callback(struct pbl_work *work) {
 static PBL_DELAYED_WORK_DEFINE(s_uptime_timer, uptime_callback);
 #endif
 
+#ifdef CONFIG_BOOT_TRACE
+// Up for a while with the launcher running: the boot is over
+static void prv_boot_done(struct pbl_work *work) {
+  pbl_boot_trace_crumb(PBL_BT_KERNEL, PBL_BT_KERNEL_BOOT_DONE);
+}
+
+static PBL_DELAYED_WORK_DEFINE(s_boot_done_timer, prv_boot_done);
+
+#define BOOT_DONE_MS 10000U
+#endif
+
 static void prv_resource_banks_region_add(void) {
 #ifdef CONFIG_MMAP_RESOURCES
   static_assert(PART_SYSTEM_RESOURCES_BANK_0_OFFSET + PART_SYSTEM_RESOURCES_BANK_0_SIZE ==
@@ -124,8 +136,10 @@ int main(void) {
   pebble_task_register(PebbleTask_KernelMain, pbl_thread_current());
   process_regions_thread_init();
 
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_START);
   print_splash_screen();
 
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_CLOCK_RESTORE);
   clock_restore_time();
 
 #ifdef CONFIG_RECOVERY_FW
@@ -146,6 +160,7 @@ int main(void) {
   events_init();
 
   // After the timer service, which the display may use
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_SPLASH);
   boot_splash_start();
 
   // Suspend the task watchdog while the rest of the system comes up.
@@ -155,8 +170,10 @@ int main(void) {
   pbl_analytics_init();
 #endif
 
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_INIT_DRIVERS);
   init_drivers();
 
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_CLOCK_INIT);
   clock_init();
 
 #if defined(CONFIG_MFG)
@@ -164,16 +181,20 @@ int main(void) {
 #endif
 
 #ifdef CONFIG_LOG_BACKEND_FLASH
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_LOG_FLASH);
   pbl_log_flash_init();
 #endif
 
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_DEBUG);
   debug_init(s_mcu_reboot_reason);
 
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_SERVICES_EARLY);
   services_early_init();
 
   debug_print_last_launched_app();
 
   // Do this early before things can screw ith it.
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_PRF_UPDATE);
   check_prf_update();
 
 #if defined(CONFIG_PBLBOOT) && defined(CONFIG_RECOVERY_FW) && !defined(CONFIG_MFG)
@@ -184,8 +205,10 @@ int main(void) {
 
   // When there are new system resources waiting to be installed, this call
   // will actually install them:
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_RESOURCES);
   resource_init();
 
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_SYSTEM_RESOURCES);
   system_resource_init();
 
 #ifdef CONFIG_HRM
@@ -195,12 +218,14 @@ int main(void) {
   // Stop boot splash before initializing compositor
   boot_splash_stop();
   // Can't use the compositor framebuffer until the compositor is initialized
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_COMPOSITOR);
   compositor_init();
   kernel_ui_init();
 
 #ifdef CONFIG_QEMU_SERIAL
   qemu_serial_init();
 #endif
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_BLUETOOTH);
   pbl_bt_init();
   pebble_task_register(PebbleTask_BTHost, nimble_port_pebble_host_thread());
 #if NIMBLE_CFG_CONTROLLER
@@ -210,6 +235,7 @@ int main(void) {
   pebble_task_register(PebbleTask_BTHCI, nimble_port_pebble_hci_thread());
 #endif
 
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_SERVICES);
   services_init();
 
   clear_reset_loop_detection_bits();
@@ -226,6 +252,10 @@ int main(void) {
 
   pbl_task_wdt_resume();
 
+#ifdef CONFIG_BOOT_TRACE
+  pbl_delayed_work_reschedule(&pbl_sys_workq, &s_boot_done_timer, PBL_MSEC(BOOT_DONE_MS));
+#endif
+  PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_LAUNCHER);
   launcher_main_loop();
   return 0;
 }

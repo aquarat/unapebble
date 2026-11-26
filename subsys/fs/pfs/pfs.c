@@ -14,6 +14,7 @@
 
 #include <pbl/analytics/analytics.h>
 #include <pbl/board/partitions.h>
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/crc/crc.h>
 #include <pbl/drivers/flash.h>
 #include <pbl/kernel/assert.h>
@@ -1992,9 +1993,11 @@ int pfs_init(bool run_filesystem_check) {
     PFS_FD(fd) = (FileDesc){.fd_status = FD_STATUS_FREE};
   }
 
+  PBL_BOOT_TRACE(PBL_BT_PFS, PBL_BT_PFS_INIT);
   ftl_populate_region_list();
 
   if (run_filesystem_check) {
+    PBL_BOOT_TRACE(PBL_BT_PFS, PBL_BT_PFS_CHECK);
     if (!pfs_active()) {
       // either we have downgraded or there is no data on the flash
       PBL_LOG_INFO("PFS not active ... formatting");
@@ -2009,10 +2012,12 @@ int pfs_init(bool run_filesystem_check) {
   if ((fd = pfs_open_gc_file(0, false)) >= 0) {
     // we rebooted while we were in the middle of a garbage collection
     PBL_LOG_INFO("Recovering flash region from GC file");
+    PBL_BOOT_TRACE(PBL_BT_PFS, PBL_BT_PFS_GC_RECOVER);
     recover_region_from_file(fd);
   }
 
   // find a free region
+  PBL_BOOT_TRACE(PBL_BT_PFS, PBL_BT_PFS_GC_REGION);
   if (!prv_update_gc_reserved_region()) {
     PBL_LOG_ERR("No free flash erase units!");
     // Note: It should not be possible for this to happen since start of day no
@@ -2028,7 +2033,9 @@ int pfs_init(bool run_filesystem_check) {
   uint32_t bytes_to_free = ((s_pfs_page_count * PFS_PAGE_SIZE) * 4) / 100;
   PBL_LOG_DBG("Preparing %" PRIu32 " bytes of flash for filesystem use", bytes_to_free);
 
+  PBL_BOOT_TRACE(PBL_BT_PFS, PBL_BT_PFS_PREPARE);
   pfs_prepare_for_file_creation(bytes_to_free, 15 * PBL_TICK_HZ);
+  PBL_BOOT_TRACE(PBL_BT_PFS, PBL_BT_PFS_READY);
 
   return 0;
 }
@@ -2042,12 +2049,15 @@ void pfs_format(bool write_erase_headers) {
   }
 
   // clear out all pages
+  PBL_BOOT_TRACE(PBL_BT_PFS, PBL_BT_PFS_FORMAT);
   pbl_flash_partition_erase(PART_FILESYSTEM, 0U, PART_FILESYSTEM_SIZE);
   prv_invalidate_page_flags_cache_all();
 
   if (write_erase_headers) {
+    PBL_BOOT_TRACE(PBL_BT_PFS, PBL_BT_PFS_FORMAT_HEADERS);
     prv_write_erased_header_on_page_range(0, s_pfs_page_count, 1);
   }
+  PBL_BOOT_TRACE(PBL_BT_PFS, PBL_BT_PFS_FORMAT_DONE);
 
   pbl_mutex_unlock(&s_pfs_mutex);
   PBL_LOG_INFO("FS-Format Done");
