@@ -18,6 +18,7 @@
 #include <pbl/logging/logging.h>
 #include <pbl/services/battery/battery_charger.h>
 #include <pbl/services/battery/battery_state.h>
+#include <pbl/services/battery/battery_test.h>
 #include <pbl/util/ratio.h>
 
 #include <kernel/events.h>
@@ -51,7 +52,7 @@ static void prv_put_event(void) {
   event_put(&e);
 }
 
-static void prv_update(bool publish) {
+static bool prv_update(bool publish) {
   const bool was_inhibited = s_thermal.inhibited;
   struct pbl_gauge_reading r = {0};
   PreciseBatteryChargeState state;
@@ -110,13 +111,21 @@ static void prv_update(bool publish) {
   if (publish) {
     prv_put_event();
   }
+
+  return valid;
 }
 
 static void prv_work(struct pbl_work *work) {
   const bool force = s_force;
 
   s_force = false;
-  prv_update(force);
+  const bool valid = prv_update(force);
+#ifdef CONFIG_BATTERY_TEST
+  // On the polls, so that the test does not wake the watch more often
+  battery_test_sample(valid ? &s_reading : nullptr, s_state.is_plugged, s_state.pct);
+#else
+  (void)valid;
+#endif
 
   pbl_delayed_work_reschedule(
       &pbl_sys_workq, &s_work,
@@ -134,7 +143,7 @@ void battery_state_force_update(void) {
 
 void battery_state_init(void) {
   // A first state for whoever asks before the first update; the forced one publishes it
-  prv_update(false);
+  (void)prv_update(false);
 
   if (!s_state.is_plugged) {
     PBL_ANALYTICS_TIMER_START(battery_discharge_duration_ms);

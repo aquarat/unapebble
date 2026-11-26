@@ -21,6 +21,12 @@ static int prv_cmd_gauge(const struct pbl_shell *sh, size_t argc, char **argv) {
                   r.avg_voltage_mv);
   pbl_shell_print(sh, "current: %" PRId32 " uA", r.current_ua);
   pbl_shell_print(sh, "temperature: %" PRId32 " mC", r.temp_mc);
+  pbl_shell_print(sh, "average current: %" PRId32 " uA", r.avg_current_ua);
+  pbl_shell_print(
+      sh, "capacity: %" PRIu32 " of %" PRIu32 " uAh (nominal %" PRIu32 ", design %" PRIu32 ")",
+      r.remaining_uah, r.full_uah, r.full_nominal_uah, r.design_uah);
+  pbl_shell_print(sh, "cycles: %u.%02u, counter: %u x %u uAh, resets: %u", r.cycles_pct / 100U,
+                  r.cycles_pct % 100U, r.counter, r.counter_uah, r.resets);
 
   return 0;
 }

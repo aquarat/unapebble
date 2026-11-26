@@ -27,5 +27,8 @@ else()
     voltage/battery_state.c
   )
 endif()
+if(CONFIG_BATTERY_TEST)
+  list(APPEND sources test/core.c test/service.c)
+endif()
 pbl_library()
 pbl_library_sources(${sources})

@@ -59,8 +59,8 @@ code:
 | `0x08060000`–`0x083fffff` | 3712 KiB | PebbleOS (`code`) |
 
 The partitions are in `boards/unawatch/unawatch.dts`. The image is the code
-alone, `pebbleos.bin`: a release build takes about 1611 KiB and a debug one
-1642 KiB, Moddable XS included. The code partition reaches the end of the 4 MiB
+alone, `pebbleos.bin`: a release build takes about 1619 KiB and a debug one
+1651 KiB, Moddable XS and the battery test included. The code partition reaches the end of the 4 MiB
 flash, but `tools/una/pack_ota.py` refuses an image over 1664 KiB unless told
 otherwise, so that it also installs on the 2 MiB STM32U595 of early watches.
 Moving the storage and the resources to the eMMC freed the whole second bank,
@@ -146,14 +146,15 @@ until it loses power.
 The 200 mAh cell is charged by the PCA9420's linear charger
 (`drivers/charger/pca9420.c`) and measured by the MAX17262 fuel gauge
 (`drivers/gauge/max17262.c`), both on I2C1; the battery service takes the
-percentage from the gauge (`CONFIG_BATTERY_SOC_GAUGE`). The charge is set for
-the cell's life rather than its last few percent, gentler than the stock
-firmware's 150 mA to 4.40 V:
+percentage from the gauge (`CONFIG_BATTERY_SOC_GAUGE`). Until the cell is
+identified, the owner caps its charge at 4.20 V, which every lithium cell
+takes; the stock firmware charges to 4.40 V, which suits only a high-voltage
+cell. The charge is set for the cell's life rather than its last few percent:
 
 | | PebbleOS | Stock firmware |
 | --- | --- | --- |
 | Charge current | 100 mA (0.5C) | 150 mA |
-| Charge voltage | 4.36 V | 4.40 V |
+| Charge voltage | 4.20 V | 4.40 V |
 | Termination | 14 mA, 6.4 min top-off | 10 mA, 19.2 min top-off |
 | Pre-charge, dead battery | 8 mA, 4 mA | PMIC defaults |
 | Safety timers | 5 h fast, 30 min pre-charge | 9 h fast |
@@ -161,20 +162,87 @@ firmware's 150 mA to 4.40 V:
 | Charge temperature | 0 to 45 degrees C at the gauge, 3 degrees of hysteresis | stops above 45 degrees C ambient or 55 at the gauge |
 | Input current limit | 255 mA | 255 mA |
 
-The gauge runs the stock firmware's EZ model, loaded only after a power-on
-reset of the gauge or when its registers hold another model, so switching
-firmware keeps what it learned of the cell. Charging starts off at every boot
+The gauge runs the stock firmware's EZ model for a cell charged to 4.20 V
+(ModelCFG.VChg = 0, where the stock firmware has 1), so that the end of each
+charge is its 100% and it learns the capacity to 4.20 V. The model is loaded
+only after a power-on reset of the gauge or when its registers hold another
+model; as the stock firmware's differs, switching to it makes it reload its
+own and forget what the gauge learned. Charging starts off at every boot
 and is allowed once the gauge reads a temperature in range; a gauge that
 cannot be read keeps it off. Unplugged, the watch shuts down below 1% or at
 an averaged 3.35 V, as the stock firmware does; it shows 5% until the gauge
-first answers. `CONFIG_CHARGER_PCA9420_CHARGE_LIMIT_MV` stops the charge at a
-lower voltage, 4100 for about 80%, for a longer life still.
+first answers. `CONFIG_CHARGER_PCA9420_CHARGE_LIMIT_MV` stops the charge short of
+full, at a lower voltage, for a longer life still. The cap holds while
+PebbleOS runs: whether a watch that is off charges, and to what, is not known
+yet.
 
 The interrupt of the PMIC, on PG7 with the STUSB4500's alert, reports plugging
 in and out; the battery service also polls every 30 s plugged in, 60 s
 otherwise. The STUSB4500 is left on its factory configuration. The reasons for
 each value are in the [decision log](decisions/index.md), from
 261126-173552-01.
+
+## Battery capacity test
+
+The **Battery test** app measures the charge the cell gives from a 4.20 V
+charge to the low battery power-off at 3.35 V, its usable capacity, and the
+charge it takes back. It counts with the gauge's coulomb counter (QH, 0.5 mAh a
+count) and, as a cross-check, an integral of the gauge's averaged current;
+both are shown. It samples on the battery service's polls, a minute apart,
+logs to the filesystem on the eMMC and carries on across the power-off, so it
+keeps running when the app is closed. It only reads the gauge and the
+charger: the charge cap and the charger's protections stay as they are.
+`CONFIG_BATTERY_TEST`, on for the watch only.
+
+To run it:
+
+1. Open **Battery test** and press Select to start. Plug the watch in; the
+   test waits for the charger to end the charge (14 mA, then the 6.4 minute
+   top-off). From empty, about 2.5 to 3 hours at 100 mA.
+2. When it shows **Full**, choose the load with Select: **Normal** (the
+   watch used as usual; close the app) or **Heavy** (frontlight on and the
+   CPU busy 40 ms in 50, only while the app stays in front). Unplug: the
+   discharge starts at the unplug. It runs until the watch powers itself off
+   at the low battery level, as usual: days with the normal load (1 mA
+   lasts about 8 days of a 200 mAh cell), hours with the heavy one. The
+   heavy load stops at 2%, when the app is left, or when plugged in. Plugging
+   in ends the discharge; one that did not reach empty is marked so.
+3. Plug in and hold the power button to power on. The test resumes, records
+   the discharge from its last samples and logs the recharge until the charge
+   ends, another 2.5 to 3 hours.
+4. The results stay on screen, and in `battery test status`, until a new
+   test (hold Select) or `battery test cancel`.
+
+The results: **Out**, the charge delivered from full to the power-off, by
+QH and by the integral (sum), the time and the average current, the
+temperature range and the load (Normal, Heavy or Mixed); the same as
+percentages of the 200 mAh of `main.h` and the 280 mAh a comment in
+`Pmic.cpp` gives; **In**, the charge put back from the end of the discharge,
+including what the watch used while off; the gauge's FullCapRep and
+FullCapNom at the end, what it learned, with their values at the first full
+in brackets, its design capacity and its cycle count. QH and the sum should agree within a few percent under the heavy
+load; a reset of the gauge in between is reported, the sum standing in for
+it.
+
+In the shell (debug builds):
+
+| Command | |
+| --- | --- |
+| `battery test status` | The phase or the results, the log's size, the charge bridged over gaps by QH |
+| `battery test log` | The log, as CSV |
+| `battery test start` | Start a new test |
+| `battery test cancel` | Cancel the test and delete its log and results |
+
+The CSV has a line a sample (every second or fourth one once the log of
+8192 records has filled and been thinned out): `time` (UTC seconds),
+`v_mv`, `avg_v_mv`, `i_ua` and `avg_i_ua` (positive discharging),
+`soc_cpct` (RepSOC in hundredths of a percent), `repcap_uah`,
+`fullcaprep_uah`, `qh` (raw count), `temp_mc`, `flags` (1 plugged in, 2
+charge done, 4 empty, 8 heavy load on, 16 QH reset), `phase` (1 charge, 2
+full, 3 discharge, 4 recharge, 5 done), `loads` (seen in the discharge: 1
+normal, 2 heavy), and `out_uah` and `sum_uah`, the charge out of the battery
+since full by QH and by the integral. The reasons are in the decision log,
+from 261126-190847-01.
 
 ## Display
 
@@ -286,15 +354,16 @@ Things to watch on a first boot:
 - **Clocks**: PLL1 now also gives 80 MHz on Q for the eMMC, which the SoC
   start-up turns off first, whatever the bootloader left running.
 - **Battery**: `charger` and `gauge` in the shell, and `battery status`,
-  show what the drivers read. Check that the charge stops at about 4.36 V and
+  show what the drivers read. Check that the charge stops at about 4.20 V and
   14 mA (`gauge` voltage and current), that the gauge's temperature is
   plausible, that plugging in and out shows at once (the PMIC interrupt) and
   that the percentage follows the stock firmware's. A watch that shows 5% and
   does not charge cannot read its gauge.
 - **CPU time**: each display update takes about 40 ms of busy CPU,
   preemptible.
-- **Code space**: images of 1614 KiB in release and about 1644 KiB in debug
-  builds, of the 1664 KiB a 2 MiB part takes.
+- **Code space**: images of 1619 KiB in release and about 1651 KiB in debug
+  builds, of the 1664 KiB a 2 MiB part takes. The battery test takes about
+  6 KiB (`CONFIG_BATTERY_TEST`).
 
 ## Decisions
 

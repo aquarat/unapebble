@@ -40,6 +40,24 @@ struct pbl_gauge_reading {
   int32_t current_ua;
   /** Temperature in millidegrees Celsius. */
   int32_t temp_mc;
+  /** Averaged current in uA, positive while discharging. */
+  int32_t avg_current_ua;
+  /** Remaining capacity in uAh, 0 if not known. */
+  uint32_t remaining_uah;
+  /** Full capacity, as learned and reported, in uAh, 0 if not known. */
+  uint32_t full_uah;
+  /** Nominal full capacity, as learned, in uAh, 0 if not known. */
+  uint32_t full_nominal_uah;
+  /** Design capacity in uAh, 0 if not known. */
+  uint32_t design_uah;
+  /** Charge cycles counted, in percent of a cycle. */
+  uint16_t cycles_pct;
+  /** Coulomb counter: rises with charge, falls with discharge, wraps around. */
+  uint16_t counter;
+  /** uAh a count of @c counter, 0 if the gauge has no counter. */
+  uint16_t counter_uah;
+  /** Resets of the gauge since boot: @c counter starts again at each. */
+  uint8_t resets;
 };
 
 /** @brief Fuel gauge driver operations, called with the device lock held. */
