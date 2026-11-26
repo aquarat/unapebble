@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Builds the firmware for the UNA Watch and publishes the installable .ota
+# on the repository's releases page: "unawatch-latest" follows main, and a
+# pushed v* tag gets a release of its own.
+
+name: UNA Watch firmware
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  firmware:
+    runs-on: linux-arm64-docker
+    container:
+      image: ubuntu:24.04
+    env:
+      BOARD: unawatch
+      PEBBLEOS_SDK_ROOT: /opt/pebbleos-sdk-0.1.17
+      VIRTUAL_ENV: /opt/venv
+    steps:
+      # No JavaScript actions: the job image has no Node, and these steps
+      # need nothing more than git and curl.
+      - name: Install git
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates curl git jq
+
+      - name: Check out
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global --add safe.directory '*'
+          auth="Authorization: token $TOKEN"
+          # Every commit and tag (the version comes from git describe), with
+          # file contents fetched as needed.
+          git -c http.extraHeader="$auth" clone --filter=blob:none --no-checkout \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" src
+          cd src
+          git -c http.extraHeader="$auth" checkout --detach "$GITHUB_SHA"
+          git submodule update --init --depth 1 --jobs 4
+          echo "VERSION=$(git describe --tags --always)" >> "$GITHUB_ENV"
+
+      - name: Install the build environment
+        working-directory: src
+        run: |
+          docker/setup.sh apt sdk venv
+          echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
+          echo "$PEBBLEOS_SDK_ROOT/arm-none-eabi/bin" >> "$GITHUB_PATH"
+
+      - name: Build
+        working-directory: src
+        run: |
+          pbl configure --board "$BOARD" -DCONFIG_RELEASE=y
+          pbl build
+
+      - name: Package
+        working-directory: src
+        run: |
+          mkdir -p ../out
+          name="unapebble_${BOARD}_${VERSION}"
+          # The image with the system resources appended at their partition, in
+          # the second bank of the 4 MiB flash: up to its end, 3712 KiB from
+          # 0x08060000. A 2 MiB part has no room for the resources.
+          python3 tools/una/pack_ota.py build/pebbleos_resources.bin -v "$VERSION" \
+            --max-size 0x3a0000 -o "../out/$name.ota"
+          cp build/pebbleos.elf "../out/$name.elf"
+          cp build/pebbleos.hex "../out/$name.hex"
+          if [ -f build/log.dict.json ]; then
+            cp build/log.dict.json "../out/${name}_loghash_dict.json"
+          fi
+          if [ -f build/system_resources.pbpack ]; then
+            cp build/system_resources.pbpack "../out/${name}_system_resources.pbpack"
+          fi
+          (cd ../out && sha256sum * > SHA256SUMS)
+          ls -l ../out
+
+      - name: Publish
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          api="$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY"
+          call() { curl -fsS -H "Authorization: token $TOKEN" "$@"; }
+
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag=$GITHUB_REF_NAME prerelease=false title="UNA Watch firmware $GITHUB_REF_NAME"
+          else
+            tag=unawatch-latest prerelease=true title="UNA Watch firmware (latest main)"
+            # Move the rolling release to this commit.
+            curl -sS -o /dev/null -X DELETE -H "Authorization: token $TOKEN" "$api/releases/tags/$tag" || true
+            curl -sS -o /dev/null -X DELETE -H "Authorization: token $TOKEN" "$api/tags/$tag" || true
+          fi
+
+          body=$(printf '%s\n' \
+            "Built from ${GITHUB_SHA} (${VERSION})." \
+            "" \
+            "To install: turn the watch off, then hold the power button for 4 s as it turns on to reach the bootloader menu." \
+            "Connect USB, copy the .ota file to the root of the drive that appears, eject it, unplug, and choose Continue." \
+            "To go back, install UNA's own .ota the same way." \
+            "" \
+            "Experimental: this firmware has not been tested on a watch.")
+          id=$(jq -n --arg tag "$tag" --arg sha "$GITHUB_SHA" --arg name "$title" \
+                  --arg body "$body" --argjson pre "$prerelease" \
+                  '{tag_name: $tag, target_commitish: $sha, name: $name, body: $body, prerelease: $pre}' |
+               call -X POST -H 'Content-Type: application/json' -d @- "$api/releases" | jq -r .id)
+
+          for f in out/*; do
+            call -X POST -F "attachment=@$f" "$api/releases/$id/assets?name=$(basename "$f")" >/dev/null
+            echo "uploaded $(basename "$f")"
+          done
+          echo "Release: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag"
