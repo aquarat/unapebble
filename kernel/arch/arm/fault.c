@@ -8,6 +8,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef CONFIG_BOOT_TRACE
+#include <pbl/boot_trace/boot_trace.h>
+#endif
 #include <pbl/kernel/compiler.h>
 #include <pbl/kernel/fatal.h>
 #include <pbl/kernel/mpu.h>
@@ -156,6 +159,34 @@ static bool prv_is_recoverable(uint32_t exc_return) {
 #endif
 }
 
+// Kept across the reset, for a watch without a console
+static void prv_trace(enum pbl_fault_reason reason, const uint32_t *frame, uint32_t exc_return,
+                      uint32_t cfsr) {
+#ifdef CONFIG_BOOT_TRACE
+  struct pbl_boot_trace_fault f = {
+    .kind = (uint32_t)reason + 1U,
+    .exc_return = exc_return,
+    .cfsr = cfsr,
+    .hfsr = arch_readl(ARM_SCB_HFSR),
+    .shcsr = arch_readl(ARM_SCB_SHCSR),
+    .mmfar = arch_readl(ARM_SCB_MMFAR),
+    .bfar = arch_readl(ARM_SCB_BFAR),
+  };
+  const char *name = prv_thread_name();
+
+  if (frame != nullptr) {
+    f.pc = frame[FRAME_PC];
+    f.lr = frame[FRAME_LR];
+    f.psr = frame[FRAME_XPSR];
+    f.sp = (uint32_t)(uintptr_t)&frame[FRAME_WORDS];
+  }
+  for (size_t i = 0U; i + 1U < sizeof(f.thread) && name[i] != '\0'; i++) {
+    f.thread[i] = name[i];
+  }
+  pbl_boot_trace_fault(&f);
+#endif
+}
+
 static void prv_fill_info(struct pbl_fault_info *info, enum pbl_fault_reason reason,
                           const uint32_t *frame, uint32_t cfsr) {
   *info = (struct pbl_fault_info){.reason = reason};
@@ -223,6 +254,7 @@ static void prv_stack_overflow(uint32_t *frame, uint32_t exc_return, uint32_t cf
 
   const bool recoverable = can_recover && prv_is_recoverable(exc_return);
   if (!recoverable) {
+    prv_trace(PBL_FAULT_STACK_OVERFLOW, frame_valid ? frame : nullptr, exc_return, cfsr);
     pbl_fault_fatal_record(&info);
   }
 
@@ -247,6 +279,7 @@ static void prv_fault(enum pbl_fault_reason reason, uint32_t *frame, uint32_t ex
 
   const bool recoverable = prv_is_recoverable(exc_return);
   if (!recoverable) {
+    prv_trace(reason, frame, exc_return, cfsr);
     pbl_fault_fatal_record(&info);
   }
 
@@ -302,6 +335,7 @@ static PBL_USED void prv_hard_fault(uint32_t *frame, uint32_t exc_return) {
 
   struct pbl_fault_info info;
   prv_fill_info(&info, PBL_FAULT_HARD, frame, cfsr);
+  prv_trace(PBL_FAULT_HARD, frame, exc_return, cfsr);
   pbl_fault_fatal_record(&info);
 
   const uint32_t hfsr = arch_readl(ARM_SCB_HFSR);

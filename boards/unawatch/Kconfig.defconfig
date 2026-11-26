@@ -8,3 +8,7 @@ config FLASH_SIZE
 # The resources of the Pebble Round 2, whose platform the firmware takes.
 config RESOURCES_BOARD
     default "getafix"
+
+# The reserved boot_trace region of the devicetree
+config BOOT_TRACE_RAM_BASE
+    default 0x2025dc00

@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifdef CONFIG_BOOT_TRACE
+#include <pbl/boot_trace/boot_trace.h>
+#endif
 #include <pbl/kernel/compiler.h>
 #include <pbl/kernel/fatal.h>
 #include <pbl/kernel/reboot.h>
@@ -37,6 +40,9 @@ PBL_WEAK void pbl_fault_fatal_record(const struct pbl_fault_info *info) {
   char buffer[160];
 
   vsnprintf(buffer, sizeof(buffer), fmt, args);
+#ifdef CONFIG_BOOT_TRACE
+  pbl_boot_trace_panic(filename, line, lr, buffer);
+#endif
   pbl_log_sync(LOG_LEVEL_ALWAYS, filename, line, "%s", buffer);
 
   pbl_fatal_error_handler(lr);
@@ -49,6 +55,9 @@ PBL_WEAK void pbl_fault_fatal_record(const struct pbl_fault_info *info) {
 }
 
 [[noreturn]] void pbl_panic_bare_at(const char *filename, int line) {
+#ifdef CONFIG_BOOT_TRACE
+  pbl_boot_trace_panic(filename, line, (uintptr_t)PBL_RETURN_ADDRESS(0), "panic");
+#endif
   pbl_log_sync(LOG_LEVEL_ALWAYS, filename, line, "*** PANIC");
 
   pbl_fatal_error_handler((uintptr_t)PBL_RETURN_ADDRESS(0));
@@ -56,6 +65,9 @@ PBL_WEAK void pbl_fault_fatal_record(const struct pbl_fault_info *info) {
 
 [[noreturn]] void pbl_panic_hashed(uint32_t packed_loghash, ...) {
   uintptr_t lr = (uintptr_t)PBL_RETURN_ADDRESS(0);
+#ifdef CONFIG_BOOT_TRACE
+  pbl_boot_trace_panic("hashed", (int)packed_loghash, lr, "panic");
+#endif
   PBL_LOG_ALWAYS("PANIC at LR 0x%" PRIxPTR, lr);
 
   va_list args;
@@ -68,6 +80,9 @@ PBL_WEAK void pbl_fault_fatal_record(const struct pbl_fault_info *info) {
 
 [[noreturn]] void pbl_panic_bare(void) {
   uintptr_t lr = (uintptr_t)PBL_RETURN_ADDRESS(0);
+#ifdef CONFIG_BOOT_TRACE
+  pbl_boot_trace_panic(nullptr, 0, lr, "panic");
+#endif
   PBL_LOG_ALWAYS("PANIC at LR 0x%" PRIxPTR, lr);
 
   pbl_fatal_error_handler(lr);

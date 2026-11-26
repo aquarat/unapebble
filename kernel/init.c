@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/console/console.h>
 #include <pbl/device.h>
 #include <pbl/kernel/init.h>
@@ -28,8 +29,10 @@ static void prv_main_entry(void *arg) {
 #ifdef CONFIG_TASK_WDT
   pbl_task_wdt_init();
 #endif
+  pbl_boot_trace_crumb(PBL_BT_KERNEL, PBL_BT_KERNEL_DEVICES);
   (void)pbl_device_init_all();
 
+  pbl_boot_trace_crumb(PBL_BT_KERNEL, PBL_BT_KERNEL_MAIN);
   entry();
 }
 
@@ -37,6 +40,10 @@ void kernel_init(int (*entry)(void)) {
   mpu_init();
   arch_early_init();
   pbl_soc_early_init();
+#ifdef CONFIG_BOOT_TRACE
+  // Before anything that may reset, and before the reset flags are cleared
+  pbl_boot_trace_init();
+#endif
   pbl_irq_init();
   arch_init();
   pbl_malloc_init();
