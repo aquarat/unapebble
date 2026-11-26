@@ -6,6 +6,7 @@
 
 #include <inttypes.h>
 
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/kernel/mutex.h>
 #include <pbl/kernel/reboot.h>
 #include <pbl/logging/logging.h>
@@ -34,6 +35,7 @@
 static void prv_watch_language_packs(void);
 
 void system_resource_init(void) {
+  PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_RES_CRC, SYSTEM_RESOURCE_VERSION.crc);
   prv_watch_language_packs();
   if (!resource_init_app(SYSTEM_APP, &SYSTEM_RESOURCE_VERSION)) {
 #ifdef CONFIG_RESOURCES_FROM_VOLUME
@@ -41,6 +43,7 @@ void system_resource_init(void) {
     // brings the watch back, which a reset would not
     PBL_LOG_ERR("System resources <%#010" PRIx32 ", %" PRIu32 "> missing! Powering off",
                 SYSTEM_RESOURCE_VERSION.crc, SYSTEM_RESOURCE_VERSION.timestamp);
+    PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_MISSING);
     pbl_power_off();
 #else
     // System resources are missing!

@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig BOOT_TRACE
+    bool "Boot trace"
+    depends on SOC_STM32U5
+    help
+      Breadcrumbs and fault records that survive a reset, for a watch
+      without a console (pbl/boot_trace/boot_trace.h): the last
+      breadcrumb in a TAMP backup register, which survives any reset and
+      the bootloader installing another image, and the last ones with
+      their uptime, the last CPU fault and the last panic in a record in
+      RAM, which survives a reset. The next boot keeps the record of the
+      run before for a viewer, the Lab app.
+
+if BOOT_TRACE
+
+config BOOT_TRACE_RAM_BASE
+    hex "Address of the RAM record"
+    help
+      A region of SRAM the firmware does not otherwise use, reserved in
+      the board's devicetree, that the bootloader leaves alone.
+
+config BOOT_TRACE_RAM_SIZE
+    hex "Size of the RAM record"
+    default 0x400
+
+config BOOT_TRACE_BKP_CRUMB
+    int "Backup register of the last breadcrumb"
+    default 30
+    range 24 31
+
+config BOOT_TRACE_BKP_BOOT
+    int "Backup register of the boot count"
+    default 31
+    range 24 31
+
+config BOOT_TRACE_IMAGE
+    string "Name of the image, kept in the record"
+    default "pebble"
+
+config BOOT_TRACE_IMAGE_ID
+    int "Number of the image, kept in the backup register"
+    default 0
+    range 0 15
+
+config BOOT_TRACE_BOOT_PATH
+    bool "Breadcrumbs along the boot path"
+    help
+      Breadcrumbs in the stages of the boot, the MMC and its driver, the
+      NOR window, the filesystem's mount and format, and the system
+      resources' check and copy, so that a firmware that resets during
+      its boot can be followed.
+
+endif # BOOT_TRACE

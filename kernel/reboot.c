@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 #include <stddef.h>
 
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/reboot.h>
 #include <pbl/kernel/sched.h>
@@ -66,12 +67,14 @@ static void prv_prepare(enum pbl_sys_off_mode mode) {
 }
 
 [[noreturn]] void pbl_reboot(void) {
+  pbl_boot_trace_crumb(PBL_BT_KERNEL, PBL_BT_KERNEL_REBOOT);
   prv_prepare(PBL_SYS_OFF_RESTART_PREPARE);
   prv_run(PBL_SYS_OFF_RESTART);
   prv_reset();
 }
 
 [[noreturn]] void pbl_power_off(void) {
+  pbl_boot_trace_crumb(PBL_BT_KERNEL, PBL_BT_KERNEL_POWER_OFF);
   PBL_LOG_INFO("Powering off");
 
   prv_prepare(PBL_SYS_OFF_POWER_OFF_PREPARE);
@@ -126,5 +129,6 @@ int pbl_power_cut(void) {
 }
 
 [[noreturn]] void pbl_reboot_emergency(void) {
+  pbl_boot_trace_crumb(PBL_BT_KERNEL, PBL_BT_KERNEL_EMERGENCY);
   prv_reset();
 }

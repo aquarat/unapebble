@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <inttypes.h>
 
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/drivers/mmc.h>
 #include <pbl/kernel/reboot.h>
 #include <pbl/logging/logging.h>
@@ -46,6 +47,7 @@ static int prv_power_on(const struct pbl_mmc *mmc) {
   }
 
   for (uint32_t i = 0U; i < POWER_ON_TRIES; i++) {
+    PBL_BOOT_TRACE(PBL_BT_MMC, PBL_BT_MMC_POWER_ON | i);
     ret = mmc->ops->power_on(mmc, &num_blocks);
     if (ret == 0) {
       break;
@@ -53,6 +55,8 @@ static int prv_power_on(const struct pbl_mmc *mmc) {
     PBL_LOG_WRN("Card power-up %" PRIu32 " failed: %d", i + 1U, ret);
   }
   if (ret != 0) {
+    PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_MMC_ERR, (uint32_t)ret);
+    PBL_BOOT_TRACE(PBL_BT_MMC, PBL_BT_MMC_POWER_ON_FAILED);
     return ret;
   }
 
@@ -65,6 +69,8 @@ static int prv_power_on(const struct pbl_mmc *mmc) {
 
   st->num_blocks = num_blocks;
   st->powered = true;
+  PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_MMC_BLOCKS, num_blocks);
+  PBL_BOOT_TRACE(PBL_BT_MMC, PBL_BT_MMC_ON);
   PBL_LOG_DBG("Card on, %" PRIu32 " blocks", num_blocks);
 
   return 0;
@@ -126,6 +132,10 @@ static int prv_transfer(const struct pbl_mmc *mmc, bool write, uint32_t lba, voi
 
     PBL_LOG_WRN("%s of %" PRIu32 "+%" PRIu32 " failed: %d", write ? "Write" : "Read", lba, count,
                 ret);
+    PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_MMC_ERR, (uint32_t)ret);
+    PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_VALUE, lba);
+    PBL_BOOT_TRACE(PBL_BT_MMC,
+                   (write ? PBL_BT_MMC_WRITE_FAILED : PBL_BT_MMC_READ_FAILED) | attempt);
     prv_power_off(mmc);
   }
   prv_touch(mmc);

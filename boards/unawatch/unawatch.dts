@@ -29,6 +29,13 @@
 			reg = <0x2025e000 0x12000>;
 			no-map;
 		};
+
+		// The boot trace's record, kept across resets (CONFIG_BOOT_TRACE_RAM_BASE): above the
+		// bootloader's stack, which starts at 0x201f0000
+		boot_trace: memory@2025dc00 {
+			reg = <0x2025dc00 0x400>;
+			no-map;
+		};
 	};
 
 	// The cell, charged gently: 0.5C, to 4.20 V, the owner's cap until the cell is identified

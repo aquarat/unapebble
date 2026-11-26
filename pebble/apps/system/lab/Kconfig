@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config APP_LAB
+    bool "Lab: experiments on the hardware"
+    depends on BOOT_TRACE && MMC_STM32_SDMMC && SOC_STM32U5
+    select FAT_RO
+    select FLASH_BLK_NOR
+    help
+      A system app listing experiments, each run on demand with its
+      steps and results on screen: the reset causes and the boot trace
+      of the run before, the clocks, the eMMC step by step and through
+      its driver, its NOR window, the update drive and the system
+      resources on it, what a firmware with its storage on the eMMC left
+      there, the battery's chips read raw, and tests of the trace
+      itself. It writes to the eMMC only in its GUI region. For the UNA
+      Watch's experiments firmware (unawatch/lab).
+
+config APP_LAB_AUTOSTART
+    bool "Open the Lab at boot"
+    depends on APP_LAB
+    default y
+    help
+      Open the Lab app on its report of the run before at every boot.

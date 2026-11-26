@@ -125,10 +125,12 @@ void pbl_soc_early_init(void) {
   while (PBL_FIELD_GET(RCC_CFGR1_SWS_MASK, pbl_readl(RCC(CFGR1))) != RCC_CFGR1_SW_MSIS) {
   }
 
+#ifdef CONFIG_SOC_STM32U5_EARLY_PLL1_OFF
   // Off, so that the clock tree sets up all its outputs before the system switches to it
   pbl_modifyl(RCC_CR_PLL1ON, 0U, RCC(CR));
   while ((pbl_readl(RCC(CR)) & RCC_CR_PLL1RDY) != 0U) {
   }
+#endif
 
   // Port G is supplied by VDDIO2, isolated until declared valid
   pbl_modifyl(0U, PWR_SVMCR_IO2SV, PWR(SVMCR));

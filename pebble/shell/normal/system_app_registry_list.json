@@ -423,6 +423,14 @@
       ]
     },
     {
+      "id": -198,
+      "enum": "LAB",
+      "md_fn": "lab_app_get_info",
+      "ifdefs": [
+        "CONFIG_APP_LAB"
+      ]
+    },
+    {
       "id": -61,
       "enum": "SWAP_LAYER",
       "md_fn": "swap_layer_demo_get_app_info",

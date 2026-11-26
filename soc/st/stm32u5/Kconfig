@@ -34,4 +34,14 @@ config SOC_STM32U5_BKP_POWER_OFF
       Watch bootloader that the watch was powered off: it then powers the
       watch off again, unless the power button is held. -1 for none.
 
+config SOC_STM32U5_EARLY_PLL1_OFF
+    bool "Turn PLL1 off at the start of boot"
+    default y
+    help
+      Turn PLL1 off as soon as the system clock runs on MSIS, before the
+      devices come up, whatever the bootloader left running on it. The
+      clock tree turns PLL1 off anyway before it sets it up, so this only
+      moves that earlier. Off, PLL1 runs as the bootloader left it until
+      the clock tree starts, as in the first UNA Watch images.
+
 endif # SOC_STM32U5

@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# The experiments firmware: the storage in the embedded flash, and no battery
+# drivers, the charger a stand-in as in the first port
+flash: flash
+charger:
+  symbol: SIM_CHARGER
+  include: pbl/drivers/charger/sim.h
+gauge: null
+battery: null

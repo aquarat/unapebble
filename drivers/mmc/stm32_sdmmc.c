@@ -5,6 +5,7 @@
 #include <inttypes.h>
 #include <string.h>
 
+#include <pbl/boot_trace/boot_trace.h>
 #include <pbl/devicetree.h>
 #include <pbl/drivers/mmc/stm32_sdmmc.h>
 #include <pbl/kernel/delay.h>
@@ -284,6 +285,7 @@ static int prv_data(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t idx, uint32_t
 
     if ((sta & errors) != 0U) {
       PBL_LOG_ERR("CMD%" PRIu32 " data error, STA 0x%08" PRIx32, idx, sta);
+      PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_SDMMC_STA, (idx << 24) | (sta & 0x00FFFFFFU));
       ret = (sta & (SDMMC_STA_DTIMEOUT)) != 0U ? -ETIMEDOUT : -EIO;
     }
   }
@@ -362,11 +364,13 @@ static int prv_identify(const struct pbl_mmc_stm32_sdmmc *sd) {
   uint32_t ocr;
   int ret;
 
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_CMD0);
   ret = prv_cmd(sd, CMD_GO_IDLE_STATE, 0U, SDMMC_CMD_WAITRESP_NONE, 0U, nullptr);
   if (ret != 0) {
     return ret;
   }
 
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_CMD1);
   for (;;) {
     ret = prv_cmd(sd, CMD_SEND_OP_COND, OCR_ARG, SDMMC_CMD_WAITRESP_NO_CRC, 0U, &ocr);
     if (ret != 0) {
@@ -382,11 +386,13 @@ static int prv_identify(const struct pbl_mmc_stm32_sdmmc *sd) {
     prv_delay_ms(sd, 1U);
   }
 
+  PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_MMC_OCR, ocr);
   if ((ocr & OCR_SECTOR_MODE) == 0U) {
     PBL_LOG_ERR("Card addressed in bytes, OCR 0x%08" PRIx32, ocr);
     return -ENOTSUP;
   }
 
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_CID_RCA_SELECT);
   ret = prv_cmd(sd, CMD_ALL_SEND_CID, 0U, SDMMC_CMD_WAITRESP_LONG, 0U, nullptr);
   if (ret == 0) {
     ret = prv_cmd(sd, CMD_SET_RELATIVE_ADDR, RCA << 16, SDMMC_CMD_WAITRESP_SHORT, 0U, nullptr);
@@ -415,6 +421,7 @@ static int prv_configure(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t *num_blo
   uint32_t pwr_cl;
   int ret;
 
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_EXT_CSD);
   ret = prv_data(sd, CMD_SEND_EXT_CSD, 0U, st->buf, 1U, true);
   if (ret != 0) {
     return ret;
@@ -428,6 +435,7 @@ static int prv_configure(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t *num_blo
       !st->no_hs && (ext_csd[EXT_CSD_CARD_TYPE] & CARD_TYPE_HS_52) != 0U && sd->max_hz > DEFAULT_HZ;
   pwr_cl = (hs ? ext_csd[EXT_CSD_PWR_CL_52_195] : ext_csd[EXT_CSD_PWR_CL_26_195]) & 0x0FU;
 
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_PARTITION);
   if ((ext_csd[EXT_CSD_PARTITION_CONFIG] & PARTITION_ACCESS) != 0U) {
     ret = prv_switch(sd, EXT_CSD_PARTITION_CONFIG,
                      ext_csd[EXT_CSD_PARTITION_CONFIG] & ~PARTITION_ACCESS);
@@ -436,6 +444,7 @@ static int prv_configure(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t *num_blo
     }
   }
 
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_POWER_CLASS);
   if (pwr_cl != (ext_csd[EXT_CSD_POWER_CLASS] & 0x0FU)) {
     ret = prv_switch(sd, EXT_CSD_POWER_CLASS, pwr_cl);
     if (ret != 0) {
@@ -443,6 +452,7 @@ static int prv_configure(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t *num_blo
     }
   }
 
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_BUS_WIDTH);
   ret = prv_switch(sd, EXT_CSD_BUS_WIDTH, BUS_WIDTH_4);
   if (ret != 0) {
     return ret;
@@ -451,6 +461,7 @@ static int prv_configure(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t *num_blo
               PBL_FIELD_PREP(SDMMC_CLKCR_WIDBUS_MASK, SDMMC_CLKCR_WIDBUS_4),
               sd->base + STM32_SDMMC_CLKCR_OFFSET);
 
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_HS | (hs ? 0x100U : 0U));
   if (hs) {
     ret = prv_switch(sd, EXT_CSD_HS_TIMING, 1U);
     if (ret != 0) {
@@ -462,6 +473,7 @@ static int prv_configure(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t *num_blo
   }
 
   // Read the EXT_CSD again on the bus as it now runs: a bus that does not, fails here
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_EXT_CSD_AGAIN);
   ret = prv_data(sd, CMD_SEND_EXT_CSD, 0U, st->buf, 1U, true);
   if (ret == 0 && prv_sec_count(ext_csd) != *num_blocks) {
     ret = -EIO;
@@ -480,6 +492,7 @@ static int prv_power_on(const struct pbl_mmc *mmc, uint32_t *num_blocks) {
   int ret;
 
   pbl_idle_state_block(SOC_STM32_IDLE_STOP);
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_SUPPLY);
 
   // A supply that just went off has to fall first
   if (pbl_mmc_in_coredump(mmc)) {
@@ -507,6 +520,7 @@ static int prv_power_on(const struct pbl_mmc *mmc, uint32_t *num_blocks) {
   prv_delay_ms(sd, sd->power_on_delay_ms);
 
   // One data line at 400 kHz, the clock running, then the 74 clocks the card needs
+  PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_CLOCK);
   prv_putreg(sd, STM32_SDMMC_POWER_OFFSET, SDMMC_POWER_PWRCTRL_OFF);
   prv_putreg(
       sd, STM32_SDMMC_CLKCR_OFFSET,
@@ -520,7 +534,11 @@ static int prv_power_on(const struct pbl_mmc *mmc, uint32_t *num_blocks) {
   }
   if (ret != 0) {
     PBL_LOG_ERR("Card init failed: %d", ret);
+    PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_MMC_ERR, (uint32_t)ret);
+    PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_FAILED);
     prv_power_off(mmc);
+  } else {
+    PBL_BOOT_TRACE(PBL_BT_SDMMC, PBL_BT_SDMMC_READY);
   }
 
   pbl_idle_state_release(SOC_STM32_IDLE_STOP);
