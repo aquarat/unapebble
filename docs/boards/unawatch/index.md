@@ -18,7 +18,9 @@ The port runs the full firmware, on the gabbro platform of the Pebble Round
 unit, the buttons, the display, the haptics, storage on the eMMC and the
 battery: its charger and its fuel gauge. Bluetooth, USB and the sensors come
 next; see
-[](#unawatch-status). None of it has run on a watch yet.
+[](#unawatch-status). The first port, with its storage in the embedded flash,
+boots on a watch; the images with the storage on the eMMC loop at boot, which
+the experiments firmware, [the Lab](#unawatch-lab), is for finding out.
 
 {doc}`hardware` describes the hardware as the stock kernel drives it, with
 the sources of each detail.
@@ -68,9 +70,10 @@ Moving the storage and the resources to the eMMC freed the whole second bank,
 longer carries 905 KiB of resources, though one for a 2 MiB part still has to
 stay within 1664 KiB.
 
-The firmware takes SRAM1 to SRAM5 up to `0x2025e000`. The 72 KiB above, up to
-`0x20270000`, is where the stock kernel keeps its crash dumps and logs across
-resets, a reserved memory region left alone.
+The firmware takes SRAM1 to SRAM5 up to `0x2025dc00`. The 1 KiB above it is
+the boot trace's record (`boot_trace`, see [](#unawatch-boot-trace)), and the
+72 KiB above that, up to `0x20270000`, is where the stock kernel keeps its
+crash dumps and logs across resets, a reserved memory region left alone.
 
 ### Storage on the eMMC
 
@@ -127,8 +130,8 @@ the SMPS and voltage range 1, and runs the CPU and every bus at 160 MHz from
 PLL1 on MSIS at 48 MHz, with 4 flash wait states. The system timer is LPTIM4
 on the 32.768 kHz clock; LPTIM1 and LPTIM3 are left to the display.
 
-At boot the board drives the enables of the eMMC, the buzzer, the barometer,
-the GNSS and the reset of the BLE module low, and, outside release builds,
+At boot the board drives the enables of the buzzer, the barometer, the GNSS,
+the reset of the BLE module and, without its driver, the eMMC low, and, outside release builds,
 USB_DAM (PB15) high to route the console to the USB-C connector
 (`CONFIG_BOARD_UNAWATCH_CONSOLE_DAM`).
 
@@ -331,7 +334,9 @@ firmware does not use; its update drive and files are left alone.
 
 | | |
 | --- | --- |
-| **Built, not yet run on a watch** | Display and frontlight, VCOM on LPTIM1/LPTIM3, buttons, haptics, the eMMC with the storage and the system resources on it, retained registers (TAMP 24 to 29; the stock firmware uses 0 to 23), PCA9420 charger and MAX17262 fuel gauge |
+| **Runs on a watch** | The first port (`b697864b4`): clocks, display and frontlight, buttons, haptics, storage and resources in the embedded flash; the watch has the 4 MiB STM32U5A5 |
+| **Loops at boot on a watch** | The storage and the system resources on the eMMC (`4ff00ebca`), and so main; the cause is being looked for with the Lab (decision 261126-232719-15) |
+| **Built, not yet run on a watch** | The eMMC driver on its own, the PCA9420 charger and MAX17262 fuel gauge, the boot trace (TAMP 30 and 31; the stock firmware uses 0 to 23, PebbleOS 24 to 29), the Lab |
 | **Stand-ins, which nothing feeds** | Accelerometer, ambient light, microphone and die temperature are simulators: no steps |
 | **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS, buzzer or USB |
 | **Unknown** | Whether the panel is round (its round mask is a computed circle); whether the panel and haptics rails are on at power-on as expected |
@@ -364,6 +369,75 @@ Things to watch on a first boot:
 - **Code space**: images of 1619 KiB in release and about 1651 KiB in debug
   builds, of the 1664 KiB a 2 MiB part takes. The battery test takes about
   6 KiB (`CONFIG_BATTERY_TEST`).
+
+(unawatch-boot-trace)=
+
+## Boot trace
+
+Without a console, `CONFIG_BOOT_TRACE` (`subsys/boot_trace`) keeps across a
+reset where the firmware was and how it ended: the last breadcrumb, an area
+and a step, in TAMP backup register 30, a boot count and the image's number
+in 31, and in the RAM record at `0x2025dc00` the last 40 breadcrumbs with their
+uptime, the first CPU fault (PC, LR, CFSR, HFSR, BFAR, MMFAR, thread), the
+first panic (file, line, message), values noted along the way, and the reset
+flags and reboot reason the run started with. The next boot keeps the record
+of the run before for the Lab. The registers survive any reset and installing
+another image; the RAM record survives resets and, as the bootloader's stack
+is below it, should survive an install too: the Lab says whether it found it.
+A power loss clears the RAM. `CONFIG_BOOT_TRACE_BOOT_PATH` adds breadcrumbs to
+main()'s stages, the MMC class and driver, the NOR window, PFS's mount and
+format, the system resources' check and copy, and the battery drivers' init.
+
+(unawatch-lab)=
+
+## Lab firmware
+
+The experiments firmware starts as the first port did, which boots: storage in
+the embedded flash, the resources in the image, the eMMC unused at boot, no
+battery drivers, the clock tree without PLL1 Q. Its **Lab** app runs
+experiments on demand, each step named on screen and in the boot trace before
+it runs. Build it, and pack it with the resources, for 4 MiB parts:
+
+```shell
+BOARD=unawatch/lab BUILD_DIR=build-lab docker/build.sh
+python3 tools/una/pack_ota.py build-lab/pebbleos_resources.bin --max-size 0x3a0000 \
+    -v "$(git describe --tags --always)" -o unapebble_lab.ota
+```
+
+Install the `.ota` alone. The Lab opens at boot on **Last boot**, the report
+of the run before: the reset flags (IWDG, software, pin, BOR/power-on, ...),
+the reboot reason, the last breadcrumb and which image wrote it, and from the
+RAM record where it stopped and when, its fault and panic, its notes and last
+steps. PCs and LRs are to be looked up in the ELF of that image. Back shows
+the experiments; Select runs one, Up and Down scroll, Select again runs it
+again. Those that change something ask for a second Select.
+
+| Experiment | What it does |
+| --- | --- |
+| Last boot | The report above |
+| Clocks | PLL1 and its outputs, the eMMC's kernel clock, VOS, flash latency |
+| B's clocks | At runtime, the CPU on MSIS, PLL1 set up with Q at 80 MHz, back on PLL1, the eMMC on it, as B at boot |
+| eMMC on HSI48 | The Lab's eMMC clock, 24 MHz default speed, 48 MHz High Speed |
+| eMMC step by step | On the registers: supply, 400 kHz, CMD0, CMD1 (OCR), CID, RCA, CSD, select, EXT_CSD (size, card type, partition config, power classes, reliable writes), four lines, default speed then High Speed each checked, reads at 409600, a write and read back at 600000, power off |
+| eMMC via driver | The same through the MMC class and driver the eMMC builds use, and the idle power-off |
+| eMMC supply cut | The supply cut under the driver as the eMMC builds' board did at boot: does the driver recover? |
+| NOR window | The NOR emulation on scratch blocks: erase, program, read back, timed for a 16 MiB format |
+| Update drive | fat_ro's mount of the update drive, its root files, the packs and the version check, no copy |
+| Copy resources | The matching pack into the eMMC builds' resource bank 0, compared with the file |
+| B's storage | Read only: their resource banks, core dump storage and filesystem page headers |
+| B's logs | Read only: the newest generation of their flash log, the last boot of an eMMC build |
+| Battery | The gauge and the charger read raw, without their drivers: what the PMIC charges to |
+| Test: fault, assert, watchdog, reset, power off | Each ends the run a way, to check what the next boot's report shows |
+
+The Lab writes to the eMMC only in its GUI region: its tests at sectors
+600000 and up, past the eMMC builds' window, and the resource copy into their
+bank 0. As with the first port, no charger driver caps the charge: do not
+leave the watch charging on it.
+
+To follow an eMMC build that loops, install the traced one (breadcrumbs on its
+boot path), let it loop, hold the power button for 4 s as it restarts to get
+the bootloader menu, install the Lab and read **Last boot**, then **B's
+logs** and **B's storage**.
 
 ## Decisions
 
