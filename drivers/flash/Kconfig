@@ -79,6 +79,15 @@ config FLASH_STM32U5
       and programmed as whole 16-byte words; see
       drivers/flash/ecc_nor.h.
 
+config FLASH_MMC_NOR
+    bool "NOR window on an MMC"
+    default y
+    depends on DT_HAS_PEBBLE_MMC_NOR_ENABLED
+    select MMC
+    help
+      A range of an eMMC as the flash, with NOR semantics emulated on its
+      blocks: see drivers/flash/blk_nor.h.
+
 config FLASH_POSIX
     bool "POSIX external flash"
     default y
