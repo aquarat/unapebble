@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: nxp,pca9420
+config: CHARGER_PCA9420
+class: charger
+define: PBL_CHARGER_PCA9420_DEFINE
+args:
+  - parent: i2c
+  - reg: 0
+  - irq: 0
+  - phandle: monitored-battery
+    as: battery
+  - pinctrl: default
+    default: nullptr

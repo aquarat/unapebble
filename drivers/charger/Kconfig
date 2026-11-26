@@ -35,6 +35,29 @@ config CHARGER_NPM1300
     help
       Support for the charger of the Nordic nPM1300 PMIC.
 
+config CHARGER_PCA9420
+    bool "NXP PCA9420"
+    default y
+    depends on DT_HAS_NXP_PCA9420_ENABLED
+    select I2C
+    select KERNEL_SYS_WORKQ
+    select KERNEL_SYS_WORKQ_HIGH
+    select PINCTRL
+    help
+      Support for the linear charger of the NXP PCA9420 PMIC. The
+      regulators of the PMIC are left as they are.
+
+config CHARGER_PCA9420_CHARGE_LIMIT_MV
+    int "Charge voltage limit (mV)"
+    range 0 4600
+    default 0
+    depends on CHARGER_PCA9420
+    help
+      0 charges to the constant-charge-voltage of the battery. A lower
+      voltage stops the charge short of full, for a longer battery life:
+      4100 charges a 4.4 V cell to about 75 to 80%. The battery's voltage
+      is never exceeded.
+
 config CHARGER_SIM
     bool "Simulator"
     default y if SOC_QEMU_PEBBLE || SOC_POSIX

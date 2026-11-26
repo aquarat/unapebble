@@ -28,14 +28,15 @@ config GAUGE_MAX17262
 config GAUGE_MAX17262_FULL_SOC_THRESHOLD
     int "End-of-charge detection threshold (%)"
     range 0 100
+    default 95 if CHARGER_PCA9420 && CHARGER_PCA9420_CHARGE_LIMIT_MV != 0
     default 80
     depends on GAUGE_MAX17262
     help
       FullSOCThr: the gauge takes the end of a charge as a full battery
       only above this voltage-based state of charge. 80% is Maxim's
       recommendation for EZ models. A charger stopping short of full
-      takes 95%, so that the gauge never learns a partial charge as the
-      capacity of the cell.
+      (CHARGER_PCA9420_CHARGE_LIMIT_MV) takes 95%, so that the gauge
+      never learns a partial charge as the capacity of the cell.
 
 module = DRIVER_GAUGE
 module-str = Fuel gauge
