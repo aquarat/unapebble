@@ -1,6 +1,7 @@
 build
 build-test
 build-sdk
+/build-*/
 /target
 /samples/**/Cargo.lock
 xcode

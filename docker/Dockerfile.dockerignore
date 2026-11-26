@@ -1,0 +1,10 @@
+# Only what the Dockerfile copies is sent as build context.
+*
+!requirements.txt
+!docker/setup.sh
+!tools/libs/pbl-cli
+!tools/libs/pbl-console
+!tools/libs/pebble-loghash
+**/__pycache__
+**/*.egg-info
+**/build
