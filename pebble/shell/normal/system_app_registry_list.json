@@ -415,6 +415,14 @@
       "color_argb8": "GColorVividCeruleanARGB8"
     },
     {
+      "id": -197,
+      "enum": "BATTERY_TEST",
+      "md_fn": "battery_test_app_get_info",
+      "ifdefs": [
+        "CONFIG_BATTERY_TEST"
+      ]
+    },
+    {
       "id": -61,
       "enum": "SWAP_LAYER",
       "md_fn": "swap_layer_demo_get_app_info",
