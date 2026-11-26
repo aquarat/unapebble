@@ -44,7 +44,7 @@ jobs:
           cd src
           git -c http.extraHeader="$auth" checkout --detach "$GITHUB_SHA"
           git submodule update --init --depth 1 --jobs 4
-          echo "VERSION=$(git describe --tags --always)" >> "$GITHUB_ENV"
+          echo "VERSION=$(git describe --tags --match 'v[0-9]*' --always)" >> "$GITHUB_ENV"
 
       - name: Install the build environment
         working-directory: src
