@@ -88,6 +88,11 @@ static void uptime_callback(struct pbl_work *work) {
 static PBL_DELAYED_WORK_DEFINE(s_uptime_timer, uptime_callback);
 #endif
 
+#ifdef CONFIG_APP_LAB_AUTOSTART
+// The Lab app opens on its report of the run before (pebble/apps/system/lab)
+extern void lab_app_launch_at_boot(void);
+#endif
+
 #ifdef CONFIG_BOOT_TRACE
 // Up for a while with the launcher running: the boot is over
 static void prv_boot_done(struct pbl_work *work) {
@@ -254,6 +259,9 @@ int main(void) {
 
 #ifdef CONFIG_BOOT_TRACE
   pbl_delayed_work_reschedule(&pbl_sys_workq, &s_boot_done_timer, PBL_MSEC(BOOT_DONE_MS));
+#endif
+#ifdef CONFIG_APP_LAB_AUTOSTART
+  lab_app_launch_at_boot();
 #endif
   PBL_BOOT_TRACE(PBL_BT_MAIN, PBL_BT_MAIN_LAUNCHER);
   launcher_main_loop();
