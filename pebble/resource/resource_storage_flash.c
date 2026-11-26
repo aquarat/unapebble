@@ -4,6 +4,9 @@
 #include "resource_storage_flash.h"
 
 #include "resource_storage_impl.h"
+#ifdef CONFIG_RESOURCES_FROM_VOLUME
+#include "resource_storage_volume.h"
+#endif
 
 #include <stdlib.h>
 
@@ -37,6 +40,29 @@ static bool s_valid_resources_found = false;
 
 const ResourceStoreImplementation g_system_bank_impl;
 
+#ifdef CONFIG_RESOURCES_FROM_VOLUME
+static unsigned int prv_bank_to_replace(void) {
+  unsigned int oldest = 0;
+  uint32_t oldest_timestamp = UINT32_MAX;
+
+  for (unsigned int i = 0; i < PBL_ARRAY_SIZE(s_resource_banks); i++) {
+    ResourceManifest manifest;
+
+    pbl_flash_read(FLASH, s_resource_banks[i].begin, &manifest, sizeof(manifest));
+    // Erased or cleared
+    if (manifest.num_resources == 0 || manifest.num_resources > MAX_RESOURCES_FOR_SYSTEM_STORE) {
+      return i;
+    }
+    if (manifest.version.timestamp < oldest_timestamp) {
+      oldest = i;
+      oldest_timestamp = manifest.version.timestamp;
+    }
+  }
+
+  return oldest;
+}
+#endif
+
 static void resource_storage_system_bank_init(void) {
   boot_bit_clear(BOOT_BIT_NEW_SYSTEM_RESOURCES_AVAILABLE);
 
@@ -56,6 +82,17 @@ static void resource_storage_system_bank_init(void) {
       return;
     }
   }
+
+#ifdef CONFIG_RESOURCES_FROM_VOLUME
+  // Into the bank with no resources or the oldest, keeping the other for a firmware going back
+  s_active_bank = prv_bank_to_replace();
+  if (resource_storage_volume_install(&BANK, &SYSTEM_RESOURCE_VERSION) &&
+      resource_storage_generic_check(SYSTEM_APP, 0, &entry, &SYSTEM_RESOURCE_VERSION)) {
+    PBL_LOG_INFO("System resources installed in bank %u", s_active_bank);
+    s_valid_resources_found = true;
+    return;
+  }
+#endif
 
   // Welp, we found nothing. Leave s_valid_resources_found as false and when resource_storage_check
   // is called as part of system_resource_init we'll complain and handle missing resources.

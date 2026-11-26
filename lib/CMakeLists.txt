@@ -3,6 +3,7 @@
 
 add_subdirectory(c)
 add_subdirectory(util)
+pbl_add_subdirectory_ifdef(CONFIG_FAT_RO fat_ro)
 pbl_add_subdirectory_ifdef(CONFIG_FUEL_GAUGE fuel_gauge)
 pbl_add_subdirectory_ifdef(CONFIG_KRAEPELIN kraepelin)
 pbl_add_subdirectory_ifdef(CONFIG_VANHEES vanhees)

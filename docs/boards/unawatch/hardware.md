@@ -410,6 +410,38 @@ volume, partition 1 (`L/Source/Components/FileSystem/diskio.c:48-58`).
 | 2 "GUI" | 409600 | 100 MB | Raw GUI assets (not FAT) |
 | 3 "USR" | 614400 | Rest of the device | `2:`: user files, exposed over USB MSC |
 
+The current kernel source never reads or writes GUI: its only mention is an
+erase disabled with `#if 0` (`main.cpp:437-442`). PebbleOS keeps its storage
+there (see {doc}`index`).
+
+### 3.4 What bootloader 0.1.4 does with the eMMC (confirmed)
+
+Read in the disassembly of `UnaBootloader_0.1.4.hex`. The bootloader reaches
+the eMMC only through its copy of `flash_diskio` (`L/Source/Components/flash_diskio.cpp`),
+and only drives 0 (UPD) and 1 (SYS) of it: it never touches GUI or USR, and
+never erases.
+
+| Address | What it is |
+| --- | --- |
+| BL@0x08003FAC | `flash_diskio_set_flash()`: stores the eMMC object at `0x20072FAC`. The seven literal-pool references to that address, from BL@0x08003FB4 to BL@0x080041E4, are all inside the diskio functions below: nothing else reaches the eMMC object. |
+| BL@0x08003FEC, BL@0x0800408C | `flash_diskio_read()` and `flash_diskio_write()`: refuse a drive above 3, then address byte `(drive × 204800 + sector) × 512` (`mov.w r1, #204800` and `mla` at BL@0x0800403E and BL@0x080040DE). |
+| BL@0x08004198 | `flash_diskio_sector_count()`: 204800 sectors for drives 0 to 2, the rest of the device for 3 (`cmp.w r0, #614400` at BL@0x080041B6). |
+| BL@0x08003AA0–0x08003B70 | FatFs `disk_status/initialize/read/write/ioctl`: refuse a drive above 1 (`cmp r0, #1; bhi`), then map it through the byte table at `0x0801A240` = `{0, 1}`. FatFs only ever reaches UPD and SYS. `disk_ioctl` handles CTRL_SYNC and the three size queries; CTRL_TRIM (4) is refused. |
+| BL@0x080041E8–0x08004228 | The USB mass storage callbacks (status, read, write, block size, block count), registered at BL@0x08004238 through `USBD_STORAGE_config(drv, ...)` (BL@0x08004AEC) with `drv` from byte 7 of its object, set from `r2 = 0` by the call at BL@0x080018EC. The host only sees UPD, of 204800 sectors. |
+| BL@0x0801A10C, BL@0x0801A12C | The only drive paths in the image: `1:/settings` (deleted by a factory reset) and `0:`. |
+| BL@0x080039A8 | Formatting a drive: drives 0 and 1 only (`cmp r1, #1`), with `MKFS_PARM{FM_EXFAT, 2 FATs, 4096-byte clusters}` as the kernel's `FileSystem::format()`; FatFs keeps it within the 204800 sectors the drive reports. |
+| BL@0x08014660–0x0801494C | The SDMMC command helpers linked in: CMD0, 2, 3, 6, 7, 8, 9, 12, 13, 16, 17, 18, 24 and 25. ST's `stm32u5xx_ll_sdmmc.c` has the erase commands (CMD32, 33, 35, 36, 38) between CMD25 and CMD12; here CMD25 (BL@0x08014734) is followed by CMD12 (BL@0x08014768), and `SDMMC_MAXERASETIMEOUT` (63000) appears nowhere: the linker dropped them, so the bootloader cannot erase. |
+
+The one literal 409600 (`0x00064000` at `0x0801A0A4`) is a length in a table of
+RAM addresses (`0x20000498`, next to clock rates at `0x0801A0B4`), not a sector.
+
+This matters beyond the bootloader: the stock `Mmc::sectorErase()` passes byte
+addresses to `HAL_MMC_Erase()`, which takes block numbers on a card addressed
+in sectors (`L/Source/Drivers/STM32U5xx/Mmc.cpp:115-149`), so an erase of
+sector `n` would erase sector `n × 512`: sectors 800 to 1199 of UPD would land
+in GUI. The bootloader does not have that code, and the kernel only calls it
+from the disabled block above.
+
 ---
 
 ## 4. Power
@@ -1022,7 +1054,8 @@ verifies the kernel at boot.
 - It loads the first `0:/*.bmp` (8 bpp, 240 wide) as a **splash screen**
   (BL@0x08002986).
 - It has its own display driver (it references GPIOE, LPTIM1 and LPTIM3), its
-  own eMMC and FatFs, and USB MSC.
+  own eMMC and FatFs, and USB MSC. It only reaches the UPD and SYS drives of
+  the eMMC, and never erases (section 3.4).
 
 **Safety.** Because the bootloader runs first on every boot and only checks
 the SP, a broken PebbleOS image is recoverable: hold power for 4 s, then
@@ -1157,7 +1190,7 @@ adaptation:**
 | STM32U5 RCC / clock driver | **Missing** |
 | STM32 I2C | **Missing** |
 | STM32 SPI | **Missing** |
-| STM32 SDMMC | **Missing** |
+| STM32 SDMMC | `drivers/mmc/stm32_sdmmc.c` (built, not yet run) |
 | STM32 LPTIM PWM | **Missing** |
 | JDI-parallel display driver for STM32 | **Missing** |
 | DRV2625 driver | **Missing** |

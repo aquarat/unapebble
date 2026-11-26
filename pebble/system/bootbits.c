@@ -109,6 +109,10 @@ struct pb_version {
 static_assert(sizeof(struct pb_version) == 8, "pb_version struct must be 8 bytes");
 
 uint32_t boot_version_read(void) {
+#ifndef PART_BOOTLOADER_OFFSET
+  // A bootloader not on the storage flash, as the UNA Watch's: not one of ours
+  return 0UL;
+#else
   struct pb_version version_data;
   uint32_t version;
 
@@ -123,6 +127,7 @@ uint32_t boot_version_read(void) {
             ((uint32_t)version_data.patch << 8) | (uint32_t)version_data.tweak;
 
   return version;
+#endif
 }
 
 #else

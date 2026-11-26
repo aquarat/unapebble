@@ -102,6 +102,18 @@
 		};
 	};
 
+	// The eMMC powered down: no pull-up feeds it
+	sdmmc1_sleep: sdmmc1-1 {
+		pins1 {
+			pinmux = <STM32_PINMUX('C', 12, ANALOG)>, /* SDMMC1_CK */
+				 <STM32_PINMUX('D', 2, ANALOG)>, /* SDMMC1_CMD */
+				 <STM32_PINMUX('C', 8, ANALOG)>, /* SDMMC1_D0 */
+				 <STM32_PINMUX('C', 9, ANALOG)>, /* SDMMC1_D1 */
+				 <STM32_PINMUX('C', 10, ANALOG)>, /* SDMMC1_D2 */
+				 <STM32_PINMUX('C', 11, ANALOG)>; /* SDMMC1_D3 */
+		};
+	};
+
 	// The display VCOM: FRP on LPTIM1 CH1, XFRP on LPTIM3 CH1
 	lptim1_pwm_default: lptim1-pwm-0 {
 		pins1 {

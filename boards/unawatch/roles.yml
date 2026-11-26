@@ -3,7 +3,8 @@
 
 console_uart: usart3
 rtc: rtc
-flash: flash
+flash: emmc_storage
+mmc: sdmmc1
 display: display
 backlight: backlight
 vibe: haptics
