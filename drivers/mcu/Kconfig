@@ -26,7 +26,7 @@ config MCU_SF32LB
 config MCU_STM32
     bool "ST STM32"
     default y
-    depends on SOC_STM32H7
+    depends on SOC_FAMILY_STM32
     select NVMEM
     help
       Support for ST STM32 MCU information.

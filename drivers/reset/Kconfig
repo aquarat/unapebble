@@ -17,10 +17,10 @@ config RESET_SF32LB
       Reset controller of the SiFli SF32LB52 and SF32LB57 HPSYS RCC.
 
 config RESET_STM32H7
-    bool "STM32H7 RCC"
+    bool "STM32H7 and STM32U5 RCC"
     default y
-    depends on DT_HAS_ST_STM32H743_RCC_ENABLED
+    depends on DT_HAS_ST_STM32H743_RCC_ENABLED || DT_HAS_ST_STM32U5_RCC_ENABLED
     help
-      Reset controller of the STM32H7 RCC.
+      Reset controller of the STM32H7 and STM32U5 RCC.
 
 endif # RESET

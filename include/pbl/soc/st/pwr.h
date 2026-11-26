@@ -27,4 +27,18 @@
  */
 int pbl_soc_stm32h7_wakeup_pin_set(uintptr_t port, uint32_t pin, bool on);
 
+/**
+ * @brief Let a GPIO line wake the STM32U5 from power-off.
+ *
+ * Power-off goes through the bootloader of the UNA Watch, and the PMIC powers it on again: no
+ * line wakes it.
+ *
+ * @param port Registers of the GPIO port.
+ * @param pin Pin of the port.
+ * @param on Whether the line wakes the SoC.
+ *
+ * @retval -ENOTSUP Always.
+ */
+int pbl_soc_stm32u5_wakeup_pin_set(uintptr_t port, uint32_t pin, bool on);
+
 /** @} */

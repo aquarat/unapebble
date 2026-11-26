@@ -14,6 +14,17 @@
 #include <hardware/stm32_rtc.h>
 #include <hardware/stm32h7_exti.h>
 
+#ifdef CONFIG_SOC_STM32U5
+// The RTC with ICSR, whose interrupt wakes the CPU from Stop itself
+#define RTC_INIT_OFFSET   STM32_RTC3_ICSR_OFFSET
+#define RTC_CR_OFFSET     STM32_RTC3_CR_OFFSET
+#define RTC_ALRMAR_OFFSET STM32_RTC3_ALRMAR_OFFSET
+#else
+#define RTC_INIT_OFFSET   STM32_RTC_ISR_OFFSET
+#define RTC_CR_OFFSET     STM32_RTC_CR_OFFSET
+#define RTC_ALRMAR_OFFSET STM32_RTC_ALRMAR_OFFSET
+#endif
+
 // The asynchronous prescaler at its largest, for the least power
 #define PREDIV_A 127U
 
@@ -59,8 +70,8 @@ static int prv_enter_init(const struct pbl_rtc_stm32 *rtc) {
   int ret;
 
   prv_unlock(rtc);
-  pbl_modifyl(0U, RTC_ISR_INIT, rtc->base + STM32_RTC_ISR_OFFSET);
-  ret = PBL_POLL_BUSY_US((prv_getreg(rtc, STM32_RTC_ISR_OFFSET) & RTC_ISR_INITF) != 0U, 10U,
+  pbl_modifyl(0U, RTC_ISR_INIT, rtc->base + RTC_INIT_OFFSET);
+  ret = PBL_POLL_BUSY_US((prv_getreg(rtc, RTC_INIT_OFFSET) & RTC_ISR_INITF) != 0U, 10U,
                          INIT_TIMEOUT_US);
   if (ret != 0) {
     prv_lock(rtc);
@@ -70,7 +81,7 @@ static int prv_enter_init(const struct pbl_rtc_stm32 *rtc) {
 }
 
 static void prv_exit_init(const struct pbl_rtc_stm32 *rtc) {
-  pbl_modifyl(RTC_ISR_INIT, 0U, rtc->base + STM32_RTC_ISR_OFFSET);
+  pbl_modifyl(RTC_ISR_INIT, 0U, rtc->base + RTC_INIT_OFFSET);
   prv_lock(rtc);
 }
 
@@ -140,13 +151,33 @@ static int prv_set_time(const struct pbl_rtc *dev, time_t t) {
   return 0;
 }
 
+static bool prv_alarm_fired(const struct pbl_rtc_stm32 *rtc) {
+#ifdef CONFIG_SOC_STM32U5
+  return (prv_getreg(rtc, STM32_RTC3_SR_OFFSET) & RTC3_SR_ALRAF) != 0U;
+#else
+  return (prv_getreg(rtc, STM32_RTC_ISR_OFFSET) & RTC_ISR_ALRAF) != 0U;
+#endif
+}
+
+static void prv_alarm_clear(const struct pbl_rtc_stm32 *rtc) {
+#ifdef CONFIG_SOC_STM32U5
+  prv_putreg(rtc, STM32_RTC3_SCR_OFFSET, RTC3_SCR_CALRAF);
+#else
+  pbl_modifyl(RTC_ISR_ALRAF, 0U, rtc->base + STM32_RTC_ISR_OFFSET);
+#endif
+}
+
 // With the write protection lifted
 static int prv_alarm_disable(const struct pbl_rtc_stm32 *rtc) {
-  pbl_modifyl(RTC_CR_ALRAE | RTC_CR_ALRAIE, 0U, rtc->base + STM32_RTC_CR_OFFSET);
-  pbl_modifyl(RTC_ISR_ALRAF, 0U, rtc->base + STM32_RTC_ISR_OFFSET);
+  pbl_modifyl(RTC_CR_ALRAE | RTC_CR_ALRAIE, 0U, rtc->base + RTC_CR_OFFSET);
+  prv_alarm_clear(rtc);
 
+#ifdef CONFIG_SOC_STM32U5
+  return 0;
+#else
   return PBL_POLL_BUSY_US((prv_getreg(rtc, STM32_RTC_ISR_OFFSET) & RTC_ISR_ALRAWF) != 0U, 10U,
                           INIT_TIMEOUT_US);
+#endif
 }
 
 // Alarm A, on the date and time, to the second
@@ -172,11 +203,11 @@ static int prv_set_alarm(const struct pbl_rtc *dev, time_t t, pbl_rtc_alarm_call
   if (ret == 0) {
     rtc->state->alarm_cb = cb;
     rtc->state->alarm_user_data = user_data;
-    prv_putreg(rtc, STM32_RTC_ALRMAR_OFFSET,
+    prv_putreg(rtc, RTC_ALRMAR_OFFSET,
                prv_time_fields(&tm) | PBL_FIELD_PREP(RTC_ALRMAR_DT_MASK, tm.tm_mday / 10) |
                    PBL_FIELD_PREP(RTC_ALRMAR_DU_MASK, tm.tm_mday % 10));
     prv_putreg(rtc, STM32_RTC_ALRMASSR_OFFSET, 0U);
-    pbl_modifyl(0U, RTC_CR_ALRAE | RTC_CR_ALRAIE, rtc->base + STM32_RTC_CR_OFFSET);
+    pbl_modifyl(0U, RTC_CR_ALRAE | RTC_CR_ALRAIE, rtc->base + RTC_CR_OFFSET);
   }
   prv_lock(rtc);
 
@@ -198,14 +229,16 @@ static int prv_cancel_alarm(const struct pbl_rtc *dev) {
 void pbl_rtc_stm32_isr(const struct pbl_rtc_stm32 *rtc) {
   struct pbl_rtc_stm32_state *st = rtc->state;
 
+#ifndef CONFIG_SOC_STM32U5
   pbl_writel(PBL_BIT(rtc->exti_line), rtc->exti + STM32H7_EXTI_CORE_PR1_OFFSET);
-  if ((prv_getreg(rtc, STM32_RTC_ISR_OFFSET) & RTC_ISR_ALRAF) == 0U) {
+#endif
+  if (!prv_alarm_fired(rtc)) {
     return;
   }
 
   prv_unlock(rtc);
-  pbl_modifyl(RTC_CR_ALRAE | RTC_CR_ALRAIE, 0U, rtc->base + STM32_RTC_CR_OFFSET);
-  pbl_modifyl(RTC_ISR_ALRAF, 0U, rtc->base + STM32_RTC_ISR_OFFSET);
+  pbl_modifyl(RTC_CR_ALRAE | RTC_CR_ALRAIE, 0U, rtc->base + RTC_CR_OFFSET);
+  prv_alarm_clear(rtc);
   prv_lock(rtc);
 
   if (st->alarm_cb != nullptr) {
@@ -215,8 +248,10 @@ void pbl_rtc_stm32_isr(const struct pbl_rtc_stm32 *rtc) {
 
 // The alarms interrupt through their EXTI line, on the rising edge of the alarm flag
 static void prv_alarm_irq_init(const struct pbl_rtc_stm32 *rtc) {
+#ifndef CONFIG_SOC_STM32U5
   pbl_modifyl(0U, PBL_BIT(rtc->exti_line), rtc->exti + STM32H7_EXTI_RTSR1_OFFSET);
   pbl_modifyl(0U, PBL_BIT(rtc->exti_line), rtc->exti + STM32H7_EXTI_CORE_IMR1_OFFSET);
+#endif
   pbl_irq_enable(rtc->irq);
 }
 
@@ -254,8 +289,8 @@ int pbl_rtc_stm32_init(const struct pbl_device *dev) {
   prv_alarm_irq_init(rtc);
 
   if (prv_getreg(rtc, STM32_RTC_PRER_OFFSET) == prer &&
-      (prv_getreg(rtc, STM32_RTC_CR_OFFSET) & RTC_CR_BYPSHAD) != 0U &&
-      (prv_getreg(rtc, STM32_RTC_ISR_OFFSET) & RTC_ISR_INIT) == 0U) {
+      (prv_getreg(rtc, RTC_CR_OFFSET) & RTC_CR_BYPSHAD) != 0U &&
+      (prv_getreg(rtc, RTC_INIT_OFFSET) & RTC_ISR_INIT) == 0U) {
     return 0;
   }
 
@@ -265,7 +300,7 @@ int pbl_rtc_stm32_init(const struct pbl_device *dev) {
   }
 
   prv_putreg(rtc, STM32_RTC_PRER_OFFSET, prer);
-  pbl_modifyl(RTC_CR_FMT, RTC_CR_BYPSHAD, rtc->base + STM32_RTC_CR_OFFSET);
+  pbl_modifyl(RTC_CR_FMT, RTC_CR_BYPSHAD, rtc->base + RTC_CR_OFFSET);
   prv_exit_init(rtc);
 
   return 0;
@@ -279,3 +314,4 @@ const struct pbl_rtc_ops pbl_rtc_stm32_ops = {
 };
 
 #include PBL_DT_INSTANCES(st_stm32h7_rtc)
+#include PBL_DT_INSTANCES(st_stm32u5_rtc)

@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_STM32U5A5
+    bool "ST STM32U5A5"
+    select SOC_STM32U5
+    help
+      The STM32U5A5, with the cryptographic accelerators of the STM32U5
+      series and up to 4 MiB of flash.

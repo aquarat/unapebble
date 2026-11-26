@@ -5,7 +5,11 @@
 #include <stdint.h>
 
 #include <pbl/devicetree.h>
+#ifdef CONFIG_CLK_STM32U5
+#include <pbl/drivers/clk/stm32u5.h>
+#else
 #include <pbl/drivers/clk/stm32h7.h>
+#endif
 #include <pbl/drivers/watchdog.h>
 #include <pbl/drivers/watchdog/stm32_iwdg.h>
 #include <pbl/kernel/delay.h>
@@ -14,7 +18,24 @@
 #include <pbl/util/misc.h>
 
 #include <hardware/stm32_iwdg.h>
+#ifdef CONFIG_CLK_STM32U5
+#include <hardware/stm32u5_rcc.h>
+
+// The reset flags of the STM32U5, in CSR
+#define RESET_FLAGS       pbl_clk_stm32u5_reset_flags
+#define RCC_RSR_IWDG1RSTF RCC_CSR_IWDGRSTF
+#define RCC_RSR_BORRSTF   RCC_CSR_BORRSTF
+#define RCC_RSR_PINRSTF   RCC_CSR_PINRSTF
+#define RCC_RSR_SFT1RSTF  RCC_CSR_SFTRSTF
+#define RCC_RSR_WWDG1RSTF RCC_CSR_WWDGRSTF
+#define RCC_RSR_LPWR1RSTF RCC_CSR_LPWRRSTF
+// A power-on reset also sets the brown-out flag, the only one it sets
+#define RCC_RSR_PORRSTF 0U
+#else
 #include <hardware/stm32h7_rcc.h>
+
+#define RESET_FLAGS pbl_clk_stm32h7_reset_flags
+#endif
 
 // The prescaler and reload take up to 5 LSI cycles, about 160 us, to reach the counter domain
 #define UPDATE_TIMEOUT_US 1000U
@@ -63,7 +84,7 @@ static uint32_t prv_reset_flags(bool clear) {
     return 0U;
   }
 
-  return pbl_clk_stm32h7_reset_flags(s_wdt->clk.ctrl, clear);
+  return RESET_FLAGS(s_wdt->clk.ctrl, clear);
 }
 
 bool watchdog_check_reset_flag(void) {

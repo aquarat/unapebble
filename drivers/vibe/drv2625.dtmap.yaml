@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: ti,drv2625
+config: VIBE_DRV2625
+class: vibe
+define: PBL_DRV2625_DEFINE
+args:
+  - parent: i2c
+  - reg: 0
+  - gpio: enable
+  - prop: ti,rated-voltage
+    default: 0x3F
+  - prop: ti,od-clamp
+    default: 0x89

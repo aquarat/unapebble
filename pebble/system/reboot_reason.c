@@ -34,7 +34,7 @@ void reboot_reason_set(RebootReason *reason) {
   retained_write(REBOOT_REASON_STUCK_TASK_PC, raw[1]);
   retained_write(REBOOT_REASON_STUCK_TASK_LR, raw[2]);
   retained_write(REBOOT_REASON_STUCK_TASK_CALLBACK, raw[3]);
-#elifdef CONFIG_SOC_SF32LB52
+#elif defined(CONFIG_SOC_SF32LB52) || defined(CONFIG_SOC_STM32U5)
   uint32_t *raw = (uint32_t *)reason;
 
   if (retained_read(REBOOT_REASON_REGISTER_1)) {
@@ -77,7 +77,7 @@ static void prv_sys_off_prepare(enum pbl_sys_off_mode mode, void *user_data) {
 #ifdef CONFIG_SOC_NRF52
   uint32_t *raw = (uint32_t *)&reason;
   retained_write(REBOOT_REASON_REGISTER_1, *raw);
-#elifdef CONFIG_SOC_SF32LB52
+#elif defined(CONFIG_SOC_SF32LB52) || defined(CONFIG_SOC_STM32U5)
   uint32_t *raw = (uint32_t *)&reason;
   retained_write(REBOOT_REASON_REGISTER_1, *raw);
 #elif defined(CONFIG_QEMU) || defined(CONFIG_SOC_POSIX)
@@ -98,7 +98,7 @@ void reboot_reason_get(RebootReason *reason) {
   raw[1] = retained_read(REBOOT_REASON_STUCK_TASK_PC);
   raw[2] = retained_read(REBOOT_REASON_STUCK_TASK_LR);
   raw[3] = retained_read(REBOOT_REASON_STUCK_TASK_CALLBACK);
-#elifdef CONFIG_SOC_SF32LB52
+#elif defined(CONFIG_SOC_SF32LB52) || defined(CONFIG_SOC_STM32U5)
   uint32_t *raw = (uint32_t *)reason;
   raw[0] = retained_read(REBOOT_REASON_REGISTER_1);
   raw[1] = retained_read(REBOOT_REASON_STUCK_TASK_PC);
@@ -119,7 +119,7 @@ void reboot_reason_clear(void) {
   retained_write(REBOOT_REASON_STUCK_TASK_PC, 0);
   retained_write(REBOOT_REASON_STUCK_TASK_LR, 0);
   retained_write(REBOOT_REASON_STUCK_TASK_CALLBACK, 0);
-#elifdef CONFIG_SOC_SF32LB52
+#elif defined(CONFIG_SOC_SF32LB52) || defined(CONFIG_SOC_STM32U5)
   retained_write(REBOOT_REASON_REGISTER_1, 0);
   retained_write(REBOOT_REASON_STUCK_TASK_PC, 0);
   retained_write(REBOOT_REASON_STUCK_TASK_LR, 0);
@@ -135,7 +135,7 @@ void reboot_reason_clear(void) {
 uint32_t reboot_get_slot_of_last_launched_app(void) {
 #ifdef CONFIG_SOC_NRF52
   return retained_read(SLOT_OF_LAST_LAUNCHED_APP);
-#elifdef CONFIG_SOC_SF32LB52
+#elif defined(CONFIG_SOC_SF32LB52) || defined(CONFIG_SOC_STM32U5)
   return retained_read(SLOT_OF_LAST_LAUNCHED_APP);
 #elif defined(CONFIG_QEMU) || defined(CONFIG_SOC_POSIX)
   return RTC_ReadBackupRegister(SLOT_OF_LAST_LAUNCHED_APP);
@@ -145,7 +145,7 @@ uint32_t reboot_get_slot_of_last_launched_app(void) {
 void reboot_set_slot_of_last_launched_app(uint32_t app_slot) {
 #ifdef CONFIG_SOC_NRF52
   retained_write(SLOT_OF_LAST_LAUNCHED_APP, app_slot);
-#elifdef CONFIG_SOC_SF32LB52
+#elif defined(CONFIG_SOC_SF32LB52) || defined(CONFIG_SOC_STM32U5)
   retained_write(SLOT_OF_LAST_LAUNCHED_APP, app_slot);
 #elif defined(CONFIG_QEMU) || defined(CONFIG_SOC_POSIX)
   RTC_WriteBackupRegister(SLOT_OF_LAST_LAUNCHED_APP, app_slot);

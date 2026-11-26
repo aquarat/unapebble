@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_UNAWATCH
+    bool
+    default y
+    select GPIO
+    help
+      The UNA Watch. The board drives the enables of its loads to their
+      off level at boot, as some must not float, which takes the GPIO
+      class.
+
+if BOARD_UNAWATCH
+
+config BOARD_UNAWATCH_CONSOLE_DAM
+    bool "Console on the USB-C connector"
+    default y if !RELEASE
+    help
+      Drive USB_DAM (PB15) high at boot, which routes the USART3 console
+      to the USB-C connector, for a Type-C debug accessory adapter. The
+      stock firmware only does so once the STUSB4500 reports a debug
+      accessory; without one attached, the console line stays wired to
+      the connector.
+
+endif # BOARD_UNAWATCH

@@ -43,6 +43,17 @@ config PWM_SF32LB_GPTIM
     help
       Support for PWM outputs of the SiFli SF32LB general-purpose timers.
 
+config PWM_STM32_LPTIM
+    bool "STM32 LPTIM"
+    default y
+    depends on DT_HAS_ST_STM32_PWM_LP_ENABLED
+    depends on SOC_STM32U5
+    select CLK
+    select PINCTRL
+    help
+      Support for the PWM outputs of the STM32U5 low-power timers LPTIM1
+      to LPTIM3.
+
 config PWM_SHELL
     bool "Shell commands"
     default DRIVER_SHELL

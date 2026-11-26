@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: st,stm32u5-pinctrl
+config: GPIO_STM32
+class: [gpio, intc]
+define: PBL_GPIO_STM32U5_DEFINE
+symbol:
+  gpio: "{sym}"
+  intc: "{sym}_intc"
+children:
+  property: gpio-controller
+args:
+  - name: true
+  - reg: 0
+  - clock: 0
+  - reg: 0
+    of: interrupt-parent
+    up: true

@@ -45,7 +45,7 @@ config GPIO_SF32LB_IRQ_PRIO
 config GPIO_STM32
     bool "ST STM32"
     default y
-    depends on DT_HAS_ST_STM32H743_PINCTRL_ENABLED
+    depends on DT_HAS_ST_STM32H743_PINCTRL_ENABLED || DT_HAS_ST_STM32U5_PINCTRL_ENABLED
     select CLK
     select INTC
     help

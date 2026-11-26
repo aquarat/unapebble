@@ -40,6 +40,23 @@ config I2C_SF32LB_IRQ_PRIO
     help
       Priority of the controller interrupts.
 
+config I2C_STM32
+    bool "ST STM32 I2C controller"
+    default y
+    depends on DT_HAS_ST_STM32F7_I2C_ENABLED
+    select CLK
+    select PINCTRL
+    help
+      Support for the I2C controller of the ST STM32F7 and later, with
+      TIMINGR, as on the STM32U5. Interrupt driven, without DMA.
+
+config I2C_STM32_IRQ_PRIO
+    int "Interrupt priority"
+    default 0
+    depends on I2C_STM32
+    help
+      Priority of the controller interrupts.
+
 config I2C_SHELL
     bool "Shell commands"
     default DRIVER_SHELL

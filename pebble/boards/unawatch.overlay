@@ -1,0 +1,68 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: Apache-2.0
+
+// The firmware's storage, in the second bank of the 4 MiB embedded flash: the image runs from
+// the first, which the bank being written does not stall. The bootloader erases everything from
+// 0x08060000 when it installs an .ota, so the system resources are installed with the image,
+// appended to it at their partition (tools/una/pack_ota.py --resources), and the filesystem
+// and the logs start again empty after each update.
+//
+// Every partition is a whole number of 8 KiB pages, so none shares a page with another; the
+// filesystem is in 64 KiB sectors, as PFS needs.
+
+// The gabbro platform's 260 x 260 framebuffer, of which the 240 x 240 panel shows the centre
+&display {
+	width = <260>;
+	height = <260>;
+};
+
+&internal_flash {
+	partitions {
+		partition@200000 {
+			label = "system-resources-bank-0";
+			reg = <0x200000 0x100000>;
+		};
+
+		// The bank an update of the resources over Bluetooth would go to: none is possible
+		// yet, so it only gets the room left before the next sector
+		partition@300000 {
+			label = "system-resources-bank-1";
+			reg = <0x300000 0x2000>;
+		};
+
+		partition@302000 {
+			label = "safe-firmware";
+			reg = <0x302000 0x2000>;
+		};
+
+		partition@304000 {
+			label = "scratch";
+			reg = <0x304000 0x2000>;
+		};
+
+		partition@306000 {
+			label = "mfg-info";
+			reg = <0x306000 0x2000>;
+		};
+
+		partition@308000 {
+			label = "tzinfo";
+			reg = <0x308000 0x2000>;
+		};
+
+		partition@30a000 {
+			label = "shared-prf-storage";
+			reg = <0x30a000 0x2000>;
+		};
+
+		partition@310000 {
+			label = "filesystem";
+			reg = <0x310000 0xd0000>;
+		};
+
+		partition@3e0000 {
+			label = "debug-db";
+			reg = <0x3e0000 0x20000>;
+		};
+	};
+};

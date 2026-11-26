@@ -17,3 +17,4 @@ serialized per bus.
 | --- | --- | --- |
 | Nordic nRF5 I2C Controller | `nordic,nrf52832-twim` | `CONFIG_I2C_NRF5` |
 | SiFli SF32LB I2C Controller | `sifli,sf32lb52-i2c` | `CONFIG_I2C_SF32LB` |
+| ST STM32 I2C Controller | `st,stm32f7-i2c` | `CONFIG_I2C_STM32` |

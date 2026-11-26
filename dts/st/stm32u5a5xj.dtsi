@@ -1,0 +1,26 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+
+// The STM32U5A5xJ: 4 MiB of flash in two banks, 2.5 MiB of SRAM
+
+#include "stm32u5.dtsi"
+
+/ {
+	// SRAM1 (768 KiB), SRAM2 (64 KiB), SRAM3 (832 KiB) and SRAM5 (832 KiB), one after the other
+	sram0: memory@20000000 {
+		device_type = "memory";
+		reg = <0x20000000 0x270000>;
+	};
+
+	// SRAM4, in the low-power domain
+	sram4: memory@28000000 {
+		device_type = "memory";
+		reg = <0x28000000 0x4000>;
+	};
+};
+
+&flash {
+	internal_flash: flash@8000000 {
+		reg = <0x08000000 0x400000>;
+	};
+};

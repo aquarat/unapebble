@@ -8,6 +8,7 @@
 #include <pbl/kernel/delay.h>
 #include <pbl/kernel/time.h>
 #include <pbl/util/misc.h>
+#include <pbl/util/size.h>
 
 #define POWER_SEQ_DELAY_US 11000U
 #define OFF_TIME_MS        500U
@@ -46,7 +47,8 @@ int pbl_panel_jdi_mip_init(const struct pbl_device *dev) {
       PBL_CONTAINER_OF(dev, const struct pbl_panel_jdi_mip, panel.dev);
 
   if (pbl_device_init(&jdi->vddp->dev) != 0 || pbl_device_init(&jdi->vlcd->dev) != 0 ||
-      pbl_device_init(&jdi->vcom.ctrl->dev) != 0) {
+      pbl_device_init(&jdi->vcom[0].ctrl->dev) != 0 ||
+      (jdi->vcom[1].ctrl != nullptr && pbl_device_init(&jdi->vcom[1].ctrl->dev) != 0)) {
     return -ENODEV;
   }
 
@@ -93,19 +95,35 @@ static int prv_enable(const struct pbl_panel *panel) {
   struct pbl_pwm_state vcom;
   int ret;
 
-  pbl_pwm_init_state(&jdi->vcom, &vcom);
-  ret = pbl_pwm_set_relative_duty_cycle(&vcom, 1U, 2U);
-  if (ret != 0) {
-    return ret;
+  for (size_t i = 0U; i < PBL_ARRAY_SIZE(jdi->vcom) && jdi->vcom[i].ctrl != nullptr; i++) {
+    pbl_pwm_init_state(&jdi->vcom[i], &vcom);
+    ret = pbl_pwm_set_relative_duty_cycle(&vcom, 1U, 2U);
+    if (ret != 0) {
+      return ret;
+    }
+
+    vcom.enabled = true;
+
+    ret = pbl_pwm_apply(&jdi->vcom[i], &vcom);
+    if (ret != 0) {
+      return ret;
+    }
   }
 
-  vcom.enabled = true;
-
-  return pbl_pwm_apply(&jdi->vcom, &vcom);
+  return 0;
 }
 
 static int prv_disable(const struct pbl_panel *panel) {
-  return pbl_pwm_disable(&prv_jdi(panel)->vcom);
+  const struct pbl_panel_jdi_mip *jdi = prv_jdi(panel);
+  int ret = 0;
+
+  for (size_t i = 0U; i < PBL_ARRAY_SIZE(jdi->vcom) && jdi->vcom[i].ctrl != nullptr; i++) {
+    int err = pbl_pwm_disable(&jdi->vcom[i]);
+
+    ret = (ret != 0) ? ret : err;
+  }
+
+  return ret;
 }
 
 static int prv_unprepare(const struct pbl_panel *panel) {
@@ -122,4 +140,5 @@ const struct pbl_panel_ops pbl_panel_jdi_mip_ops = {
 };
 
 #include PBL_DT_INSTANCES(jdi_lpm015m135a)
+#include PBL_DT_INSTANCES(sharp_ls012b7dd06a)
 #include PBL_DT_INSTANCES(sharp_ls013b7dd02)

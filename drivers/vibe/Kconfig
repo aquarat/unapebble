@@ -42,6 +42,15 @@ config VIBE_DRV2604
     help
       Support for the TI DRV2604 haptic driver.
 
+config VIBE_DRV2625
+    bool "TI DRV2625"
+    default y
+    depends on DT_HAS_TI_DRV2625_ENABLED
+    select GPIO
+    select I2C
+    help
+      Support for the TI DRV2625 haptic driver, with an ERM.
+
 config VIBE_SIM
     bool "Simulator"
     default y

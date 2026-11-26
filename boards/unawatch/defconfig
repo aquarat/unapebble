@@ -1,0 +1,5 @@
+# unawatch board configuration
+
+CONFIG_SOC_STM32U5A5=y
+
+CONFIG_UART=y

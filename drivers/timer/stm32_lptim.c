@@ -3,19 +3,25 @@
 
 #include <stdatomic.h>
 
+#ifdef CONFIG_SOC_STM32U5
+#include <pbl/drivers/clk/stm32u5.h>
+#else
 #include <pbl/drivers/clk/stm32h7.h>
+#include <pbl/soc/st/exti.h>
+#endif
 #include <pbl/drivers/reset/stm32h7.h>
 #include <pbl/drivers/timer.h>
 #include <pbl/kernel/delay.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/mmio.h>
 #include <pbl/kernel/reboot.h>
-#include <pbl/soc/st/exti.h>
 #include <pbl/util/math.h>
 
 #include <devicetree/regs.h>
 #include <hardware/stm32_lptim.h>
+#ifndef CONFIG_SOC_STM32U5
 #include <hardware/stm32h7_exti.h>
+#endif
 
 // A few cycles of the counter clock
 #define SYNC_TIMEOUT_US 1000U
@@ -33,11 +39,18 @@
  */
 
 #define LPTIM_BASE PBL_DT_REG_ST_STM32_LPTIMER_TIMER
+#ifdef CONFIG_SOC_STM32U5
+// Its interrupt wakes the CPU from Stop itself
+#define LPTIM_IRQN PBL_DT_IRQ_ST_STM32_LPTIMER_TIMER
+#define LPTIM_RCC  STM32U5_RCC
+#else
 // Its interrupt comes through its line of the EXTI, which wakes the CPU from Stop
 #define LPTIM_IRQN STM32H7_EXTI_IRQ(PBL_DT_IRQ_ST_STM32_LPTIMER_TIMER)
 #define EXTI_LINE  PBL_DT_IRQ_ST_STM32_LPTIMER_TIMER
+#define LPTIM_RCC  STM32H7_RCC
+#endif
 
-static const struct pbl_clk s_clk = PBL_CLK(STM32H7_RCC, PBL_DT_CLK_ST_STM32_LPTIMER_TIMER);
+static const struct pbl_clk s_clk = PBL_CLK(LPTIM_RCC, PBL_DT_CLK_ST_STM32_LPTIMER_TIMER);
 static const struct pbl_reset s_rst =
     PBL_RESET(STM32H7_RCC_RESET, PBL_DT_RST_ST_STM32_LPTIMER_TIMER);
 static uint64_t s_rate_mhz;
@@ -156,7 +169,7 @@ static int prv_init(const struct pbl_device *dev) {
   int ret;
 
   if (!s_started) {
-    ret = pbl_device_init(&STM32H7_RCC->dev);
+    ret = pbl_device_init(&LPTIM_RCC->dev);
     if (ret == 0) {
       ret = pbl_device_init(&STM32H7_RCC_RESET->dev);
     }
@@ -175,10 +188,21 @@ static int prv_init(const struct pbl_device *dev) {
       return ret;
     }
 
-    // Free running over the whole counter, undivided; the interrupt is only set while disabled
+    // Free running over the whole counter, undivided. The interrupt is set while disabled, but
+    // on the STM32U5, where it is set once enabled.
     prv_putreg(STM32_LPTIM_CFGR_OFFSET, 0U);
+#ifdef CONFIG_SOC_STM32U5
+    prv_putreg(STM32_LPTIM_CR_OFFSET, LPTIM_CR_ENABLE);
+    prv_putreg(STM32_LPTIM_IER_OFFSET, LPTIM_ISR_CMPM);
+    ret = PBL_POLL_BUSY_US((prv_getreg(STM32_LPTIM_ISR_OFFSET) & LPTIM_ISR_DIEROK) != 0U, 1U,
+                           SYNC_TIMEOUT_US);
+    if (ret != 0) {
+      return ret;
+    }
+#else
     prv_putreg(STM32_LPTIM_IER_OFFSET, LPTIM_ISR_CMPM);
     prv_putreg(STM32_LPTIM_CR_OFFSET, LPTIM_CR_ENABLE);
+#endif
     prv_putreg(STM32_LPTIM_ARR_OFFSET, LPTIM_CNT_MASK);
     ret = PBL_POLL_BUSY_US((prv_getreg(STM32_LPTIM_ISR_OFFSET) & LPTIM_ISR_ARROK) != 0U, 1U,
                            SYNC_TIMEOUT_US);
@@ -187,8 +211,10 @@ static int prv_init(const struct pbl_device *dev) {
     }
     prv_putreg(STM32_LPTIM_CR_OFFSET, LPTIM_CR_ENABLE | LPTIM_CR_CNTSTRT);
     pbl_irq_enable(LPTIM_IRQN);
+#ifndef CONFIG_SOC_STM32U5
     // Wakes this core from Stop
     pbl_soc_stm32h7_wakeup_enable(EXTI_LINE);
+#endif
     s_started = true;
   }
 

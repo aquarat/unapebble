@@ -23,6 +23,15 @@ struct pbl_rng_stm32 {
   uintptr_t base;
   /** Clock. */
   struct pbl_clk clk;
+  /**
+   * Configuration of the noise source and conditioning, the RNG_CONFIG fields of CR, taken with
+   * the conditioning reset, or 0 to keep the one at reset.
+   */
+  uint32_t nist_config;
+  /** Value written to HTCR before its configuration, to unlock it. */
+  uint32_t ht_magic;
+  /** Health test configuration, HTCR, with the conditioning reset. */
+  uint32_t ht_config;
 };
 
 /** @cond INTERNAL_HIDDEN */
@@ -36,11 +45,15 @@ int pbl_rng_stm32_init(const struct pbl_device *dev);
  * @param _name Name.
  * @param _base Registers.
  * @param _clk Clock, from PBL_CLK().
+ * @param _nist_config Configuration of CR, taken with the conditioning reset, 0 for none.
+ * @param _ht_magic Value unlocking HTCR.
+ * @param _ht_config Health test configuration.
  */
-#define PBL_RNG_STM32_DEFINE(sym, _name, _base, _clk)                                              \
+#define PBL_RNG_STM32_DEFINE(sym, _name, _base, _clk, _nist_config, _ht_magic, _ht_config)         \
   PBL_DEVICE_STATE_DEFINE(sym);                                                                    \
   PBL_DEVICE_INSTANCE_DEV(sym, struct pbl_rng_stm32) {                                             \
     .dev = PBL_DEVICE_INIT(sym, _name, pbl_rng_stm32_init, nullptr), .base = (_base), .clk = _clk, \
+    .nist_config = (_nist_config), .ht_magic = (_ht_magic), .ht_config = (_ht_config),             \
   }
 
 /** @} */

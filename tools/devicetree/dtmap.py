@@ -1480,10 +1480,19 @@ def partitions(tree):
 
 
 def flash_table(tree, flash=None):
-    """The fixed-partitions node of ``flash``, a node label, or of the only flash with one."""
+    """The fixed-partitions node of ``flash``, a node label, or of the only flash with one.
+
+    The flash may be the controller of a memory node holding the partitions, as an embedded
+    flash under its flash controller.
+    """
     tables = partition_tables(tree)
     if flash is not None:
-        tables = [t for t in tables if flash in t.parent.labels]
+        tables = [
+            t
+            for t in tables
+            if flash in t.parent.labels
+            or (t.parent.parent is not None and flash in t.parent.parent.labels)
+        ]
     elif len(tables) > 1:
         raise DtError(
             f"{tables[1].path}: several flashes have partitions, but no flash role"

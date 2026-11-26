@@ -46,6 +46,20 @@
 #define RTC_PRER_PREDIV_S_MASK PBL_GENMASK(14, 0)
 #define RTC_PRER_PREDIV_A_MASK PBL_GENMASK(22, 16)
 
+/*
+ * The RTC of the STM32U5: initialization in ICSR, at the offset and with the bits of ISR, the
+ * control and alarm registers further on, and the alarm flag in SR, cleared through SCR. The
+ * alarm takes writes while it is disabled.
+ */
+#define STM32_RTC3_ICSR_OFFSET   0x000c
+#define STM32_RTC3_CR_OFFSET     0x0018
+#define STM32_RTC3_ALRMAR_OFFSET 0x0040
+#define STM32_RTC3_SR_OFFSET     0x0050
+#define STM32_RTC3_SCR_OFFSET    0x005c
+
+#define RTC3_SR_ALRAF   PBL_BIT(0)
+#define RTC3_SCR_CALRAF PBL_BIT(0)
+
 #define RTC_WPR_KEY1 0xcaU
 #define RTC_WPR_KEY2 0x53U
 #define RTC_WPR_LOCK 0xffU

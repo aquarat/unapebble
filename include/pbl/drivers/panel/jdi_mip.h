@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include <pbl/drivers/panel.h>
+#include <pbl/drivers/panel/ls012b7dd06a.h>
 #include <pbl/drivers/panel/ls013b7dd02.h>
 #include <pbl/drivers/pwm.h>
 #include <pbl/drivers/regulator.h>
@@ -15,10 +16,12 @@
  * @ingroup drivers_panel
  * @brief @ref drivers_panel driver for memory-in-pixel panels on the JDI parallel interface.
  *
- * Drives the JDI LPM015M135A and the Sharp LS013B7DD02, with their timing from devicetree. The
- * panel has two supplies: VLCD, raised first, and VDDP. Its VCOM is inverted by a PWM output at the
- * VCOM frequency, 50% duty cycle, while the image is on. Once powered down, the panel is kept off
- * for 500 ms before it is powered again.
+ * Drives the JDI LPM015M135A and the Sharp LS013B7DD02 and LS012B7DD06A, with their timing from
+ * devicetree. The panel has two supplies: VLCD, raised first, and VDDP. Its VCOM is inverted by a
+ * PWM output at the VCOM frequency, 50% duty cycle, while the image is on; a panel whose XFRP
+ * (VA) input takes the inverse of FRP (VB) from a second output, rather than the panel making
+ * it, has a second PWM, inverted. Once powered down, the panel is kept off for 500 ms before it
+ * is powered again.
  *
  * @code{.c}
  * PBL_PANEL_JDI_MIP_DEFINE(s_panel, "panel", &s_vddp, &s_vlcd, 746268, 200, 2, 6, 228, 0, 6, 3, 99,
@@ -44,8 +47,8 @@ struct pbl_panel_jdi_mip {
   const struct pbl_regulator *vddp;
   /** VLCD supply. */
   const struct pbl_regulator *vlcd;
-  /** VCOM inversion signal. */
-  struct pbl_pwm vcom;
+  /** VCOM inversion signal, and its inverse when the panel takes one, else no controller. */
+  struct pbl_pwm vcom[2];
 };
 
 /** @cond INTERNAL_HIDDEN */
@@ -69,7 +72,7 @@ int pbl_panel_jdi_mip_init(const struct pbl_device *dev);
  * @param _vfront_porch Lines after the visible ones.
  * @param _enable_start First column of the ENB pulse.
  * @param _enable_end Last column of the ENB pulse.
- * @param ... VCOM inversion signal, from PBL_PWM().
+ * @param ... VCOM inversion signal, from PBL_PWM(), and its inverse for a panel taking one.
  */
 #define PBL_PANEL_JDI_MIP_DEFINE(sym, _name, _vddp, _vlcd, _clock_hz, _hactive, _hback_porch,    \
                                  _hfront_porch, _vactive, _vback_porch, _vfront_porch,           \
@@ -90,7 +93,7 @@ int pbl_panel_jdi_mip_init(const struct pbl_device *dev);
   PBL_DEVICE_INSTANCE(sym, struct pbl_panel_jdi_mip, struct pbl_panel, panel) {                  \
     .panel = PBL_PANEL_INIT(sym, _name, pbl_panel_jdi_mip_init, nullptr, &pbl_panel_jdi_mip_ops, \
                             &sym##_timing, PBL_PANEL_BUS_FORMAT_JDI_RGB222),                     \
-    .state = &sym##_jdi_state, .vddp = (_vddp), .vlcd = (_vlcd), .vcom = __VA_ARGS__,            \
+    .state = &sym##_jdi_state, .vddp = (_vddp), .vlcd = (_vlcd), .vcom = {__VA_ARGS__},            \
   }
 
 /** @} */

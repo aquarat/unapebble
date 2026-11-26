@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# Blocks the early init, the clock tree, the idle states and power-off touch outside of devices
+config: SOC_STM32U5
+labels:
+  - rcc
+  - pwr
+  - exti
+  - flash
+  - icache
+  - tamp

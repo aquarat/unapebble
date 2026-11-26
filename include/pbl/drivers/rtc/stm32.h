@@ -78,4 +78,27 @@ void pbl_rtc_stm32_isr(const struct pbl_rtc_stm32 *rtc);
   };                                                                                  \
   PBL_IRQ_CONNECT_NUM(_irq, CONFIG_RTC_STM32_IRQ_PRIO, pbl_rtc_stm32_isr, &sym##_inst, 0)
 
+/**
+ * @brief Define the RTC of the STM32U5, whose alarm interrupts without the EXTI.
+ *
+ * @param sym Symbol.
+ * @param _name Device name.
+ * @param _base Registers.
+ * @param _pclk Bus clock, from PBL_CLK().
+ * @param _clk Kernel clock, from PBL_CLK().
+ * @param _irq Alarm interrupt.
+ */
+#define PBL_RTC_STM32U5_DEFINE(sym, _name, _base, _pclk, _clk, _irq)                  \
+  PBL_DEVICE_STATE_DEFINE(sym);                                                       \
+  static struct pbl_rtc_stm32_state sym##_rtc_state;                                  \
+  PBL_DEVICE_INSTANCE(sym, struct pbl_rtc_stm32, struct pbl_rtc, rtc){                \
+    .rtc = PBL_RTC_INIT(sym, _name, pbl_rtc_stm32_init, nullptr, &pbl_rtc_stm32_ops), \
+    .base = (_base),                                                                  \
+    .pclk = _pclk,                                                                    \
+    .clk = _clk,                                                                      \
+    .irq = (_irq),                                                                    \
+    .state = &sym##_rtc_state,                                                        \
+  };                                                                                  \
+  PBL_IRQ_CONNECT_NUM(_irq, CONFIG_RTC_STM32_IRQ_PRIO, pbl_rtc_stm32_isr, &sym##_inst, 0)
+
 /** @} */

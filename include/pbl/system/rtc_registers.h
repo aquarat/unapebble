@@ -49,6 +49,19 @@ extern bool retained_validate(void);
 extern void retained_write(uint8_t id, uint32_t value);
 extern uint32_t retained_read(uint8_t id);
 
+#elifdef CONFIG_SOC_STM32U5
+/* TAMP backup registers the stock UNA Watch firmware and its bootloader leave free: they use 0 to
+ * 23 (docs/boards/unawatch/hardware.md, section 1.3) */
+#define RTC_BKP_BOOTBIT_DR                24
+#define REBOOT_REASON_REGISTER_1          25
+#define REBOOT_REASON_STUCK_TASK_PC       26
+#define REBOOT_REASON_STUCK_TASK_LR       27
+#define REBOOT_REASON_STUCK_TASK_CALLBACK 28
+#define SLOT_OF_LAST_LAUNCHED_APP         29
+
+extern void retained_write(uint8_t id, uint32_t value);
+extern uint32_t retained_read(uint8_t id);
+
 #elif defined(CONFIG_QEMU) || defined(CONFIG_SOC_POSIX)
 /* QEMU backup registers mapped to MMIO backup region (indices 0..15) */
 #define RTC_BKP_BOOTBIT_DR                0

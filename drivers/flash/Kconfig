@@ -68,6 +68,17 @@ config FLASH_QEMU
     help
       Support for the QEMU external flash peripheral.
 
+config FLASH_STM32U5
+    bool "STM32U5 embedded flash"
+    default y
+    depends on DT_HAS_ST_STM32U5_FLASH_CONTROLLER_ENABLED
+    depends on SOC_STM32U5
+    help
+      The embedded flash of the STM32U5 as the storage flash, its second
+      bank written, the first one executed from. Writes are cached in RAM
+      and programmed as whole 16-byte words; see
+      drivers/flash/ecc_nor.h.
+
 config FLASH_POSIX
     bool "POSIX external flash"
     default y

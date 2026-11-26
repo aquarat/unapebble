@@ -41,8 +41,9 @@ static void prv_recover(void) {
   for (uint32_t i = 0U; i < SEED_ERROR_FLUSH; i++) {
     (void)prv_getreg(STM32_RNG_DR_OFFSET);
   }
-  prv_putreg(STM32_RNG_CR_OFFSET, 0U);
-  prv_putreg(STM32_RNG_CR_OFFSET, RNG_CR_RNGEN);
+  // The configuration stays
+  pbl_modifyl(RNG_CR_RNGEN, 0U, s_rng->base + STM32_RNG_CR_OFFSET);
+  pbl_modifyl(0U, RNG_CR_RNGEN, s_rng->base + STM32_RNG_CR_OFFSET);
 }
 
 static int prv_read(uint32_t *out) {
@@ -83,7 +84,21 @@ int pbl_rng_stm32_init(const struct pbl_device *dev) {
     return ret;
   }
 
-  prv_putreg(STM32_RNG_CR_OFFSET, RNG_CR_RNGEN);
+  // The conditioning takes its configuration while held in reset, which ends a few RNG clock
+  // cycles after it is released
+  if (s_rng->nist_config != 0U) {
+    prv_putreg(STM32_RNG_CR_OFFSET, RNG_CR_CONDRST | (s_rng->nist_config & RNG_CR_CONFIG_MASK));
+    prv_putreg(STM32_RNG_HTCR_OFFSET, s_rng->ht_magic);
+    prv_putreg(STM32_RNG_HTCR_OFFSET, s_rng->ht_config);
+    prv_putreg(STM32_RNG_CR_OFFSET, s_rng->nist_config & RNG_CR_CONFIG_MASK);
+    ret = PBL_POLL_BUSY_US((prv_getreg(STM32_RNG_CR_OFFSET) & RNG_CR_CONDRST) == 0U, 1U,
+                           DRDY_TIMEOUT_US);
+    if (ret != 0) {
+      return ret;
+    }
+  }
+
+  pbl_modifyl(0U, RNG_CR_RNGEN, s_rng->base + STM32_RNG_CR_OFFSET);
 
   return 0;
 }

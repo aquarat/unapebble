@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: jdi-parallel-gpio
+config: DISPLAY_JDI_GPIO
+class: display
+define: PBL_DISPLAY_JDI_GPIO_DEFINE
+args:
+  - name: true
+  - self: panel
+    remote: 0
+  - prop: hactive
+    remote: 0
+    child: panel-timing
+  - prop: vactive
+    remote: 0
+    child: panel-timing
+  - prop: rotation
+    remote: 0
+    default: 0
+  - self: round-mask
+    remote: 0
+  - prop: width
+    default: 0
+  - prop: height
+    default: 0
+  - gpio: vst
+  - gpio: vck
+  - gpio: enb
+  - gpio: xrst
+  - gpio: hst
+  - gpio: hck
+  - gpio: data
+    index: 0
+  - gpio: data
+    index: 1
+  - gpio: data
+    index: 2
+  - gpio: data
+    index: 3
+  - gpio: data
+    index: 4
+  - gpio: data
+    index: 5

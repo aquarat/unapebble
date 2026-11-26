@@ -19,5 +19,6 @@ the RTC at boot.
 | --- | --- | --- |
 | Retained RAM | — | `CONFIG_RTC_RETAINED` |
 | SiFli SF32LB | `sifli,sf32lb52-rtc` | `CONFIG_RTC_SF32LB` |
+| ST STM32 | `st,stm32h7-rtc`, `st,stm32u5-rtc` | `CONFIG_RTC_STM32` |
 | QEMU RTC | — | `CONFIG_RTC_QEMU` |
 | POSIX RTC | — | `CONFIG_RTC_POSIX` |

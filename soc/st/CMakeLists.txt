@@ -6,4 +6,6 @@ pbl_include_directories(include)
 
 if(CONFIG_SOC_STM32H7)
   add_subdirectory(stm32h7)
+elseif(CONFIG_SOC_STM32U5)
+  add_subdirectory(stm32u5)
 endif()

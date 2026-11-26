@@ -22,6 +22,7 @@ properties:
   compatible:
     enum:
       - jdi,lpm015m135a
+      - sharp,ls012b7dd06a
       - sharp,ls013b7dd02
 
   vddp-supply:
@@ -31,8 +32,12 @@ properties:
     description: Liquid crystal supply.
 
   pwms:
-    maxItems: 1
-    description: VCOM inversion signal.
+    minItems: 1
+    items:
+      - description: VCOM inversion signal, on FRP (VB).
+      - description:
+          Its inverse, on XFRP (VA), for a panel that does not make it from
+          FRP.
 
   jdi,enable-start:
     $ref: /schemas/types.yaml#/definitions/uint32

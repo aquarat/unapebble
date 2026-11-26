@@ -15,4 +15,4 @@ devicetree and asserts or pulses it.
 | Driver | Compatible | Kconfig |
 | --- | --- | --- |
 | SiFli SF32LB RCC | `sifli,sf32lb57-hpsys-rcc`, `sifli,sf32lb52-hpsys-rcc` | `CONFIG_RESET_SF32LB` |
-| STM32H7 RCC | `st,stm32h743-rcc` | `CONFIG_RESET_STM32H7` |
+| STM32H7 and STM32U5 RCC | `st,stm32h743-rcc`, `st,stm32u5-rcc` | `CONFIG_RESET_STM32H7` |

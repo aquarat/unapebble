@@ -210,6 +210,21 @@ function(pbl_link_firmware)
       VERBATIM
     )
     list(APPEND artifacts ${sizes_stamp})
+
+    if(CONFIG_RESOURCES_IN_IMAGE)
+      set(image_resources ${PROJECT_BINARY_DIR}/pebbleos_resources.bin)
+      add_custom_command(
+        OUTPUT ${image_resources}
+        COMMAND ${PBL_TOOLCHAIN_ENV} ${PYTHON_EXECUTABLE} ${PBL_FIRMWARE_PY} image-resources
+                --config ${PBL_DOTCONFIG} --bin ${bin} --pbpack ${PBL_PBPACK}
+                --output ${image_resources}
+        DEPENDS ${bin} ${PBL_PBPACK} ${sizes_stamp} ${PBL_FIRMWARE_PY}
+        WORKING_DIRECTORY ${PBL_BASE}
+        COMMENT "Appending the resources to the image"
+        VERBATIM
+      )
+      list(APPEND artifacts ${image_resources})
+    endif()
   endif()
   add_custom_target(pbl_firmware ALL DEPENDS ${artifacts})
   pbl_images(${hex})

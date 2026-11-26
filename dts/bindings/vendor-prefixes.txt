@@ -3,4 +3,5 @@
 # <prefix>	<description>
 coredevices	Core Devices LLC
 sifli	SiFli Technologies (Nanjing) Co., Ltd.
+una	UNA Watch
 worldsemi	Worldsemi Co., Limited

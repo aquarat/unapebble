@@ -5,7 +5,7 @@
 
 #include <pbl/drivers/otp.h>
 
-// No OTP on the host: every slot reads as locked and empty.
+// No OTP, on the host or on a board without: every slot reads as locked and empty.
 
 static char s_slot[32];
 

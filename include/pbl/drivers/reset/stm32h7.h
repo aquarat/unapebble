@@ -10,10 +10,11 @@
 /**
  * @defgroup reset_stm32h7 STM32H7 RCC
  * @ingroup drivers_reset
- * @brief Reset controller of the STM32H7 RCC.
+ * @brief Reset controller of the STM32H7 RCC, and of the STM32U5 RCC.
  *
- * Its lines are numbered as the binding does, dt-bindings/mfd/stm32h7-rcc.h: the bit of a
- * peripheral in the reset registers, eight per byte of offset in the RCC.
+ * Its lines are numbered as the bindings do, dt-bindings/mfd/stm32h7-rcc.h and
+ * dt-bindings/reset/st,stm32u5-rcc.h: the bit of a peripheral in the reset registers, eight per
+ * byte of offset in the RCC.
  * @{
  */
 
@@ -34,7 +35,7 @@ struct pbl_reset_stm32h7 {
 extern const struct pbl_reset_controller_ops pbl_reset_stm32h7_ops;
 /** @endcond */
 
-/** Number of reset lines of the RCC: up to the last bit of APB4RSTR. */
+/** Number of reset lines of the RCC: up to the last bit of APB4RSTR, past APB3RSTR on the U5. */
 #define PBL_RESET_STM32H7_NUM_LINES (0xa0U * 8U)
 
 /**

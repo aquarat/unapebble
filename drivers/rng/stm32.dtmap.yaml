@@ -10,3 +10,9 @@ args:
   - name: true
   - reg: 0
   - clock: 0
+  - prop: st,nist-config
+    default: 0
+  - prop: st,health-test-magic
+    default: 0
+  - prop: st,health-test-config
+    default: 0

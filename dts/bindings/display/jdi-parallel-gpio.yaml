@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/display/jdi-parallel-gpio.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: JDI parallel interface on GPIO
+
+maintainers:
+  - Gerard Marull-Paretas <gerard@teslabs.com>
+
+description:
+  The JDI parallel interface of a memory-in-pixel panel, clocked on GPIO by
+  the CPU for a SoC without a controller generating it. The panel, connected
+  to its port, gives the timing, mounting rotation and round mask.
+
+properties:
+  compatible:
+    const: jdi-parallel-gpio
+
+  vst-gpios:
+    maxItems: 1
+    description: Vertical start pulse, VST (GSP).
+
+  vck-gpios:
+    maxItems: 1
+    description: Vertical shift clock, VCK (GCK).
+
+  enb-gpios:
+    maxItems: 1
+    description: Pixel memory write enable, ENB (GEN).
+
+  xrst-gpios:
+    maxItems: 1
+    description: Driver reset, XRST (INTB), high for the length of a frame.
+
+  hst-gpios:
+    maxItems: 1
+    description: Horizontal start pulse, HST (BSP).
+
+  hck-gpios:
+    maxItems: 1
+    description: Horizontal shift clock, HCK (BCK).
+
+  data-gpios:
+    maxItems: 6
+    minItems: 6
+    description:
+      R1, R2, G1, G2, B1 and B2, on one GPIO port, active high. R1, G1 and B1
+      carry the even pixels, R2, G2 and B2 the odd ones.
+
+  width:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      Width of the framebuffer, at least that of the panel's image, which
+      shows its centre. That of the image by default.
+
+  height:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Height of the framebuffer, as width.
+
+  port:
+    $ref: /schemas/graph.yaml#/properties/port
+    description: Connection to the panel.
+
+required:
+  - compatible
+  - vst-gpios
+  - vck-gpios
+  - enb-gpios
+  - xrst-gpios
+  - hst-gpios
+  - hck-gpios
+  - data-gpios
+  - port
+
+additionalProperties: false

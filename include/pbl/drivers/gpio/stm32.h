@@ -80,4 +80,30 @@ int pbl_gpio_stm32_init(const struct pbl_device *dev);
     .port = &sym##_inst,                                                                          \
   }
 
+/**
+ * @brief Define an STM32U5 GPIO port, whose EXTI selects the port of its lines itself.
+ *
+ * @param sym Symbol of the port, its interrupt controller being @c sym_intc.
+ * @param _name Name.
+ * @param _base Registers.
+ * @param _clk Clock, from PBL_CLK().
+ * @param _exti EXTI registers.
+ */
+#define PBL_GPIO_STM32U5_DEFINE(sym, _name, _base, _clk, _exti)                                   \
+  extern const struct pbl_intc sym##_intc;                                                        \
+  PBL_DEVICE_STATE_DEFINE(sym);                                                                   \
+  PBL_INTC_STATE_DEFINE(sym##_intc, 16);                                                          \
+  PBL_DEVICE_INSTANCE(sym, struct pbl_gpio_stm32, struct pbl_gpio_port, port){                    \
+    .port = PBL_GPIO_PORT_INIT(sym, _name, pbl_gpio_stm32_init, nullptr, &pbl_gpio_stm32_ops, 16, \
+                               &sym##_intc),                                                      \
+    .base = (_base),                                                                              \
+    .clk = _clk,                                                                                  \
+    .exti = (_exti),                                                                              \
+  };                                                                                              \
+  PBL_DEVICE_INSTANCE(sym##_intc, struct pbl_gpio_stm32_intc, struct pbl_intc, intc) {            \
+    .intc = PBL_INTC_INIT(sym##_intc, _name "_intc", nullptr, &sym##_inst.port.dev,               \
+                          &pbl_gpio_stm32_intc_ops),                                              \
+    .port = &sym##_inst,                                                                          \
+  }
+
 /** @} */

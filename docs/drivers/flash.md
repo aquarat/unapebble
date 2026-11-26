@@ -21,4 +21,5 @@ and how NOR parts are described.
 | --- | --- | --- |
 | SPI NOR | `jedec,spi-nor` | `CONFIG_FLASH_SPI_NOR` |
 | QEMU External Flash | `qemu,pebble-extflash` | `CONFIG_FLASH_QEMU` |
+| STM32U5 embedded flash, its second bank, writes cached and programmed in whole 16-byte words | `st,stm32u5-flash-controller` | `CONFIG_FLASH_STM32U5` |
 | POSIX External Flash | — | `CONFIG_FLASH_POSIX` |

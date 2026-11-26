@@ -89,6 +89,17 @@ config DISPLAY_SHARP_MEMORY
       LS010B7DH04, LS011B7DH03, LS012B7DD01, LS013B7DH01, LS013B7DH03,
       LS013B7DH05, LS027B7DH01, LS027B7DH01A and LS044Q7DH01.
 
+config DISPLAY_JDI_GPIO
+    bool "JDI parallel interface on GPIO"
+    default y
+    depends on DT_HAS_JDI_PARALLEL_GPIO_ENABLED
+    depends on SOC_FAMILY_STM32
+    select GPIO
+    select PANEL
+    help
+      Support for a memory-in-pixel panel on the JDI parallel interface
+      clocked by the CPU on STM32 GPIO, as on the UNA Watch.
+
 config DISPLAY_QEMU
     bool "QEMU framebuffer display"
     default y

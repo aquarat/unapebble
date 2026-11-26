@@ -13,7 +13,11 @@
 #include <pbl/util/misc.h>
 
 #include <hardware/stm32_gpio.h>
+#ifdef CONFIG_SOC_STM32U5
+#include <hardware/stm32u5_exti.h>
+#else
 #include <hardware/stm32h7_exti.h>
+#endif
 
 // The ports follow each other at 1 KiB steps from port A
 #define PORT_INDEX(base) (((base) / STM32_GPIO_PORT_SIZE) % 16U)
@@ -21,6 +25,34 @@
 // Port holding each EXTI line, NULL when free
 static const struct pbl_gpio_stm32 *s_owners[STM32_GPIO_NUM_PINS];
 static uintptr_t s_exti;
+
+#ifdef CONFIG_SOC_STM32U5
+#define EXTI_RTSR1_OFFSET STM32U5_EXTI_RTSR1_OFFSET
+#define EXTI_FTSR1_OFFSET STM32U5_EXTI_FTSR1_OFFSET
+#define EXTI_IMR1_OFFSET  STM32U5_EXTI_IMR1_OFFSET
+
+// Rising and falling edges are pending apart
+static uint32_t prv_exti_pending(uintptr_t exti) {
+  return pbl_readl(exti + STM32U5_EXTI_RPR1_OFFSET) | pbl_readl(exti + STM32U5_EXTI_FPR1_OFFSET);
+}
+
+static void prv_exti_clear(uintptr_t exti, uint32_t lines) {
+  pbl_writel(lines, exti + STM32U5_EXTI_RPR1_OFFSET);
+  pbl_writel(lines, exti + STM32U5_EXTI_FPR1_OFFSET);
+}
+#else
+#define EXTI_RTSR1_OFFSET STM32H7_EXTI_RTSR1_OFFSET
+#define EXTI_FTSR1_OFFSET STM32H7_EXTI_FTSR1_OFFSET
+#define EXTI_IMR1_OFFSET  STM32H7_EXTI_CORE_IMR1_OFFSET
+
+static uint32_t prv_exti_pending(uintptr_t exti) {
+  return pbl_readl(exti + STM32H7_EXTI_CORE_PR1_OFFSET);
+}
+
+static void prv_exti_clear(uintptr_t exti, uint32_t lines) {
+  pbl_writel(lines, exti + STM32H7_EXTI_CORE_PR1_OFFSET);
+}
+#endif
 
 static const struct pbl_gpio_stm32 *prv_port(const struct pbl_gpio_port *port) {
   return PBL_CONTAINER_OF(port, const struct pbl_gpio_stm32, port);
@@ -99,13 +131,20 @@ static int prv_intc_configure(const struct pbl_intc *intc, uint32_t hwirq, uint3
   if (s_owners[hwirq] != nullptr && s_owners[hwirq] != gpio) {
     ret = -EBUSY;
   } else {
+#ifdef CONFIG_SOC_STM32U5
+    // The port of each line is selected in the EXTI itself
+    pbl_modifyl(EXTI_EXTICR_MASK(hwirq),
+                PBL_FIELD_PREP(EXTI_EXTICR_MASK(hwirq), PORT_INDEX(gpio->base)),
+                gpio->exti + STM32U5_EXTI_EXTICR_OFFSET(hwirq));
+#else
     pbl_modifyl(SYSCFG_EXTICR_MASK(hwirq),
                 PBL_FIELD_PREP(SYSCFG_EXTICR_MASK(hwirq), PORT_INDEX(gpio->base)),
                 gpio->syscfg + STM32H7_SYSCFG_EXTICR_OFFSET(hwirq));
+#endif
     pbl_modifyl(bit, (type & PBL_IRQ_TYPE_EDGE_RISING) != 0U ? bit : 0U,
-                gpio->exti + STM32H7_EXTI_RTSR1_OFFSET);
+                gpio->exti + EXTI_RTSR1_OFFSET);
     pbl_modifyl(bit, (type & PBL_IRQ_TYPE_EDGE_FALLING) != 0U ? bit : 0U,
-                gpio->exti + STM32H7_EXTI_FTSR1_OFFSET);
+                gpio->exti + EXTI_FTSR1_OFFSET);
   }
   pbl_irq_unlock();
 
@@ -121,8 +160,8 @@ static int prv_intc_enable(const struct pbl_intc *intc, uint32_t hwirq) {
     ret = -EBUSY;
   } else {
     s_owners[hwirq] = gpio;
-    pbl_writel(PBL_BIT(hwirq), gpio->exti + STM32H7_EXTI_CORE_PR1_OFFSET);
-    pbl_modifyl(0U, PBL_BIT(hwirq), gpio->exti + STM32H7_EXTI_CORE_IMR1_OFFSET);
+    prv_exti_clear(gpio->exti, PBL_BIT(hwirq));
+    pbl_modifyl(0U, PBL_BIT(hwirq), gpio->exti + EXTI_IMR1_OFFSET);
   }
   pbl_irq_unlock();
 
@@ -134,7 +173,7 @@ static int prv_intc_disable(const struct pbl_intc *intc, uint32_t hwirq) {
 
   pbl_irq_lock();
   if (s_owners[hwirq] == gpio) {
-    pbl_modifyl(PBL_BIT(hwirq), 0U, gpio->exti + STM32H7_EXTI_CORE_IMR1_OFFSET);
+    pbl_modifyl(PBL_BIT(hwirq), 0U, gpio->exti + EXTI_IMR1_OFFSET);
     s_owners[hwirq] = nullptr;
   }
   pbl_irq_unlock();
@@ -144,7 +183,11 @@ static int prv_intc_disable(const struct pbl_intc *intc, uint32_t hwirq) {
 
 // Only the lines on a wakeup pin wake the SoC from Standby
 static int prv_intc_set_wake(const struct pbl_intc *intc, uint32_t hwirq, bool on) {
+#ifdef CONFIG_SOC_STM32U5
+  return pbl_soc_stm32u5_wakeup_pin_set(prv_intc_port(intc)->base, hwirq, on);
+#else
   return pbl_soc_stm32h7_wakeup_pin_set(prv_intc_port(intc)->base, hwirq, on);
+#endif
 }
 
 const struct pbl_intc_ops pbl_gpio_stm32_intc_ops = {
@@ -155,10 +198,9 @@ const struct pbl_intc_ops pbl_gpio_stm32_intc_ops = {
 };
 
 static void prv_exti_isr(uint32_t lines) {
-  uint32_t pending = pbl_readl(s_exti + STM32H7_EXTI_CORE_PR1_OFFSET) &
-                     pbl_readl(s_exti + STM32H7_EXTI_CORE_IMR1_OFFSET) & lines;
+  uint32_t pending = prv_exti_pending(s_exti) & pbl_readl(s_exti + EXTI_IMR1_OFFSET) & lines;
 
-  pbl_writel(pending, s_exti + STM32H7_EXTI_CORE_PR1_OFFSET);
+  prv_exti_clear(s_exti, pending);
 
   while (pending != 0U) {
     uint32_t line = (uint32_t)PBL_CTZ(pending);
@@ -170,6 +212,37 @@ static void prv_exti_isr(uint32_t lines) {
   }
 }
 
+#ifdef CONFIG_SOC_STM32U5
+// A line per interrupt
+#define EXTI_LINE_ISR(n)                \
+  static void prv_exti##n##_isr(void) { \
+    prv_exti_isr(PBL_BIT(n));           \
+  }                                     \
+  PBL_IRQ_CONNECT(EXTI##n, CONFIG_GPIO_STM32_IRQ_PRIO, prv_exti##n##_isr, , 0)
+
+EXTI_LINE_ISR(0);
+EXTI_LINE_ISR(1);
+EXTI_LINE_ISR(2);
+EXTI_LINE_ISR(3);
+EXTI_LINE_ISR(4);
+EXTI_LINE_ISR(5);
+EXTI_LINE_ISR(6);
+EXTI_LINE_ISR(7);
+EXTI_LINE_ISR(8);
+EXTI_LINE_ISR(9);
+EXTI_LINE_ISR(10);
+EXTI_LINE_ISR(11);
+EXTI_LINE_ISR(12);
+EXTI_LINE_ISR(13);
+EXTI_LINE_ISR(14);
+EXTI_LINE_ISR(15);
+
+static void prv_exti_irqs_enable(void) {
+  for (pbl_irq_t irq = PBL_IRQN(EXTI0); irq <= PBL_IRQN(EXTI15); irq++) {
+    pbl_irq_enable(irq);
+  }
+}
+#else
 static void prv_exti0_isr(void) {
   prv_exti_isr(PBL_BIT(0));
 }
@@ -206,6 +279,17 @@ PBL_IRQ_CONNECT(EXTI4, CONFIG_GPIO_STM32_IRQ_PRIO, prv_exti4_isr, , 0);
 PBL_IRQ_CONNECT(EXTI9_5, CONFIG_GPIO_STM32_IRQ_PRIO, prv_exti9_5_isr, , 0);
 PBL_IRQ_CONNECT(EXTI15_10, CONFIG_GPIO_STM32_IRQ_PRIO, prv_exti15_10_isr, , 0);
 
+static void prv_exti_irqs_enable(void) {
+  pbl_irq_enable(PBL_IRQN(EXTI0));
+  pbl_irq_enable(PBL_IRQN(EXTI1));
+  pbl_irq_enable(PBL_IRQN(EXTI2));
+  pbl_irq_enable(PBL_IRQN(EXTI3));
+  pbl_irq_enable(PBL_IRQN(EXTI4));
+  pbl_irq_enable(PBL_IRQN(EXTI9_5));
+  pbl_irq_enable(PBL_IRQN(EXTI15_10));
+}
+#endif
+
 int pbl_gpio_stm32_init(const struct pbl_device *dev) {
   const struct pbl_gpio_stm32 *gpio = PBL_CONTAINER_OF(dev, const struct pbl_gpio_stm32, port.dev);
   int ret;
@@ -215,21 +299,18 @@ int pbl_gpio_stm32_init(const struct pbl_device *dev) {
     return ret;
   }
 
-  ret = pbl_clk_enable(&gpio->syscfg_clk);
-  if (ret != 0) {
-    return ret;
+  // The EXTI port selection is in SYSCFG, but on the STM32U5
+  if (gpio->syscfg_clk.ctrl != nullptr) {
+    ret = pbl_clk_enable(&gpio->syscfg_clk);
+    if (ret != 0) {
+      return ret;
+    }
   }
 
   pbl_irq_lock();
   if (s_exti == 0U) {
     s_exti = gpio->exti;
-    pbl_irq_enable(PBL_IRQN(EXTI0));
-    pbl_irq_enable(PBL_IRQN(EXTI1));
-    pbl_irq_enable(PBL_IRQN(EXTI2));
-    pbl_irq_enable(PBL_IRQN(EXTI3));
-    pbl_irq_enable(PBL_IRQN(EXTI4));
-    pbl_irq_enable(PBL_IRQN(EXTI9_5));
-    pbl_irq_enable(PBL_IRQN(EXTI15_10));
+    prv_exti_irqs_enable();
   }
   pbl_irq_unlock();
 
@@ -237,3 +318,4 @@ int pbl_gpio_stm32_init(const struct pbl_device *dev) {
 }
 
 #include PBL_DT_INSTANCES(st_stm32h743_pinctrl_gpio)
+#include PBL_DT_INSTANCES(st_stm32u5_pinctrl_gpio)

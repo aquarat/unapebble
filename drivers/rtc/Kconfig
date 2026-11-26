@@ -36,12 +36,12 @@ config RTC_SF32LB
 config RTC_STM32
     bool "STM32 RTC"
     default y
-    depends on DT_HAS_ST_STM32H7_RTC_ENABLED
+    depends on DT_HAS_ST_STM32H7_RTC_ENABLED || DT_HAS_ST_STM32U5_RTC_ENABLED
     select CLK
     help
-      STM32H7 calendar RTC in the backup domain, counting the LSE across
-      resets and in Standby, with alarm A, which wakes the system from
-      Standby.
+      STM32H7 and STM32U5 calendar RTC in the backup domain, counting the
+      LSE across resets and in Standby, with alarm A, which wakes the
+      system from Standby.
 
 config RTC_STM32_IRQ_PRIO
     int "Alarm interrupt priority"

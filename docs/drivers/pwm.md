@@ -18,3 +18,4 @@ once.
 | Nordic nRF5 | `nordic,nrf52832-pwm` | `CONFIG_PWM_NRF5` |
 | Nordic nRF5 RTC PWM | `nordic,nrf52832-rtc-pwm` | `CONFIG_PWM_NRF5_RTC` |
 | SiFli SF32LB LPTIM | `sifli,sf32lb52-lptim-pwm` | `CONFIG_PWM_SF32LB_LPTIM` |
+| STM32U5 LPTIM1 to LPTIM3 | `st,stm32-pwm-lp` | `CONFIG_PWM_STM32_LPTIM` |

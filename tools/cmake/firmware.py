@@ -45,7 +45,9 @@ def enabled(config, key):
     return config.get(key) == "y"
 
 
-def max_resources_size(config):
+def max_resources_size(config, config_path):
+    if enabled(config, "CONFIG_RESOURCES_IN_IMAGE"):
+        return flash_regions(config_path)["SYSTEM_RESOURCES_BANK_0"][1]
     if enabled(config, "CONFIG_SOC_NRF52"):
         return 1024 * BYTES_PER_K
     if enabled(config, "CONFIG_SOC_SF32LB52") or enabled(config, "CONFIG_QEMU"):
@@ -62,7 +64,7 @@ def version_info():
 
 def cmd_size_resources(args):
     config = read_config(args.config)
-    maximum = max_resources_size(config)
+    maximum = max_resources_size(config, args.config)
     actual = os.path.getsize(args.pbpack)
 
     bar_width = 20
@@ -180,16 +182,49 @@ def cmd_qemu_image_micro(args):
     img.tobinfile(args.output, start=0x00000000, end=flash_end - 1)
 
 
-def qemu_resources_offset(config_path):
+def flash_regions(config_path):
+    """``{name: (offset, size)}`` of the board's flash partitions."""
     sys.path.insert(0, os.path.join(REPO_ROOT, "tools", "libs", "pbl-cli"))
     from pbl import flash_layout
     from pbl.build import BuildDir
 
     build = BuildDir(os.path.dirname(os.path.abspath(config_path)), REPO_ROOT)
-    regions = flash_layout.regions(build)
+    return flash_layout.regions(build)
+
+
+def qemu_resources_offset(config_path):
+    regions = flash_regions(config_path)
     if "SYSTEM_RESOURCES_BANK_0" not in regions:
         sys.exit("qemu-image-spi: the board has no system-resources-bank-0 partition")
     return regions["SYSTEM_RESOURCES_BANK_0"][0]
+
+
+def cmd_image_resources(args):
+    """The image, then the resources at their partition, the gap read as erased flash."""
+    config = read_config(args.config)
+    regions = flash_regions(args.config)
+    if "SYSTEM_RESOURCES_BANK_0" not in regions:
+        sys.exit("image-resources: the board has no system-resources-bank-0 partition")
+    bank, bank_size = regions["SYSTEM_RESOURCES_BANK_0"]
+    code = int(config.get("CONFIG_FLASH_OFFSET", "0"), 0)
+
+    with open(args.bin, "rb") as f:
+        image = f.read()
+    with open(args.pbpack, "rb") as f:
+        resources = f.read()
+
+    gap = bank - code - len(image)
+    if bank < code or gap < 0:
+        sys.exit(f"image-resources: the image ends past the resources at {bank:#x}")
+    if len(resources) > bank_size:
+        sys.exit(f"image-resources: {len(resources)} bytes of resources, {bank_size} of partition")
+
+    with open(args.output, "wb") as f:
+        f.write(image + b"\xff" * gap + resources)
+    pprint(
+        f"Image with resources: {len(image)} bytes of code, resources at {bank:#x}, "
+        f"{len(image) + gap + len(resources)} bytes"
+    )
 
 
 def cmd_qemu_image_spi(args):
@@ -217,6 +252,13 @@ def main():
     p.add_argument("--config", required=True)
     p.add_argument("--pbpack", required=True)
     p.set_defaults(func=cmd_size_resources)
+
+    p = sub.add_parser("image-resources")
+    p.add_argument("--config", required=True)
+    p.add_argument("--bin", required=True)
+    p.add_argument("--pbpack", required=True)
+    p.add_argument("--output", required=True)
+    p.set_defaults(func=cmd_image_resources)
 
     p = sub.add_parser("check-syscalls")
     p.add_argument("--elf", required=True)

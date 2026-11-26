@@ -45,9 +45,9 @@ config WATCHDOG_STM32_IWDG
     bool "ST STM32 IWDG"
     default y
     depends on DT_HAS_ST_STM32_IWDG_ENABLED
-    depends on CLK_STM32H7
+    depends on CLK_STM32H7 || CLK_STM32U5
     help
-      Support for the ST STM32H7 independent watchdog.
+      Support for the ST STM32H7 and STM32U5 independent watchdog.
 
 config WATCHDOG_QEMU
     bool "QEMU watchdog"

@@ -121,3 +121,5 @@ const struct pbl_pinctrl_controller_ops pbl_pinctrl_stm32_ops = {
 
 #include PBL_DT_INSTANCES(st_stm32h743_pinctrl_pinctrl_controller)
 #include PBL_DT_INSTANCES(st_stm32h743_pinctrl_pinctrl)
+#include PBL_DT_INSTANCES(st_stm32u5_pinctrl_pinctrl_controller)
+#include PBL_DT_INSTANCES(st_stm32u5_pinctrl_pinctrl)

@@ -27,6 +27,9 @@
   - STMicroelectronics STM32H747I-DISCO discovery kit
   - ```{thumbnail} stm32h747i_disco/images/stm32h747i_disco.webp
     ```
+* - [`unawatch`](unawatch/index.md)
+  - UNA Watch
+  -
 * - [`nrf52840dk`](nrf52840dk/index.md)
   - Nordic nRF52840 DK development kit
   - ```{thumbnail} nrf52840dk/images/nrf52840dk.webp
@@ -66,6 +69,7 @@ obelix/index.md
 getafix/index.md
 sf32lb57_dpi_hdk/index.md
 stm32h747i_disco/index.md
+unawatch/index.md
 nrf52840dk/index.md
 nrf52dk/index.md
 ```

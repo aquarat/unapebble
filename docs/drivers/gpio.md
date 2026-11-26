@@ -18,6 +18,6 @@ levels. GPIO ports also provide interrupt lines, through the
 | --- | --- | --- |
 | Nordic nRF5 | `nordic,nrf52832-gpio` | `CONFIG_GPIO_NRF5` |
 | SiFli SF32LB | `sifli,sf32lb57-gpio`, `sifli,sf32lb52-gpio` | `CONFIG_GPIO_SF32LB` |
-| ST STM32 | `st,stm32h743-pinctrl` | `CONFIG_GPIO_STM32` |
+| ST STM32 | `st,stm32h743-pinctrl`, `st,stm32u5-pinctrl` | `CONFIG_GPIO_STM32` |
 | QEMU GPIO | `qemu,pebble-gpio` | `CONFIG_GPIO_QEMU` |
 | Nordic nPM1300 GPIO | `nordic,npm1300` | `CONFIG_GPIO_NPM1300` |

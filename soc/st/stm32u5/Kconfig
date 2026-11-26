@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_STM32U5
+    bool
+    select SOC_FAMILY_STM32
+    select SOC_HAS_UNIQUE_ID
+    select CPU_CORTEX_M33
+    select ARMV8_M_DSP
+    select CPU_HAS_FPU
+    select PINCTRL
+    select SOC_HAS_IDLE_STATES
+    select SOC_HAS_POWER_OFF
+    select TIMER_STM32_LPTIM
+    help
+      ST STM32U5 series, selected by its SoCs. The Cortex-M33 runs
+      non-secure, TrustZone off, as the UNA Watch bootloader leaves it.
+
+if SOC_STM32U5
+
+config SOC_STM32U5_ICACHE
+    bool "Instruction cache"
+    default y
+    help
+      Turn the ICACHE on at boot, in front of the code bus: the flash runs
+      with 4 wait states at 160 MHz.
+
+config SOC_STM32U5_BKP_POWER_OFF
+    int "Backup register of the bootloader power-off flag"
+    default 3
+    range -1 31
+    help
+      TAMP backup register in which power-off sets 1, which tells the UNA
+      Watch bootloader that the watch was powered off: it then powers the
+      watch off again, unless the power button is held. -1 for none.
+
+endif # SOC_STM32U5

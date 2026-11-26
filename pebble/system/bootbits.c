@@ -64,7 +64,7 @@ uint32_t boot_version_read(void) {
   return retained_read(BOOTLOADER_VERSION_REGISTER);
 }
 
-#elifdef CONFIG_SOC_SF32LB52
+#elif defined(CONFIG_SOC_SF32LB52) || defined(CONFIG_SOC_STM32U5)
 void boot_bit_init(void) {
   if (!boot_bit_test(BOOT_BIT_INITIALIZED)) {
     retained_write(RTC_BKP_BOOTBIT_DR, BOOT_BIT_INITIALIZED);

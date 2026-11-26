@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# The STM32U5A5QJ: 4 MiB of embedded flash.
+config FLASH_SIZE
+    default 0x400000
+
+# The resources of the Pebble Round 2, whose platform the firmware takes.
+config RESOURCES_BOARD
+    default "getafix"

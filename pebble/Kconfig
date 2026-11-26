@@ -231,6 +231,15 @@ config MMAP_RESOURCES
       Serve read-only system resources as direct pointers into
       memory-mapped flash instead of copying them out.
 
+config RESOURCES_IN_IMAGE
+    bool "System resources installed with the image"
+    help
+      Build pebbleos_resources.bin: the firmware image followed by the
+      system resources at their partition, system-resources-bank-0, the gap
+      filled as erased flash, for a bootloader that installs one image over
+      the code partition and the flash after it, such as the UNA Watch's.
+      The resources may then take the whole partition.
+
 endmenu
 
 choice

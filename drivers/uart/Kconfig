@@ -48,7 +48,7 @@ config UART_STM32
     select DMA
     select PINCTRL
     help
-      Support for the ST STM32H7 USART and UART controllers.
+      Support for the ST STM32H7 and STM32U5 USART and UART controllers.
 
 config UART_STM32_IRQ_PRIO
     int "Interrupt priority"

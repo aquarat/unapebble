@@ -16,4 +16,4 @@ revisions.
 | --- | --- | --- |
 | Flash security registers | — | `CONFIG_OTP_FLASH` |
 | QEMU | — | `CONFIG_OTP_QEMU` |
-| POSIX | — | `CONFIG_OTP_POSIX` |
+| None, on the host or a board without | — | `CONFIG_OTP_NONE` |

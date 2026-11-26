@@ -24,11 +24,12 @@ config OTP_QEMU
     help
       QEMU OTP. QEMU emulates none, so all slots read as locked and empty.
 
-config OTP_POSIX
-    bool "POSIX"
+config OTP_NONE
+    bool "None"
     default y
-    depends on SOC_POSIX
+    depends on !OTP_FLASH && !OTP_QEMU
     help
-      No OTP on the host: all slots read as locked and empty.
+      No OTP, on the host or on a board without one, as the UNA Watch: all
+      slots read as locked and empty.
 
 endif # OTP
