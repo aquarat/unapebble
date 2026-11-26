@@ -146,14 +146,15 @@ until it loses power.
 The 200 mAh cell is charged by the PCA9420's linear charger
 (`drivers/charger/pca9420.c`) and measured by the MAX17262 fuel gauge
 (`drivers/gauge/max17262.c`), both on I2C1; the battery service takes the
-percentage from the gauge (`CONFIG_BATTERY_SOC_GAUGE`). The charge is set for
-the cell's life rather than its last few percent, gentler than the stock
-firmware's 150 mA to 4.40 V:
+percentage from the gauge (`CONFIG_BATTERY_SOC_GAUGE`). Until the cell is
+identified, the owner caps its charge at 4.20 V, which every lithium cell
+takes; the stock firmware charges to 4.40 V, which suits only a high-voltage
+cell. The charge is set for the cell's life rather than its last few percent:
 
 | | PebbleOS | Stock firmware |
 | --- | --- | --- |
 | Charge current | 100 mA (0.5C) | 150 mA |
-| Charge voltage | 4.36 V | 4.40 V |
+| Charge voltage | 4.20 V | 4.40 V |
 | Termination | 14 mA, 6.4 min top-off | 10 mA, 19.2 min top-off |
 | Pre-charge, dead battery | 8 mA, 4 mA | PMIC defaults |
 | Safety timers | 5 h fast, 30 min pre-charge | 9 h fast |
@@ -161,14 +162,19 @@ firmware's 150 mA to 4.40 V:
 | Charge temperature | 0 to 45 degrees C at the gauge, 3 degrees of hysteresis | stops above 45 degrees C ambient or 55 at the gauge |
 | Input current limit | 255 mA | 255 mA |
 
-The gauge runs the stock firmware's EZ model, loaded only after a power-on
-reset of the gauge or when its registers hold another model, so switching
-firmware keeps what it learned of the cell. Charging starts off at every boot
+The gauge runs the stock firmware's EZ model for a cell charged to 4.20 V
+(ModelCFG.VChg = 0, where the stock firmware has 1), so that the end of each
+charge is its 100% and it learns the capacity to 4.20 V. The model is loaded
+only after a power-on reset of the gauge or when its registers hold another
+model; as the stock firmware's differs, switching to it makes it reload its
+own and forget what the gauge learned. Charging starts off at every boot
 and is allowed once the gauge reads a temperature in range; a gauge that
 cannot be read keeps it off. Unplugged, the watch shuts down below 1% or at
 an averaged 3.35 V, as the stock firmware does; it shows 5% until the gauge
-first answers. `CONFIG_CHARGER_PCA9420_CHARGE_LIMIT_MV` stops the charge at a
-lower voltage, 4100 for about 80%, for a longer life still.
+first answers. `CONFIG_CHARGER_PCA9420_CHARGE_LIMIT_MV` stops the charge short of
+full, at a lower voltage, for a longer life still. The cap holds while
+PebbleOS runs: whether a watch that is off charges, and to what, is not known
+yet.
 
 The interrupt of the PMIC, on PG7 with the STUSB4500's alert, reports plugging
 in and out; the battery service also polls every 30 s plugged in, 60 s
@@ -286,7 +292,7 @@ Things to watch on a first boot:
 - **Clocks**: PLL1 now also gives 80 MHz on Q for the eMMC, which the SoC
   start-up turns off first, whatever the bootloader left running.
 - **Battery**: `charger` and `gauge` in the shell, and `battery status`,
-  show what the drivers read. Check that the charge stops at about 4.36 V and
+  show what the drivers read. Check that the charge stops at about 4.20 V and
   14 mA (`gauge` voltage and current), that the gauge's temperature is
   plausible, that plugging in and out shows at once (the PMIC interrupt) and
   that the percentage follows the stock firmware's. A watch that shows 5% and
