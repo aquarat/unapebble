@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: st,stm32-sdmmc2
+config: MMC_STM32_SDMMC
+class: mmc
+define: PBL_MMC_STM32_SDMMC_DEFINE
+args:
+  - name: true
+  - reg: 0
+  - clock: 0
+  - reset: 0
+  - pinctrl: default
+  - pinctrl: sleep
+  - gpio: enable
+  - prop: post-power-on-delay-ms
+    default: 0
+  - prop: max-frequency
+    default: 52000000

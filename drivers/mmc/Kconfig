@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig MMC
+    bool "MMC"
+    help
+      MMC class (pbl/drivers/mmc.h) and its drivers: an eMMC soldered to
+      the board, as a block device the class powers up on use and down
+      once idle.
+
+if MMC
+
+config MMC_IDLE_OFF_MS
+    int "Idle time before the card is powered down, in ms"
+    default 2000
+    help
+      The card is powered down once it has had no access for this long,
+      and powered up again, which takes some tens of milliseconds, by the
+      next access. 0 keeps it powered.
+
+config MMC_STM32_SDMMC
+    bool "STM32 SDMMC"
+    default y
+    depends on DT_HAS_ST_STM32_SDMMC2_ENABLED
+    select CLK
+    select GPIO
+    select PINCTRL
+    select RESET
+    help
+      An eMMC on the SDMMC host of the STM32U5, polled, its data moved by
+      the internal DMA of the host.
+
+module = DRIVER_MMC
+module-str = MMC
+source "subsys/logging/Kconfig.template.log_level"
+
+endif # MMC

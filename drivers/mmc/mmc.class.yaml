@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+class: mmc
+type: struct pbl_mmc
+include: pbl/drivers/mmc.h
+provides:
+  mmc: "&{sym}"
+roles:
+  mmc: MMC
