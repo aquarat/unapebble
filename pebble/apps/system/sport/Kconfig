@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config APP_SPORT
+    bool "Sport activity apps (Run, Bike)"
+    help
+      Garmin-style Run and Bike apps on the watch's own sensors: GNSS
+      through the location service (CONFIG_SERVICE_LOCATION) when the
+      board has it, heart rate, barometer and steps.

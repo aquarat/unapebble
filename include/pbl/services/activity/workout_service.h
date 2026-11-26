@@ -163,6 +163,17 @@ bool workout_service_get_current_workout_info(int32_t *steps_out, int32_t *durat
                                               int32_t *distance_m_out, int32_t *current_bpm_out,
                                               HRZone *current_hr_zone_out);
 
+/**
+ * @brief Set the distance of the current workout, measured by the client.
+ *
+ * For clients with a better measure than steps, such as GNSS: the distance is then no longer
+ * estimated from steps until the workout stops.
+ *
+ * @param distance_m Distance, in meters.
+ * @return true if a workout is ongoing.
+ */
+bool workout_service_set_distance(int32_t distance_m);
+
 /** @brief Metrics of the current workout, taken at one instant. */
 typedef struct WorkoutServiceMetrics {
   /** Steps. */

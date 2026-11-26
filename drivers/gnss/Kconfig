@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig GNSS
+    bool "GNSS receiver"
+    help
+      Satellite positioning receiver drivers (pbl/drivers/gnss.h). The
+      board instantiates the receiver it has and exports it as GNSS.
+
+if GNSS
+
+config GNSS_SHELL
+    bool "Shell commands"
+    default DRIVER_SHELL || GNSS_SIM
+    depends on SHELL
+    help
+      The gnss shell command, to start, stop and read the receiver, and
+      to drive the simulator.
+
+config GNSS_SIM
+    bool "Simulator"
+    depends on SOC_QEMU_PEBBLE || SOC_POSIX
+    help
+      Simulated receiver, replaying a built-in looped running route at
+      1 Hz, or the fixes set through its simulator API
+      (pbl/drivers/gnss/sim.h).
+
+config GNSS_SIM_TIME_TO_FIX
+    int "Simulated time to first fix (s)"
+    default 8
+    depends on GNSS_SIM
+    help
+      Epochs without a position the simulator reports after it starts.
+
+module = DRIVER_GNSS
+module-str = GNSS receiver
+source "subsys/logging/Kconfig.template.log_level"
+
+endif # GNSS

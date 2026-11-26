@@ -3,7 +3,10 @@
 A simulator is a driver of a class with no hardware behind it: tests set what
 it reads, feed it data or watch what it is told to do through a simulator
 API next to its class. The emulator and native boards use them for the
-devices they do not emulate, and any board can swap one in for testing.
+devices they do not emulate, and any board can swap one in for testing, or
+stand one in for hardware without a driver yet, as the UNA Watch does for its
+sensors and charger: nothing feeds it there, so it reads its defaults.
+Simulators are enabled by default on the emulator and native boards only.
 
 | Class | Kconfig | Device | API |
 | --- | --- | --- | --- |
@@ -11,6 +14,7 @@ devices they do not emulate, and any board can swap one in for testing.
 | Ambient light | `ALS_SIM` | `SIM_ALS` | `pbl/drivers/als/sim.h` |
 | Audio capture | `AUDIO_SIM_MIC` | `SIM_MIC` | `pbl/drivers/audio/sim.h` |
 | Charger | `CHARGER_SIM` | `SIM_CHARGER` | `pbl/drivers/charger/sim.h` |
+| GNSS | `GNSS_SIM` | `SIM_GNSS` | `pbl/drivers/gnss/sim.h` |
 | Magnetometer | `MAG_SIM` | `SIM_MAG` | `pbl/drivers/imu/sim.h` |
 | Temperature | `TEMP_SIM` | `SIM_TEMP` | `pbl/drivers/temp/sim.h` |
 | Vibration | `VIBE_SIM` | `SIM_VIBE` | `pbl/drivers/vibe/sim.h` |

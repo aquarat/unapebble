@@ -5,6 +5,7 @@ menu "Applications"
 
 rsource "demo/Kconfig"
 rsource "prf/Kconfig"
+rsource "system/sport/Kconfig"
 rsource "watch/Kconfig"
 
 endmenu

@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# No receiver to emulate: replay a route with the simulator
+gnss:
+  symbol: SIM_GNSS
+  include: pbl/drivers/gnss/sim.h

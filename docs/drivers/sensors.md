@@ -9,6 +9,7 @@ accel.md
 mag.md
 als.md
 pressure.md
+gnss.md
 temp.md
 hrm.md
 touch.md

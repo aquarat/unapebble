@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+config SERVICE_LOCATION
+    bool "Location"
+    depends on GNSS
+    help
+      On-watch location service, positioning with the GNSS receiver
+      (CONFIG_GNSS) for the system apps.
+
+if SERVICE_LOCATION
+
+module = SERVICE_LOCATION
+module-str = Location
+source "subsys/logging/Kconfig.template.log_level"
+
+endif

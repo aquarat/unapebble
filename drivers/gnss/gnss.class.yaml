@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+class: gnss
+type: struct pbl_gnss
+include: pbl/drivers/gnss.h
+roles:
+  gnss: GNSS

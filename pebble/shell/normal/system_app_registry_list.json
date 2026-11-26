@@ -397,6 +397,24 @@
       "color_argb8": "GColorYellowARGB8"
     },
     {
+      "id": -195,
+      "enum": "SPORT_RUN",
+      "md_fn": "sport_run_get_app_info",
+      "ifdefs": [
+        "CONFIG_APP_SPORT"
+      ],
+      "color_argb8": "GColorChromeYellowARGB8"
+    },
+    {
+      "id": -196,
+      "enum": "SPORT_BIKE",
+      "md_fn": "sport_bike_get_app_info",
+      "ifdefs": [
+        "CONFIG_APP_SPORT"
+      ],
+      "color_argb8": "GColorVividCeruleanARGB8"
+    },
+    {
       "id": -61,
       "enum": "SWAP_LAYER",
       "md_fn": "swap_layer_demo_get_app_info",

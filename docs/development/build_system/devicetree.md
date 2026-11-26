@@ -328,6 +328,7 @@ class header, as `SPEAKER`:
 | `mag` | `mag` | `MAG` |
 | `als` | `als` | `ALS` |
 | `pressure` | `pressure` | `PRESSURE` |
+| `gnss` | `gnss` | `GNSS` |
 | `touch` | `touch` | `TOUCH` |
 | `vibe` | `vibe` | `VIBE` |
 | `mic` | `audio` | `MIC` |

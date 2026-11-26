@@ -70,6 +70,8 @@ typedef struct CurrentWorkoutData {
 
   // Whether or not the current workout is paused
   bool paused;
+  // Distance set by the client, e.g. from GNSS, instead of estimated from steps
+  bool distance_from_client;
 
   EventedTimerID workout_abandoned_timer;
 } CurrentWorkoutData;
@@ -203,7 +205,9 @@ static void prv_handle_movement_update(HealthEventMovementUpdateData *event) {
     // Calculate the distance delta
     const time_t delta_ms = (now_ts - wrkt_data->last_movement_event_time_ts) * PBL_MSEC_PER_SEC;
     const int32_t delta_distance_mm = activity_private_compute_distance_mm(delta_steps, delta_ms);
-    wrkt_data->distance_m += (delta_distance_mm / PBL_MM_PER_M);
+    if (!wrkt_data->distance_from_client) {
+      wrkt_data->distance_m += (delta_distance_mm / PBL_MM_PER_M);
+    }
 
     // Calculate active calories
     const int32_t active_calories =
@@ -728,6 +732,19 @@ bool workout_service_get_current_workout_metrics(WorkoutServiceMetrics *metrics_
   }
   prv_unlock();
   return wrkt != nullptr;
+}
+
+bool workout_service_set_distance(int32_t distance_m) {
+  bool rv = false;
+
+  prv_lock();
+  if (s_workout_data.current_workout) {
+    s_workout_data.current_workout->distance_from_client = true;
+    s_workout_data.current_workout->distance_m = distance_m;
+    rv = true;
+  }
+  prv_unlock();
+  return rv;
 }
 
 #if UNITTEST
