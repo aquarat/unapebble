@@ -7,6 +7,11 @@
 #include <kernel/events.h>
 
 static bool s_charging_forced_disable;
+static bool s_charging_inhibited;
+
+static void prv_apply_enable(void) {
+  (void)pbl_charger_enable(CHARGER, !s_charging_forced_disable && !s_charging_inhibited);
+}
 
 static void prv_online_changed(const struct pbl_charger *charger) {
   PebbleEvent event = {
@@ -54,5 +59,11 @@ bool battery_charge_controller_thinks_we_are_charging(void) {
 void battery_force_charge_enable(bool is_charging) {
   s_charging_forced_disable = !is_charging;
 
-  (void)pbl_charger_enable(CHARGER, is_charging);
+  prv_apply_enable();
+}
+
+void battery_charger_set_inhibited(bool inhibited) {
+  s_charging_inhibited = inhibited;
+
+  prv_apply_enable();
 }

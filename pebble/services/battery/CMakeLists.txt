@@ -11,6 +11,11 @@ if(CONFIG_NRF_FUEL_GAUGE)
     nrf_fuel_gauge/battery_curve.c
     nrf_fuel_gauge/battery_state.c
   )
+elseif(CONFIG_BATTERY_SOC_GAUGE)
+  list(APPEND sources
+    fuel_gauge/battery_curve.c
+    gauge/battery_state.c
+  )
 elseif(CONFIG_BATTERY_SOC_FUEL_GAUGE)
   list(APPEND sources
     fuel_gauge/battery_curve.c
