@@ -1190,7 +1190,7 @@ adaptation:**
 | STM32U5 RCC / clock driver | **Missing** |
 | STM32 I2C | **Missing** |
 | STM32 SPI | **Missing** |
-| STM32 SDMMC | **Missing** |
+| STM32 SDMMC | `drivers/mmc/stm32_sdmmc.c` (built, not yet run) |
 | STM32 LPTIM PWM | **Missing** |
 | JDI-parallel display driver for STM32 | **Missing** |
 | DRV2625 driver | **Missing** |

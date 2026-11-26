@@ -15,8 +15,8 @@ can be put back.
 
 The port runs the full firmware, on the gabbro platform of the Pebble Round
 2: the SoC with its clocks, console, system timer, RTC, watchdog, RNG and CRC
-unit, the buttons, the display, the haptics and storage in the embedded flash.
-Bluetooth, USB, the eMMC, the sensors and the power management come next; see
+unit, the buttons, the display, the haptics and storage on the eMMC.
+Bluetooth, USB, the sensors and the power management come next; see
 [](#unawatch-status). None of it has run on a watch yet.
 
 {doc}`hardware` describes the hardware as the stock kernel drives it, with
@@ -48,58 +48,73 @@ the sources of each detail.
 
 The stock bootloader starts the image at `0x08060000`, from the stack pointer
 and reset vector there, provided the stack pointer is in SRAM, at or below
-`0x20270000`. The flash below it is left alone. The CPU executes from the
-first of the two 2 MiB banks, and the firmware stores its data in the second
-one, which it can program and erase while the first keeps running:
+`0x20270000`. The flash below it is left alone. The embedded flash only holds
+code:
 
 | Flash | Size | Contents |
 | --- | --- | --- |
 | `0x08000000`–`0x08027fff` | 160 KiB | Stock bootloader (`bootloader`) |
 | `0x08028000`–`0x0805ffff` | 224 KiB | Shared libc of the stock kernel (`una-libc`) |
-| `0x08060000`–`0x081fffff` | 1664 KiB | PebbleOS (`code`) |
-| `0x08200000`–`0x082fffff` | 1024 KiB | System resources (`system-resources-bank-0`) |
-| `0x08300000`–`0x08301fff` | 8 KiB | Second resource bank, for updates over Bluetooth: unused |
-| `0x08302000`–`0x0830bfff` | 5 × 8 KiB | `safe-firmware`, `scratch`, `mfg-info`, `tzinfo`, `shared-prf-storage` |
-| `0x0830c000`–`0x0830ffff` | 16 KiB | Free |
-| `0x08310000`–`0x083dffff` | 832 KiB | Filesystem (PFS, `filesystem`) |
-| `0x083e0000`–`0x083fffff` | 128 KiB | Flash logs (`debug-db`) |
+| `0x08060000`–`0x083fffff` | 3712 KiB | PebbleOS (`code`) |
 
-The firmware partitions are in `pebble/boards/unawatch.overlay`, each a whole
-number of 8 KiB pages so that none shares a page with another. A release build
-takes about 1606 KiB of the code partition and a debug one 1637 KiB, Moddable
-XS included; the resources about 885 KiB of theirs.
-
-This needs the STM32U5A5QJ's 4 MiB. A 2 MiB part fits the code alone: the
-flash driver refuses to start on it, and its bootloader refuses the `.ota`,
-which is larger than the 1664 KiB it then allows.
+The partitions are in `boards/unawatch/unawatch.dts`. The image is the code
+alone, `pebbleos.bin`: a release build takes about 1611 KiB and a debug one
+1642 KiB, Moddable XS included. The code partition reaches the end of the 4 MiB
+flash, but `tools/una/pack_ota.py` refuses an image over 1664 KiB unless told
+otherwise, so that it also installs on the 2 MiB STM32U595 of early watches.
+Moving the storage and the resources to the eMMC freed the whole second bank,
+2048 KiB: the code partition grew from 1664 KiB to 3712 KiB, and the image no
+longer carries 905 KiB of resources, though one for a 2 MiB part still has to
+stay within 1664 KiB.
 
 The firmware takes SRAM1 to SRAM5 up to `0x2025e000`. The 72 KiB above, up to
 `0x20270000`, is where the stock kernel keeps its crash dumps and logs across
 resets, a reserved memory region left alone.
 
-### Embedded flash as storage
+### Storage on the eMMC
 
-A 16-byte word of the embedded flash can only be programmed once after its 8
-KiB page is erased, while PebbleOS's storage writes bytes and clears bits of
-bytes it wrote before, on 4 KiB subsectors, as on a NOR flash. The driver,
-`drivers/flash/stm32u5.c` with `drivers/flash/ecc_nor.c`, keeps the last four
-pages written in RAM and programs a word once all of it is written, a second
-later, or ten minutes later for the last word of a run of appends, which the
-next append usually completes. Clearing bits of a programmed word, or erasing
-half a page, erases the page and programs it again. A reset or power-off from
-the firmware programs everything first; a hard fault does as it saves its
-core dump. A watchdog reset or a power loss loses up to the last second of
-writes, and a power loss during a page erase may lose that page. Core dumps
-go to the 8 KiB `scratch` partition, which only holds their first 4 KiB.
+The storage is on the 4 GB eMMC, in the GUI region of UNA's layout, which
+neither UNA's firmware nor its bootloader uses ({doc}`hardware`, sections 3.3
+and 3.4). The board gives the flash its first 32 MiB, from 200 MiB into the
+eMMC (`emmc_storage` in `unawatch.dts`), and `pebble/boards/unawatch.overlay`
+lays it out, in offsets from there:
 
-The ICACHE caches reads of the flash: the driver invalidates it after each
-change. The system resources are read in place (`CONFIG_MMAP_RESOURCES`).
+| Offset | Size | Contents |
+| --- | --- | --- |
+| `0x0000000` | 4 MiB | System resources (`system-resources-bank-0`) |
+| `0x0400000` | 4 MiB | System resources of another version (`system-resources-bank-1`) |
+| `0x0800000` | 4 × 8 KiB | `safe-firmware` (only protected), `mfg-info`, `tzinfo`, `shared-prf-storage` |
+| `0x0900000` | 4 MiB | Core dumps (`scratch`), which take the 2424 KiB of RAM in use |
+| `0x0d00000` | 512 KiB | Flash logs (`debug-db`), as large as they go |
+| `0x1000000` | 16 MiB | Filesystem (PFS, `filesystem`) |
 
-The bootloader erases from `0x08060000` to the end of the flash before it
-installs an image, so **every install empties the filesystem and the logs**:
-settings, apps and watchfaces installed later, and the timeline start again.
-The system resources go in with the image instead: the build appends them at
-their partition, in `pebbleos_resources.bin`, which is what is packed.
+The bootloader does not touch any of it, so **settings, apps and logs survive
+an install**, and a switch to the stock firmware and back.
+
+The eMMC (`drivers/mmc/stm32_sdmmc.c`) runs on four data lines, at 40 MHz in
+High Speed from the 80 MHz PLL1 Q, as the stock firmware does. Its supply,
+EMMC_EN, is switched off once it has been idle for 2 s
+(`CONFIG_MMC_IDLE_OFF_MS`) and on again, with 35 ms to come up, by the next
+access. The flash (`drivers/flash/mmc_nor.c` with `drivers/flash/blk_nor.c`)
+has NOR semantics on the 512-byte blocks: a write reads its blocks, clears the
+bits and writes them back before it returns, and an erase writes blocks of
+0xFF. Writes are reliable writes, which a power loss leaves either done or not.
+Nothing is held in RAM that a reset would lose; the 16 blocks last read or
+written in part are cached for reads.
+
+### System resources
+
+The bootloader only installs the code, so the system resources come from the
+update drive instead, where they are copied next to the `.ota`
+(`pebble/resource/resource_storage_volume.c`, `CONFIG_RESOURCES_FROM_VOLUME`).
+At boot, when neither resource bank holds the resources the firmware was built
+with, it looks in the root directory of the update drive (exFAT, FAT32 or
+FAT16) for a file whose manifest has their version, whatever its name, copies
+it into the bank with no resources or the oldest, and checks its CRC. A
+firmware that finds the resources of its version already there, as after
+installing the same build again or going back to the one before, copies
+nothing. Without them, it logs the version it needs and powers the watch off:
+there is no recovery firmware to go to, and a reset would only start it again.
 
 ## Boot
 
@@ -163,38 +178,45 @@ In the build container ({doc}`/getting_started/index`, `docker/README.md`):
 
 ```shell
 BOARD=unawatch BUILD_DIR=build-una-fw docker/build.sh -DCONFIG_RELEASE=y
-python3 tools/una/pack_ota.py build-una-fw/pebbleos_resources.bin \
-    -v "$(git describe --tags --always)" --max-size 0x3a0000 -o unapebble.ota
+python3 tools/una/pack_ota.py build-una-fw/pebbleos.bin \
+    -v "$(git describe --tags --always)" -o unapebble.ota
+cp build-una-fw/system_resources.pbpack unapebble.pbpack
 ```
 
 or `pbl configure --board unawatch -DCONFIG_RELEASE=y && pbl build`. The
-build writes `pebbleos.bin`, the code alone, and `pebbleos_resources.bin`,
-the code then the system resources at `0x08200000`. `--max-size 0x3a0000`
-lets the packer take up to the end of a 4 MiB flash. The
-`.forgejo/workflows/unawatch.yml` workflow does the same and publishes the
-`.ota`.
+build writes `pebbleos.bin`, the image, and `system_resources.pbpack`, the
+resources that go with it. The packer refuses an image that would not fit a
+2 MiB part; `--max-size 0x3a0000` lets it take up to the end of a 4 MiB one.
+The `.forgejo/workflows/unawatch.yml` workflow does the same and publishes the
+`.ota` and the `.pbpack`.
 
 ## Installing
 
 1. Turn the watch off, then hold the power button (top right) for 4 s as it
    turns on: the bootloader menu appears.
-2. Connect USB: the update drive appears. Copy the `.ota` to its root, under a
-   name ending in lowercase `.ota`.
+2. Connect USB: the update drive appears. Copy the `.ota` and the `.pbpack`
+   of the same build to its root, the `.ota` under a name ending in lowercase
+   `.ota`.
 3. Eject the drive, unplug, and choose **Continue**. The bootloader checks
    the file, erases the flash from `0x08060000`, writes the image, deletes the
-   file and starts it.
+   `.ota` and starts it. The firmware then copies the resources from the
+   `.pbpack`, a few seconds behind the splash screen, the first time it
+   starts. The `.pbpack` stays on the drive, and may stay there.
 
-The battery must be above about 10% for the bootloader to look for updates.
-The image can also be flashed over SWD: `pebbleos_resources.bin` at
-`0x08060000`, with the `probe-rs` runner or any probe, which leaves the rest
-of the flash alone.
+If the watch turns off right after the splash, the resources of its build are
+not on the drive: copy that `.pbpack` and start again. The battery must be
+above about 10% for the bootloader to look for updates. The image can also be
+flashed over SWD: `pebbleos.bin` at `0x08060000`, with the `probe-rs` runner
+or any probe, which leaves the rest of the flash alone; the resources still
+come from the update drive.
 
 ## Recovering
 
 The bootloader runs first on every boot and only checks the stack pointer of
 the image, so a firmware that does not boot does not stop it. Hold the power
 button for 4 s as the watch turns on, and install UNA's own `.ota` the same
-way. Nothing PebbleOS writes reaches the eMMC, where the update drive is.
+way. PebbleOS only writes to the GUI region of the eMMC, which the stock
+firmware does not use; its update drive and files are left alone.
 
 (unawatch-status)=
 
@@ -202,9 +224,9 @@ way. Nothing PebbleOS writes reaches the eMMC, where the update drive is.
 
 | | |
 | --- | --- |
-| **Built, not yet run on a watch** | Display and frontlight, VCOM on LPTIM1/LPTIM3, buttons, haptics, storage in the embedded flash, retained registers (TAMP 24 to 29; the stock firmware uses 0 to 23) |
+| **Built, not yet run on a watch** | Display and frontlight, VCOM on LPTIM1/LPTIM3, buttons, haptics, the eMMC with the storage and the system resources on it, retained registers (TAMP 24 to 29; the stock firmware uses 0 to 23) |
 | **Stand-ins, which nothing feeds** | Accelerometer, ambient light, microphone, die temperature and charger are simulators: no steps, the battery always reads 100% and unplugged |
-| **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS, buzzer, USB or eMMC |
+| **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS, buzzer or USB |
 | **Unknown** | Whether the panel is round (its round mask is a computed circle); whether the panel and haptics rails are on at power-on as expected |
 
 Things to watch on a first boot:
@@ -214,15 +236,20 @@ Things to watch on a first boot:
   a blank panel from VCOM, the PMIC rails or the timing. The conversion of a
   line is checked against the stock driver's by
   `tests/drivers/display/test_jdi_gpio_line.c`.
-- **Storage**: the flash driver programs the embedded flash for the first
-  time on a watch. It refuses to start on a part of other than 4 MiB or with
-  swapped banks, and only ever changes the second bank. An error while
-  programming stops the firmware; a word torn by a power loss reads with an
-  ECC error, which faults: install the `.ota` again.
+- **Storage**: the eMMC driver runs for the first time on a watch. A card
+  that does not come up is power cycled and tried three times; a transfer
+  that fails is tried again after a power cycle. Then the flash class stops
+  the firmware with an error. Watch the log for `Card init failed`, a
+  fallback from High Speed, or `Window past the ... blocks of the card`.
+- **Resources**: the first start after an install copies about 900 KiB from
+  the update drive; the log says `Copying ... bytes of resources`. A watch
+  that turns itself off after the splash did not find them.
+- **Clocks**: PLL1 now also gives 80 MHz on Q for the eMMC, which the SoC
+  start-up turns off first, whatever the bootloader left running.
 - **CPU time**: each display update takes about 40 ms of busy CPU,
   preemptible.
-- **Code space**: the code partition is 96.5% full in release, 98.4% in
-  debug builds.
+- **Code space**: images of 1611 KiB in release and 1642 KiB in debug
+  builds, of the 1664 KiB a 2 MiB part takes.
 ## Decisions
 
 The reasons behind the port's design are recorded in the
