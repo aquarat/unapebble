@@ -231,6 +231,37 @@ config MMAP_RESOURCES
       Serve read-only system resources as direct pointers into
       memory-mapped flash instead of copying them out.
 
+config RESOURCES_FROM_VOLUME
+    bool "System resources from a FAT volume of the eMMC"
+    depends on MMC && FLASH && !RECOVERY_FW
+    select FAT_RO
+    help
+      When neither resource bank holds the resources the firmware was
+      built with, copy them into one at boot from a file in the root
+      directory of a FAT16, FAT32 or exFAT volume of the eMMC (the MMC
+      role): the UNA Watch's update drive, which the pack is copied to
+      next to the .ota. Any file whose manifest has their version is
+      taken, whatever its name. With none, the watch powers off, as it
+      has no recovery firmware to go to.
+
+if RESOURCES_FROM_VOLUME
+
+config RESOURCES_VOLUME_FIRST_BLOCK
+    int "First block of the volume"
+    default 0
+    help
+      Where the volume, or the MBR holding it, starts on the eMMC, in
+      512-byte blocks.
+
+config RESOURCES_VOLUME_BLOCKS
+    int "Blocks of the volume"
+    default 204800
+    help
+      Size of the region of the eMMC the volume is in, in 512-byte
+      blocks: 100 MiB for the UNA Watch's update drive.
+
+endif
+
 config RESOURCES_IN_IMAGE
     bool "System resources installed with the image"
     help

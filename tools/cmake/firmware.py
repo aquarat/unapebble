@@ -46,7 +46,10 @@ def enabled(config, key):
 
 
 def max_resources_size(config, config_path):
-    if enabled(config, "CONFIG_RESOURCES_IN_IMAGE"):
+    # Resources that take their whole partition
+    if enabled(config, "CONFIG_RESOURCES_IN_IMAGE") or enabled(
+        config, "CONFIG_RESOURCES_FROM_VOLUME"
+    ):
         return flash_regions(config_path)["SYSTEM_RESOURCES_BANK_0"][1]
     if enabled(config, "CONFIG_SOC_NRF52"):
         return 1024 * BYTES_PER_K
