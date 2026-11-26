@@ -8,3 +8,10 @@ config FLASH_SIZE
 # The resources of the Pebble Round 2, whose platform the firmware takes.
 config RESOURCES_BOARD
     default "getafix"
+
+# Linked after the tether stub (tools/una/tether), which flashes and starts it.
+config FLASH_OFFSET
+    default 0x80000 if BOARD_UNAWATCH_TETHER_SLOT
+
+config FW_FLASH_SIZE
+    default 0x380000 if BOARD_UNAWATCH_TETHER_SLOT

@@ -325,6 +325,15 @@ button for 4 s as the watch turns on, and install UNA's own `.ota` the same
 way. PebbleOS only writes to the GUI region of the eMMC, which the stock
 firmware does not use; its update drive and files are left alone.
 
+## Tethered stub
+
+{doc}`tether` describes a small firmware, installed like any image, that
+stands in for a debug probe: over the USB-C connector, `tools/una/tether/tether.py`
+reads and writes memory and registers, drives the I2C buses and the GPIO,
+runs experiments loaded into SRAM, and flashes a PebbleOS image linked for
+the slot after it (`CONFIG_BOARD_UNAWATCH_TETHER_SLOT`) and starts it,
+without the bootloader menu.
+
 (unawatch-status)=
 
 ## Status
@@ -375,5 +384,6 @@ covers, and add a record for each new decision.
 :hidden:
 
 hardware.md
+tether.md
 decisions/index.md
 ```

@@ -22,4 +22,12 @@ config BOARD_UNAWATCH_CONSOLE_DAM
       accessory; without one attached, the console line stays wired to
       the connector.
 
+config BOARD_UNAWATCH_TETHER_SLOT
+    bool "Link for the slot of the tether stub"
+    help
+      Link the image at 0x08080000 instead of 0x08060000, for the slot
+      the tether stub (tools/una/tether) programs over USB and starts:
+      the stub stays where the bootloader starts images. Such an image
+      is flashed with `tether.py flash`, not packed as an .ota.
+
 endif # BOARD_UNAWATCH

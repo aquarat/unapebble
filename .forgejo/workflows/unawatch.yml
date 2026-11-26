@@ -59,6 +59,14 @@ jobs:
           pbl configure --board "$BOARD" -DCONFIG_RELEASE=y
           pbl build
 
+      # The tethered stub, a USB debug monitor installed like any image
+      # (docs/boards/unawatch/tether.md), its experiments, and the tests of its
+      # host tools against its protocol code built for the host.
+      - name: Build the tether stub
+        working-directory: src
+        run: |
+          make -C tools/una/tether OUT="$PWD/build-tether" VERSION="$VERSION" all test
+
       - name: Package
         working-directory: src
         run: |
@@ -74,6 +82,13 @@ jobs:
           if [ -f build/log.dict.json ]; then
             cp build/log.dict.json "../out/${name}_loghash_dict.json"
           fi
+          # The stub, and what drives it: host tools, experiments and their sources
+          t="unapebble_tether_${VERSION}"
+          cp build-tether/tether.ota "../out/$t.ota"
+          cp build-tether/tether.elf "../out/$t.elf"
+          tar -czf "../out/${t}_host.tar.gz" --transform "s,^,$t/," \
+            -C tools/una/tether tether.py bridge.py experiments stub/tether_api.h stub/tether_proto.h \
+            -C "$PWD/build-tether" experiments
           (cd ../out && sha256sum * > SHA256SUMS)
           ls -l ../out
 
@@ -102,6 +117,8 @@ jobs:
             "Settings, apps and logs are kept from one install to the next." \
             "If the watch turns off again right after the splash, the .pbpack of this release is missing from the drive: copy it and start again." \
             "To go back, install UNA's own .ota the same way." \
+            "" \
+            "unapebble_tether_*.ota is the tethered stub, a USB debug monitor installed the same way (no .pbpack); the _host.tar.gz has tether.py and bridge.py to drive it. See docs/boards/unawatch/tether.md." \
             "" \
             "Experimental: this firmware has not been tested on a watch.")
           id=$(jq -n --arg tag "$tag" --arg sha "$GITHUB_SHA" --arg name "$title" \
