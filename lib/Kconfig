@@ -5,6 +5,12 @@ rsource "c/Kconfig"
 
 menu "Libraries"
 
+config FAT_RO
+    bool
+    help
+      Read the files of the root directory of a FAT16, FAT32 or exFAT
+      volume (pbl/fat_ro/fat_ro.h).
+
 config KRAEPELIN
     bool "Kraepelin"
     help
