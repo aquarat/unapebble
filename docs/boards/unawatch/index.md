@@ -223,8 +223,15 @@ Things to watch on a first boot:
   preemptible.
 - **Code space**: the code partition is 96.5% full in release, 98.4% in
   debug builds.
+## Decisions
+
+The reasons behind the port's design are recorded in the
+[decision log](decisions/index.md). Read it before changing something it
+covers, and add a record for each new decision.
+
 ```{toctree}
 :hidden:
 
 hardware.md
+decisions/index.md
 ```
