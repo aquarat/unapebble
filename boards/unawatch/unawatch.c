@@ -12,9 +12,12 @@
 
 // The enables of the loads the board switches, off at boot as the stock firmware leaves them:
 // eMMC, buzzer, barometer LDO (which must not float), BLE reset and GNSS. The haptics' is its
-// driver's.
+// driver's, and so is the eMMC's with its driver: the board comes up after the devices, by when
+// the card may be in use.
 static const struct pbl_gpio s_off_at_boot[] = {
+#ifndef CONFIG_MMC_STM32_SDMMC
   PBL_GPIO(&dt_gpiod, 10, 0), /* EMMC_EN */
+#endif
   PBL_GPIO(&dt_gpiob, 8, 0),  /* BUZZER_PWM */
   PBL_GPIO(&dt_gpiob, 9, 0),  /* BUZZER_EN1 */
   PBL_GPIO(&dt_gpiod, 5, 0),  /* BUZZER_EN2 */
