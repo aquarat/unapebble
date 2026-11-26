@@ -5,6 +5,7 @@
 # run. In the build container, from the repository root:
 #
 #   docker/build.sh -- make -C tools/una/tether          # stub .ota and experiments
+#   docker/build.sh -- make -C tools/una/tether test     # host tool tests
 #
 # arm-none-eabi-gcc must be on PATH, or CROSS set to its prefix.
 
@@ -34,7 +35,7 @@ EXPERIMENTS := rcc_clocks max17262 emmc_cid
 EXP_COMMON := experiments/blob_crt0.c
 EXP_HDRS := experiments/tether_blob.h stub/tether_api.h stub/tether_proto.h
 
-.PHONY: all stub experiments sim clean
+.PHONY: all stub experiments sim test clean
 # The ELFs stay, for addr2line and gdb
 .SECONDARY:
 
@@ -64,7 +65,7 @@ $(OUT)/experiments/%.elf: experiments/%.c $(EXP_COMMON) $(EXP_HDRS) experiments/
 $(OUT)/experiments/%.bin: $(OUT)/experiments/%.elf
 	$(OBJCOPY) -O binary $< $@
 
-# The protocol as the stub runs it, on the host, over stdin and stdout
+# The protocol as the stub runs it, on the host, for the tests
 SIM_SANITIZE ?= -fsanitize=address,undefined -fno-sanitize-recover=all
 sim: $(OUT)/tether_sim
 
@@ -72,6 +73,9 @@ $(OUT)/tether_sim: sim/sim_port.c stub/proto.c stub/port.h stub/tether_proto.h M
 	@mkdir -p $(OUT)
 	$(HOSTCC) -O1 -g -std=gnu17 -Wall -Wextra -Wno-unused-parameter $(SIM_SANITIZE) -Istub -o $@ \
 		sim/sim_port.c stub/proto.c
+
+test: $(OUT)/tether_sim
+	TETHER_SIM=$(abspath $(OUT)/tether_sim) $(PYTHON) -m unittest -v test_tether
 
 clean:
 	rm -rf $(OUT)
