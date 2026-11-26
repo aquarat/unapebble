@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: maxim,max17262
+config: GAUGE_MAX17262
+class: gauge
+define: PBL_GAUGE_MAX17262_DEFINE
+args:
+  - parent: i2c
+  - reg: 0
+  - phandle: monitored-battery
+    as: battery
+  - prop: maxim,empty-microvolt
+  - prop: maxim,recovery-microvolt

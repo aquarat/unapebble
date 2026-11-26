@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig GAUGE
+    bool "Fuel gauge"
+    help
+      Battery fuel gauge class (pbl/drivers/gauge.h): a chip that
+      measures the battery and estimates its state of charge.
+
+if GAUGE
+
+config GAUGE_SHELL
+    bool "Shell commands"
+    default DRIVER_SHELL
+    depends on SHELL
+    help
+      The gauge shell command, to read the fuel gauge.
+
+config GAUGE_MAX17262
+    bool "Maxim MAX17262"
+    default y
+    depends on DT_HAS_MAXIM_MAX17262_ENABLED
+    select I2C
+    help
+      Support for the Maxim MAX17262 fuel gauge, with its internal
+      sense resistor, on the ModelGauge m5 EZ model of the battery.
+
+config GAUGE_MAX17262_FULL_SOC_THRESHOLD
+    int "End-of-charge detection threshold (%)"
+    range 0 100
+    default 80
+    depends on GAUGE_MAX17262
+    help
+      FullSOCThr: the gauge takes the end of a charge as a full battery
+      only above this voltage-based state of charge. 80% is Maxim's
+      recommendation for EZ models. A charger stopping short of full
+      takes 95%, so that the gauge never learns a partial charge as the
+      capacity of the cell.
+
+module = DRIVER_GAUGE
+module-str = Fuel gauge
+source "subsys/logging/Kconfig.template.log_level"
+
+endif # GAUGE
