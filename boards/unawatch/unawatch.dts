@@ -11,6 +11,7 @@
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/pwm/pwm.h>
 
 / {
@@ -28,6 +29,18 @@
 			reg = <0x2025e000 0x12000>;
 			no-map;
 		};
+	};
+
+	// The cell, charged gently for its life: 0.5C, to 4.36 V, which the charger's 0.75% keeps
+	// below the 4.40 V the stock firmware charges to, ending at the 14 mA its fuel gauge
+	// model takes (docs/boards/unawatch/decisions)
+	battery: battery {
+		compatible = "simple-battery";
+		device-chemistry = "lithium-ion-polymer";
+		charge-full-design-microamp-hours = <200000>;
+		constant-charge-current-max-microamp = <100000>;
+		charge-term-current-microamp = <14000>;
+		constant-charge-voltage-max-microvolt = <4360000>;
 	};
 
 	// The display module's supplies: PMIC rails, on whenever the watch is
@@ -193,6 +206,29 @@
 	pinctrl-names = "default";
 	clock-frequency = <400000>;
 	status = "okay";
+
+	// Its rails are on at power-on and left as they are; its charger is driven. INTB is
+	// wired-OR with the STUSB4500's ALERT on PWR_INT_L, which the STUSB4500 may hold low while
+	// USB is in, hence both edges.
+	pmic: pmic@61 {
+		compatible = "nxp,pca9420";
+		reg = <0x61>;
+		pinctrl-0 = <&pwr_int_default>;
+		pinctrl-names = "default";
+		interrupt-parent = <&gpiog>;
+		interrupts = <7 IRQ_TYPE_EDGE_BOTH>;
+		monitored-battery = <&battery>;
+	};
+
+	// The stock firmware's EZ model, so that switching firmware keeps what it learned
+	// (FuelGauge.cpp, main.h:239-253)
+	fuel_gauge: fuel-gauge@36 {
+		compatible = "maxim,max17262";
+		reg = <0x36>;
+		monitored-battery = <&battery>;
+		maxim,empty-microvolt = <3400000>;
+		maxim,recovery-microvolt = <3960000>;
+	};
 
 	// An ERM, at the voltages of the stock firmware: 2.7 V rated, 2.95 V overdrive
 	// (DRV2625.cpp:140-149)
