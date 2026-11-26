@@ -1,0 +1,104 @@
+// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-License-Identifier: Apache-2.0
+
+// The experiments firmware (unawatch/lab) starts as the first port did, which boots: the storage
+// in the second bank of the embedded flash, the system resources installed with the image, the
+// eMMC unused at boot, no battery drivers and the clock tree without PLL1 Q. The Lab app drives
+// the eMMC, its NOR window and the clocks on demand (docs/boards/unawatch).
+
+// No NOR window on the eMMC: it would power the card up at boot
+/delete-node/ &emmc_storage;
+
+// The first port's clock tree: the CPU and every bus at 160 MHz from PLL1 R, no PLL1 Q. The
+// eMMC's kernel clock is selected, not started: ICLK on HSI48, which only runs while the Lab
+// uses the card, whatever mux the bootloader left
+&rcc {
+	assigned-clocks = <&rcc STM32U5_CLK_PLL1_SRC>, <&rcc STM32U5_CLK_SYSCLK>,
+			  <&rcc STM32U5_CLK_LPTIM4>, <&rcc STM32U5_CLK_RTC>,
+			  <&rcc STM32U5_CLK_LPTIM1>, <&rcc STM32U5_CLK_ICLK>,
+			  <&rcc STM32U5_CLK_SDMMC1>,
+			  <&rcc STM32U5_CLK_MSIS>, <&rcc STM32U5_CLK_PLL1_R>,
+			  <&rcc STM32U5_CLK_HCLK>, <&rcc STM32U5_CLK_PCLK1>,
+			  <&rcc STM32U5_CLK_PCLK2>, <&rcc STM32U5_CLK_PCLK3>;
+	assigned-clock-parents = <&rcc STM32U5_CLK_MSIS>, <&rcc STM32U5_CLK_PLL1_R>,
+				 <&rcc STM32U5_CLK_LSE>, <&rcc STM32U5_CLK_LSE>,
+				 <&rcc STM32U5_CLK_LSE>, <&rcc STM32U5_CLK_HSI48>,
+				 <&rcc STM32U5_CLK_ICLK>,
+				 <0>, <0>, <0>, <0>, <0>, <0>;
+	assigned-clock-rates = <0>, <0>, <0>, <0>, <0>, <0>, <0>, <48000000>, <160000000>,
+			       <160000000>, <160000000>, <160000000>, <160000000>;
+};
+
+// No battery drivers, as in the first port: the Lab reads the gauge and the PMIC raw
+&pmic {
+	status = "disabled";
+};
+
+&fuel_gauge {
+	status = "disabled";
+};
+
+// The first port's storage, in the second bank of the 4 MiB embedded flash, the image running
+// from the first. The bootloader erases everything from 0x08060000 when it installs an .ota, so
+// the system resources are installed with the image, appended to it at their partition, and
+// the filesystem and the logs start again empty after each update. Every partition is a whole
+// number of 8 KiB pages; the filesystem is in 64 KiB sectors.
+&internal_flash {
+	partitions {
+		// Up to the resources: the 2 MiB of a STM32U595 less what the bootloader keeps
+		partition@60000 {
+			reg = <0x60000 0x1a0000>;
+		};
+
+		partition@200000 {
+			label = "system-resources-bank-0";
+			reg = <0x200000 0x100000>;
+		};
+
+		partition@300000 {
+			label = "system-resources-bank-1";
+			reg = <0x300000 0x2000>;
+		};
+
+		partition@302000 {
+			label = "safe-firmware";
+			reg = <0x302000 0x2000>;
+		};
+
+		partition@304000 {
+			label = "scratch";
+			reg = <0x304000 0x2000>;
+		};
+
+		partition@306000 {
+			label = "mfg-info";
+			reg = <0x306000 0x2000>;
+		};
+
+		partition@308000 {
+			label = "tzinfo";
+			reg = <0x308000 0x2000>;
+		};
+
+		partition@30a000 {
+			label = "shared-prf-storage";
+			reg = <0x30a000 0x2000>;
+		};
+
+		partition@310000 {
+			label = "filesystem";
+			reg = <0x310000 0xd0000>;
+		};
+
+		partition@3e0000 {
+			label = "debug-db";
+			reg = <0x3e0000 0x20000>;
+		};
+	};
+};
+
+// Without its window the host has no child nodes
+&sdmmc1 {
+	/delete-property/ #address-cells;
+	/delete-property/ #size-cells;
+};

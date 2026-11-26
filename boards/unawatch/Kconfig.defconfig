@@ -10,5 +10,18 @@ config RESOURCES_BOARD
     default "getafix"
 
 # The reserved boot_trace region of the devicetree
+if BOOT_TRACE
 config BOOT_TRACE_RAM_BASE
     default 0x2025dc00
+endif
+
+# The storage is on the eMMC: the embedded flash only holds the code. The
+# experiments firmware keeps it there, as the first port did.
+config FLASH_STM32U5
+    default n if !BOARD_UNAWATCH_LAB
+
+# The battery: the PCA9420's charger and the MAX17262 fuel gauge, which gives
+# the state of charge and the temperature charging depends on. Not in the
+# experiments firmware, which starts as the first port did.
+config GAUGE
+    default y if !BOARD_UNAWATCH_LAB

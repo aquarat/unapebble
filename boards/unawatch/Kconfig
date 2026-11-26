@@ -22,4 +22,14 @@ config BOARD_UNAWATCH_CONSOLE_DAM
       accessory; without one attached, the console line stays wired to
       the connector.
 
+config BOARD_UNAWATCH_LAB
+    bool
+    default y if "$(BOARD_VARIANT)" = "lab"
+    help
+      The experiments firmware, the board's lab variant (unawatch/lab):
+      it starts as the first port did, which boots, with the storage in
+      the embedded flash, the system resources in the image, the eMMC
+      unused at boot and no battery drivers, and carries the Lab app to
+      run experiments on the eMMC, the clocks and the reset causes.
+
 endif # BOARD_UNAWATCH
