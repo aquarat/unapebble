@@ -21,11 +21,19 @@ if [[ -n ${REBUILD:-} ]] || ! "${docker[@]}" image inspect "$IMAGE" >/dev/null 2
     "${docker[@]}" build --cgroup-parent=batch.slice -f docker/Dockerfile -t "$IMAGE" .
 fi
 
+# In a git worktree, .git points into the main repository's git directory:
+# mount that too, read-only, at the same path, so git describe works.
+gitdirs=()
+common=$(git rev-parse --path-format=absolute --git-common-dir)
+if [[ $common != "$PWD/.git" ]]; then
+    gitdirs=(-v "$common:$common:ro")
+fi
+
 run() {
     "${docker[@]}" run --rm --init --cgroup-parent=batch.slice \
         --user "$(id -u):$(id -g)" \
         --security-opt label=disable \
-        -v "$PWD:/work" -w /work \
+        -v "$PWD:/work" -w /work "${gitdirs[@]}" \
         $([[ -t 0 ]] && echo -it) \
         "$IMAGE" "$@"
 }
