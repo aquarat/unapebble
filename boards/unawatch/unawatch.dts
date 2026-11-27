@@ -295,6 +295,20 @@
 			       "-1", "0", "0",
 			       "0", "0", "-1";
 	};
+
+	// Its interrupt, on PC2, is not used: the driver polls. The mount matrix, X to 3 o'clock, Y
+	// to 12, Z out of the face, is the stock firmware's, measured on a watch (MagBosch.cpp:20-29).
+	bmm350: magnetometer@14 {
+		compatible = "bosch,bmm350";
+		reg = <0x14>;
+		vdd-supply = <&vdd_link2>;
+		vddio-supply = <&vdd_link2>;
+		interrupt-parent = <&gpioc>;
+		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
+		mount-matrix = "0", "1", "0",
+			       "1", "0", "0",
+			       "0", "0", "-1";
+	};
 };
 
 // The display's VCOM, FRP and XFRP, on the LSE, which keeps them running in Stop 2

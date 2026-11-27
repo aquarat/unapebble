@@ -16,3 +16,4 @@ battery: battery
 charger: pmic
 gauge: fuel_gauge
 accel: bmi270
+mag: bmm350
