@@ -10,9 +10,20 @@
  *   args[0] = 1  the same, after switching it to link-layer-only mode
  *                (aci_hal_write_config_data 0x2c, held in its RAM until reset)
  *   args[0] = 2  standard HCI commands only, as a host would send them
- *   args[1] != 0 also advertise for args[1] seconds with standard HCI commands,
- *                non-connectable, as "unapebble-test"
+ *   args[0] = 3  a reset with MISO (the chip's IO3, ST's updater pin) pulled
+ *                up, then one with it floating: the start events
+ *   args[0] = 4  three resets with MISO pulled down, hci_reset, another reset
+ *   args[0] = 5  a 3 s reset then one of 5, 20, 100, 300, 1000, 3000 ms, in turn
+ *   args[0] = 6  a normal start, a 5 ms reset (which starts the updater), then
+ *                RESET held low 2 s with the pins in args[1] put back as found
+ *                (bit 0 SCK, 1 MISO, 2 MOSI, 3 CS, 4 IRQ), the SPI pins set
+ *                up again and a 5 ms reset (which starts normally)
+ *   args[1] != 0 in modes 0 to 2, also advertise for args[1] seconds (at most
+ *                10) with standard HCI commands, non-connectable, as
+ *                "unapebble-test"
  *
+ * hci_reset, and a reset soon after a start, leave the chip in its updater
+ * (start reason 4), where it answers no command: see hardware.md 2.5.1.
  * Nothing is written to the BlueNRG-2's flash: no updater command, no
  * aci_hal_write_config_data but offset 0x2c (RAM). The pins are put back as
  * they were at the end, and the chip is left in reset if it was in reset.
@@ -244,10 +255,12 @@ static int prv_cmd(const char *name, uint16_t op, const uint8_t *par, uint8_t le
   return -1;
 }
 
+static uint32_t s_reset_ms = 5U;
+
 static void prv_reset(void) {
   prv_set(CS_PORT, CS_PIN, 1U);
   prv_set(RST_PORT, RST_PIN, 0U);
-  tether_delay_ms(5U);
+  tether_delay_ms(s_reset_ms);
   prv_set(RST_PORT, RST_PIN, 1U);
   const uint32_t t0 = tether->millis();
   tether->delay_us(50U);
@@ -397,7 +410,7 @@ static void prv_advertise(uint32_t seconds) {
 
 uint32_t blob_main(const uint32_t *args, uint32_t nargs) {
   const uint32_t mode = nargs > 0U ? args[0] : 0U;
-  const uint32_t adv_s = nargs > 1U ? (args[1] > 10U ? 10U : args[1]) : 0U;
+  const uint32_t adv_s = nargs > 1U && mode < 3U ? (args[1] > 10U ? 10U : args[1]) : 0U;
 
   REG32(RCC_AHB2ENR1) |= (1U << PA) | (1U << PB) | (1U << PG);
   (void)REG32(RCC_AHB2ENR1);
@@ -421,8 +434,59 @@ uint32_t blob_main(const uint32_t *args, uint32_t nargs) {
   prv_in(IRQ_PORT, IRQ_PIN);
   prv_out(RST_PORT, RST_PIN, true, 0U);
 
-  prv_reset();
-  if (s_errors == 0) {
+  if (mode == 3U) {
+    tprintf("reset with MISO pulled up:\n");
+    REG32(GPIO_PORT(MISO_PORT) + 0x0cU) |= 1U << (MISO_PIN * 2U);
+    prv_reset();
+    REG32(GPIO_PORT(MISO_PORT) + 0x0cU) &= ~(3U << (MISO_PIN * 2U));
+    tprintf("reset with MISO floating:\n");
+    prv_reset();
+    prv_versions();
+  } else if (mode == 5U) {
+    static const uint32_t s_ms[6] = {5U, 20U, 100U, 300U, 1000U, 3000U};
+    for (int i = 0; i < 6; i++) {
+      s_reset_ms = 3000U;
+      tprintf("normal start first:\n");
+      prv_reset();
+      s_reset_ms = s_ms[i];
+      tprintf("reset held %lu ms:\n", (unsigned long)s_reset_ms);
+      prv_reset();
+    }
+  } else if (mode == 6U) {
+    const uint32_t mask = nargs > 1U ? args[1] : 0x1fU;
+    s_reset_ms = 3000U;
+    prv_reset();
+    s_reset_ms = 5U;
+    prv_reset();
+    tprintf("hold 2 s, pins %02lx as found:\n", (unsigned long)mask);
+    prv_set(RST_PORT, RST_PIN, 0U);
+    for (int i = 0; i < 5; i++) {
+      if (mask & (1U << i)) {
+        prv_restore(&s_save[i]);
+      }
+    }
+    tether_delay_ms(2000U);
+    prv_out(CS_PORT, CS_PIN, false, 1U);
+    prv_out(SCK_PORT, SCK_PIN, false, 0U);
+    prv_out(MOSI_PORT, MOSI_PIN, false, 0U);
+    prv_in(MISO_PORT, MISO_PIN);
+    prv_in(IRQ_PORT, IRQ_PIN);
+    prv_reset();
+  } else if (mode == 4U) {
+    REG32(GPIO_PORT(MISO_PORT) + 0x0cU) |= 2U << (MISO_PIN * 2U);
+    for (int i = 0; i < 3; i++) {
+      tprintf("reset %d with MISO pulled down:\n", i + 1);
+      prv_reset();
+    }
+    prv_simple("hci_reset", 0x0c03U);
+    tprintf("reset with MISO pulled down:\n");
+    prv_reset();
+    prv_versions();
+    REG32(GPIO_PORT(MISO_PORT) + 0x0cU) &= ~(3U << (MISO_PIN * 2U));
+  } else {
+    prv_reset();
+  }
+  if (s_errors == 0 && mode < 3U) {
     uint8_t r[260];
     uint32_t n;
     if (mode == 1U) {
