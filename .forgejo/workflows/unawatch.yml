@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Builds the firmware for the UNA Watch and publishes the installable .ota,
-# with the system resources it copies to the eMMC, on the repository's
-# releases page: "unawatch-latest" follows main, and a pushed v* tag gets a
+# which carries the system resources, on the repository's releases page: "unawatch-latest" follows main, and a pushed v* tag gets a
 # release of its own.
 
 name: UNA Watch firmware
@@ -72,11 +71,10 @@ jobs:
         run: |
           mkdir -p ../out
           name="unapebble_${BOARD}_${VERSION}"
-          # The code alone, which must fit a 2 MiB part (the packer's default
-          # limit). The resources go next to it on the update drive, and the
-          # firmware copies them to the eMMC.
-          python3 tools/una/pack_ota.py build/pebbleos.bin -v "$VERSION" -o "../out/$name.ota"
-          cp build/system_resources.pbpack "../out/$name.pbpack"
+          # The code and the system resources after it, one file for the
+          # bootloader, up to the end of the 4 MiB flash.
+          python3 tools/una/pack_ota.py build/pebbleos_resources.bin --max-size 0x3a0000 \
+            -v "$VERSION" -o "../out/$name.ota"
           cp build/pebbleos.elf "../out/$name.elf"
           cp build/pebbleos.hex "../out/$name.hex"
           if [ -f build/log.dict.json ]; then
@@ -112,13 +110,12 @@ jobs:
             "Built from ${GITHUB_SHA} (${VERSION})." \
             "" \
             "To install: turn the watch off, then hold the power button for 4 s as it turns on to reach the bootloader menu." \
-            "Connect USB, copy both the .ota and the .pbpack files to the root of the drive that appears, eject it, unplug, and choose Continue." \
-            "The bootloader installs the .ota; on its first start the firmware copies the system resources from the .pbpack, which stays on the drive." \
+            "Connect USB, copy the unapebble_unawatch_*.ota file, the only one needed, to the root of the drive that appears, eject it, unplug, and choose Continue." \
+            "The bootloader installs it, the system resources included, deletes it from the drive and starts the firmware." \
             "Settings, apps and logs are kept from one install to the next." \
-            "If the watch turns off again right after the splash, the .pbpack of this release is missing from the drive: copy it and start again." \
             "To go back, install UNA's own .ota the same way." \
             "" \
-            "unapebble_tether_*.ota is the tethered stub, a USB debug monitor installed the same way (no .pbpack); the _host.tar.gz has tether.py and bridge.py to drive it. See docs/boards/unawatch/tether.md." \
+            "unapebble_tether_*.ota is the tethered stub, a USB debug monitor installed the same way; the _host.tar.gz has tether.py and bridge.py to drive it. See docs/boards/unawatch/tether.md." \
             "" \
             "Experimental: this firmware has not been tested on a watch.")
           id=$(jq -n --arg tag "$tag" --arg sha "$GITHUB_SHA" --arg name "$title" \
