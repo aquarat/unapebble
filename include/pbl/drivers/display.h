@@ -37,7 +37,8 @@
  * @endcode
  *
  * An update runs in the background and reports its outcome to a callback run from the display's
- * interrupt, or before pbl_display_update() returns for displays that update synchronously. The
+ * interrupt or thread, or before pbl_display_update() returns for displays that update
+ * synchronously. The
  * display may modify the updated rows while it runs, but restores them before the callback. Calls
  * are made from task context and return 0 or a negative errno: @c -EBUSY while an update is in
  * progress, @c -EINVAL for an invalid row range and @c -ENODEV if the display is not ready.

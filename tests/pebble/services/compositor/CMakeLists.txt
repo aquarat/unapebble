@@ -7,3 +7,9 @@ pbl_clar_test(test_compositor
     pebble/services/compositor/compositor.c
   OVERRIDES dummy_board
 )
+
+pbl_clar_test(test_compositor_display
+  SOURCES
+    pebble/services/compositor/compositor_display.c
+  OVERRIDES dummy_board
+)

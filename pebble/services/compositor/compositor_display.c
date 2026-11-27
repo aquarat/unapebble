@@ -17,6 +17,7 @@
 #include <applib/graphics/framebuffer.h>
 #include <applib/graphics/gcolor_definitions.h>
 #include <applib/graphics/gtypes.h>
+#include <kernel/event_loop.h>
 #include <kernel/events.h>
 
 static void (*s_update_complete_handler)(bool success);
@@ -117,11 +118,12 @@ static void prv_flush_finish(void *data) {
   }
 }
 
-// The display reports from its interrupt, or synchronously from compositor_display_update()
+// The display reports from its interrupt or a thread of its own, or synchronously from
+// compositor_display_update(), on KernelMain
 static void prv_flush_done(int status, void *arg) {
   void *data = (status == 0) ? nullptr : (void *)1;
 
-  if (!pbl_in_isr()) {
+  if (!pbl_in_isr() && launcher_task_is_current_task()) {
     prv_flush_finish(data);
     return;
   }
@@ -134,7 +136,11 @@ static void prv_flush_done(int status, void *arg) {
     },
   };
 
-  event_put_isr(&e);
+  if (pbl_in_isr()) {
+    event_put_isr(&e);
+  } else {
+    event_put(&e);
+  }
 }
 
 void compositor_display_init(void) {
