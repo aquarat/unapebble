@@ -284,10 +284,41 @@ config RESOURCES_IN_IMAGE
     bool "System resources installed with the image"
     help
       Build pebbleos_resources.bin: the firmware image followed by the
-      system resources at their partition, system-resources-bank-0, the gap
-      filled as erased flash, for a bootloader that installs one image over
-      the code partition and the flash after it, such as the UNA Watch's.
+      system resources at their partition, system-resources-bank-0 or,
+      with RESOURCES_IN_CODE_FLASH, system-resources, the gap filled as
+      erased flash, for a bootloader that installs one image over the
+      code partition and the flash after it, such as the UNA Watch's.
       The resources may then take the whole partition.
+
+config RESOURCES_IN_CODE_FLASH
+    bool "System resources read in place from the code's flash"
+    depends on RESOURCES_IN_IMAGE && $(dt_has_partition,system-resources)
+    default y
+    select MMAP_RESOURCES
+    help
+      The system resources are installed with the image in the
+      system-resources partition of the memory-mapped flash the firmware
+      runs from, and read there in place, while the flash role, which
+      holds the storage, is another flash, such as an eMMC. That one
+      bank is never written: system resource updates over put bytes or
+      the console are refused, as the resources only come with the
+      image.
+
+if RESOURCES_IN_CODE_FLASH
+
+config RESOURCES_CODE_FLASH_OFFSET
+    hex
+    default $(dt_partition_offset,system-resources)
+    help
+      Offset of the system resources from FLASH_BASE.
+
+config RESOURCES_CODE_FLASH_SIZE
+    hex
+    default $(dt_partition_size,system-resources)
+    help
+      Size of their partition, the most the resources may take.
+
+endif
 
 endmenu
 

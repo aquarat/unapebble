@@ -113,6 +113,11 @@ static void prv_handle_query_region(uint8_t region) {
       break;
     case REGION_RESOURCES: {
       const SystemResourceBank *bank = resource_storage_flash_get_unused_bank();
+      // None when the resources only come with the image
+      if (bank->end == bank->begin) {
+        prv_send_opcode(RESP_ERROR);
+        return;
+      }
       resp.address = bank->begin;
       resp.length = bank->end - bank->begin;
       break;
