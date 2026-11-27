@@ -227,23 +227,26 @@ flashed over USB and started without the bootloader menu:
 ```shell
 BOARD=unawatch BUILD_DIR=build-slot docker/build.sh -DCONFIG_RELEASE=y \
     -DCONFIG_BOARD_UNAWATCH_TETHER_SLOT=y
-python3 tools/una/tether/tether.py flash build-slot/pebbleos.bin --boot
+python3 tools/una/tether/tether.py flash build-slot/pebbleos_resources.bin --boot
 ```
 
-`CONFIG_BOARD_UNAWATCH_TETHER_SLOT` moves the code partition from `0x60000`
-to `0x80000` (`CONFIG_FLASH_OFFSET`), leaving 3584 KiB for the image. Flashing
-a release image of about 1.6 MiB should take some 15 s (estimated: 4 KiB a
-command, programmed by quad-words, then a CRC of the whole). The stub starts it as the
+`CONFIG_BOARD_UNAWATCH_TETHER_SLOT` moves the start of the code partition from
+`0x60000` to `0x80000` (`CONFIG_FLASH_OFFSET`), leaving 2048 KiB for the code
+up to the system resources at `0x280000`, where they stay.
+`pebbleos_resources.bin` is the code, erased flash and the resources, about
+2.9 MiB; flashing it should take some 30 s (estimated: 4 KiB a command,
+programmed by quad-words, then a CRC of the whole). `pebbleos.bin` alone
+flashes the code only, which is enough when the resources there are of the
+same build. The stub starts it as the
 bootloader would: USB disconnected, interrupts masked, the image's vector
 table in VTOR and its stack pointer in MSP; PebbleOS's start-up resets the
 rest. Up on the watch starts it too. A slot image is never an `.ota`: the
 bootloader always installs at `0x08060000`.
 
 Every reset or reboot goes through the bootloader to the stub again, which
-then waits to be told to boot; powering off works as usual. PebbleOS still
-takes its system resources from the eMMC, or from the `.pbpack` of its
-version on the update drive: copy it there once through the bootloader menu,
-without an `.ota`, then choose Continue.
+then waits to be told to boot; powering off works as usual. PebbleOS reads
+its system resources in place at `0x08280000`: without those of its build it
+powers off.
 
 ## Protocol
 

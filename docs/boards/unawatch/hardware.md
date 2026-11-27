@@ -1230,7 +1230,8 @@ adaptation:**
 ## Open questions
 
 1. **MCU on the actual watch.** Is it the U5A5QJ (4 MB) or the U595QI (2 MB)?
-   Read `0x0BFA07A0` and `DBGMCU->IDCODE` on a real unit.
+   Read `0x0BFA07A0` and `DBGMCU->IDCODE` on a real unit. Answered: the
+   watch has the 4 MB U5A5, and PebbleOS images now use it.
 2. **Panel identity and shape.** Is it the Sharp LS012B7DD06A or the JDI
    LPM012M387D, and is it round? Also needed: its datasheet timing and a
    round mask.

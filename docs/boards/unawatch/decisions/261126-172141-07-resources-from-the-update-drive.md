@@ -1,6 +1,6 @@
 # Resources copied from the update drive when their version is missing
 
-- Status: Accepted
+- Status: Superseded by 261127-131711-02-resources-read-in-place
 - Date: 2026-11-26 17:21 UTC
 - Decided by: agent
 
