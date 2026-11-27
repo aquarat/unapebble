@@ -38,16 +38,16 @@
 		};
 	};
 
-	// The cell, charged gently: 0.5C, to 4.20 V, the owner's cap until the cell is identified
-	// (the stock firmware charges to 4.40 V), ending at the 14 mA its fuel gauge model takes
-	// (docs/boards/unawatch/decisions)
+	// The cell, a 4.4 V one, charged gently for its life: 0.5C, to 4.36 V, which the charger's
+	// 0.75% keeps below the 4.40 V the stock firmware charges to, ending at the 14 mA its fuel
+	// gauge model takes (docs/boards/unawatch/decisions)
 	battery: battery {
 		compatible = "simple-battery";
 		device-chemistry = "lithium-ion-polymer";
 		charge-full-design-microamp-hours = <200000>;
 		constant-charge-current-max-microamp = <100000>;
 		charge-term-current-microamp = <14000>;
-		constant-charge-voltage-max-microvolt = <4200000>;
+		constant-charge-voltage-max-microvolt = <4360000>;
 	};
 
 	// The display module's supplies: PMIC rails, on whenever the watch is
@@ -363,8 +363,8 @@
 			read-only;
 		};
 
-		// The rest of the flash: an image up to 0x1a0000 bytes also fits the 2 MiB STM32U595 of
-		// early watches, which tools/una/pack_ota.py checks by default
+		// The rest of the flash, which the bootloader installs an image to: the firmware may
+		// split it (pebble/boards/unawatch.overlay)
 		partition@60000 {
 			label = "code";
 			reg = <0x60000 0x3a0000>;

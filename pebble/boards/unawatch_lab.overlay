@@ -43,6 +43,9 @@
 // the system resources are installed with the image, appended to it at their partition, and
 // the filesystem and the logs start again empty after each update. Every partition is a whole
 // number of 8 KiB pages; the filesystem is in 64 KiB sectors.
+// Its resources are in the second bank, at their partition of the flash role
+/delete-node/ &image_resources;
+
 &internal_flash {
 	partitions {
 		// Up to the resources: the 2 MiB of a STM32U595 less what the bootloader keeps

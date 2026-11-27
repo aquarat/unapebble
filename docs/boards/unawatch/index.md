@@ -28,8 +28,9 @@ the sources of each detail.
 ## Hardware
 
 - **SoC**: ST STM32U5A5QJ, an Arm Cortex-M33 at 160 MHz with single-precision
-  FPU and DSP extension, 4 MiB flash and 2.5 MiB SRAM, TrustZone off. Early
-  watches may carry the STM32U595QI, with 2 MiB of flash.
+  FPU and DSP extension, 4 MiB flash and 2.5 MiB SRAM, TrustZone off,
+  confirmed on a watch. Some sources mention the STM32U595QI, with 2 MiB of
+  flash, for early watches.
 - **Clocks**: 16 MHz crystal (USB PHY only), 32.768 kHz external clock
 - **Display**: 240 × 240 reflective colour memory-in-pixel LCD, 6 bits per
   pixel, on a parallel JDI/Sharp interface, with a frontlight
@@ -51,24 +52,25 @@ the sources of each detail.
 
 The stock bootloader starts the image at `0x08060000`, from the stack pointer
 and reset vector there, provided the stack pointer is in SRAM, at or below
-`0x20270000`. The flash below it is left alone. The embedded flash only holds
-code:
+`0x20270000`. The flash below it is left alone. The embedded flash holds the
+code and the system resources, no storage:
 
 | Flash | Size | Contents |
 | --- | --- | --- |
 | `0x08000000`–`0x08027fff` | 160 KiB | Stock bootloader (`bootloader`) |
 | `0x08028000`–`0x0805ffff` | 224 KiB | Shared libc of the stock kernel (`una-libc`) |
-| `0x08060000`–`0x083fffff` | 3712 KiB | PebbleOS (`code`) |
+| `0x08060000`–`0x0827ffff` | 2176 KiB | PebbleOS (`code`) |
+| `0x08280000`–`0x083fffff` | 1536 KiB | System resources (`system-resources`), read in place |
 
-The partitions are in `boards/unawatch/unawatch.dts`. The image is the code
-alone, `pebbleos.bin`: a release build takes about 1619 KiB and a debug one
-1651 KiB, Moddable XS and the battery test included. The code partition reaches the end of the 4 MiB
-flash, but `tools/una/pack_ota.py` refuses an image over 1664 KiB unless told
-otherwise, so that it also installs on the 2 MiB STM32U595 of early watches.
-Moving the storage and the resources to the eMMC freed the whole second bank,
-2048 KiB: the code partition grew from 1664 KiB to 3712 KiB, and the image no
-longer carries 905 KiB of resources, though one for a 2 MiB part still has to
-stay within 1664 KiB.
+The board's partitions are in `boards/unawatch/unawatch.dts`, where `code` is
+the rest of the flash, which the bootloader installs to;
+`pebble/boards/unawatch.overlay` splits it between the code and the resources.
+The image, `pebbleos_resources.bin`, is the code, erased flash up to
+`0x08280000`, then the resources, about 3061 KiB in all, of the 3712 KiB the
+bootloader takes. The code takes about 1617 KiB in a release build and 1649
+KiB in a debug one, Moddable XS and the battery test included, leaving some
+500 KiB; the resources take 885 KiB of their 1536 KiB. The images need the 4
+MiB part, which the watch has.
 
 The firmware takes SRAM1 to SRAM5 up to `0x2025dc00`. The 1 KiB above it is
 the boot trace's record (`boot_trace`, see [](#unawatch-boot-trace)), and the
@@ -85,8 +87,7 @@ lays it out, in offsets from there:
 
 | Offset | Size | Contents |
 | --- | --- | --- |
-| `0x0000000` | 4 MiB | System resources (`system-resources-bank-0`) |
-| `0x0400000` | 4 MiB | System resources of another version (`system-resources-bank-1`) |
+| `0x0000000` | 8 MiB | Free: the system resources of earlier builds |
 | `0x0800000` | 4 × 8 KiB | `safe-firmware` (only protected), `mfg-info`, `tzinfo`, `shared-prf-storage` |
 | `0x0900000` | 4 MiB | Core dumps (`scratch`), which take the 2424 KiB of RAM in use |
 | `0x0d00000` | 512 KiB | Flash logs (`debug-db`), as large as they go |
@@ -110,17 +111,16 @@ written in part are cached for reads.
 
 ### System resources
 
-The bootloader only installs the code, so the system resources come from the
-update drive instead, where they are copied next to the `.ota`
-(`pebble/resource/resource_storage_volume.c`, `CONFIG_RESOURCES_FROM_VOLUME`).
-At boot, when neither resource bank holds the resources the firmware was built
-with, it looks in the root directory of the update drive (exFAT, FAT32 or
-FAT16) for a file whose manifest has their version, whatever its name, copies
-it into the bank with no resources or the oldest, and checks its CRC. A
-firmware that finds the resources of its version already there, as after
-installing the same build again or going back to the one before, copies
-nothing. Without them, it logs the version it needs and powers the watch off:
-there is no recovery firmware to go to, and a reset would only start it again.
+The system resources come with the code, in the same `.ota`: the bootloader
+writes them to `0x08280000` with the image, and the firmware reads them there
+in place (`CONFIG_RESOURCES_IN_CODE_FLASH`, with `CONFIG_RESOURCES_IN_IMAGE`
+and `CONFIG_MMAP_RESOURCES`), as the first port did. They are one bank, which
+nothing writes: put bytes and the console's imaging have no resource bank to
+write to. At boot the firmware checks their version and CRC; without them, as
+after flashing `pebbleos.bin` alone, it logs the version it needs and powers
+the watch off: there is no recovery firmware to go to, and a reset would only
+start it again. Copying them from a `.pbpack` on the update drive
+(`CONFIG_RESOURCES_FROM_VOLUME`), as earlier builds did, is no longer used.
 
 ## Boot
 
@@ -151,15 +151,17 @@ until it loses power.
 The 200 mAh cell is charged by the PCA9420's linear charger
 (`drivers/charger/pca9420.c`) and measured by the MAX17262 fuel gauge
 (`drivers/gauge/max17262.c`), both on I2C1; the battery service takes the
-percentage from the gauge (`CONFIG_BATTERY_SOC_GAUGE`). Until the cell is
-identified, the owner caps its charge at 4.20 V, which every lithium cell
-takes; the stock firmware charges to 4.40 V, which suits only a high-voltage
-cell. The charge is set for the cell's life rather than its last few percent:
+percentage from the gauge (`CONFIG_BATTERY_SOC_GAUGE`). The stock firmware
+charging to 4.40 V says the cell is a 4.4 V (LiHV) one. PebbleOS charges it to
+4.36 V, which the charger's 0.75% accuracy keeps at or below 4.393 V, never
+above what the stock firmware asks, for about 1 to 2% of the capacity; exactly
+4.40 V is a devicetree change away. The charge is set for the cell's life
+rather than its last few percent:
 
 | | PebbleOS | Stock firmware |
 | --- | --- | --- |
 | Charge current | 100 mA (0.5C) | 150 mA |
-| Charge voltage | 4.20 V | 4.40 V |
+| Charge voltage | 4.36 V | 4.40 V |
 | Termination | 14 mA, 6.4 min top-off | 10 mA, 19.2 min top-off |
 | Pre-charge, dead battery | 8 mA, 4 mA | PMIC defaults |
 | Safety timers | 5 h fast, 30 min pre-charge | 9 h fast |
@@ -167,19 +169,17 @@ cell. The charge is set for the cell's life rather than its last few percent:
 | Charge temperature | 0 to 45 degrees C at the gauge, 3 degrees of hysteresis | stops above 45 degrees C ambient or 55 at the gauge |
 | Input current limit | 255 mA | 255 mA |
 
-The gauge runs the stock firmware's EZ model for a cell charged to 4.20 V
-(ModelCFG.VChg = 0, where the stock firmware has 1), so that the end of each
-charge is its 100% and it learns the capacity to 4.20 V. The model is loaded
-only after a power-on reset of the gauge or when its registers hold another
-model; as the stock firmware's differs, switching to it makes it reload its
-own and forget what the gauge learned. Charging starts off at every boot
+The gauge runs the stock firmware's EZ model, register for register, for a
+cell charged above 4.25 V (ModelCFG.VChg = 1). The model is loaded only after
+a power-on reset of the gauge or when its registers hold another model, so
+switching firmware keeps what it learned of the cell. Charging starts off at every boot
 and is allowed once the gauge reads a temperature in range; a gauge that
 cannot be read keeps it off. Unplugged, the watch shuts down below 1% or at
 an averaged 3.35 V, as the stock firmware does; it shows 5% until the gauge
 first answers. `CONFIG_CHARGER_PCA9420_CHARGE_LIMIT_MV` stops the charge short of
-full, at a lower voltage, for a longer life still. The cap holds while
-PebbleOS runs: whether a watch that is off charges, and to what, is not known
-yet.
+full, at a lower voltage, for a longer life still, 4100 for about 75 to 80%.
+The charge voltage holds while PebbleOS runs: whether a watch that is off
+charges, and to what, is not known yet.
 
 The interrupt of the PMIC, on PG7 with the STUSB4500's alert, reports plugging
 in and out; the battery service also polls every 30 s plugged in, 60 s
@@ -189,14 +189,15 @@ each value are in the [decision log](decisions/index.md), from
 
 ## Battery capacity test
 
-The **Battery test** app measures the charge the cell gives from a 4.20 V
-charge to the low battery power-off at 3.35 V, its usable capacity, and the
+The **Battery test** app measures the charge the cell gives from a full
+charge, to 4.36 V, to the low battery power-off at 3.35 V, its usable
+capacity, and the
 charge it takes back. It counts with the gauge's coulomb counter (QH, 0.5 mAh a
 count) and, as a cross-check, an integral of the gauge's averaged current;
 both are shown. It samples on the battery service's polls, a minute apart,
 logs to the filesystem on the eMMC and carries on across the power-off, so it
 keeps running when the app is closed. It only reads the gauge and the
-charger: the charge cap and the charger's protections stay as they are.
+charger: the charge voltage and the charger's protections stay as they are.
 `CONFIG_BATTERY_TEST`, on for the watch only.
 
 To run it:
@@ -293,37 +294,32 @@ In the build container ({doc}`/getting_started/index`, `docker/README.md`):
 
 ```shell
 BOARD=unawatch BUILD_DIR=build-una-fw docker/build.sh -DCONFIG_RELEASE=y
-python3 tools/una/pack_ota.py build-una-fw/pebbleos.bin \
+python3 tools/una/pack_ota.py build-una-fw/pebbleos_resources.bin --max-size 0x3a0000 \
     -v "$(git describe --tags --always)" -o unapebble.ota
-cp build-una-fw/system_resources.pbpack unapebble.pbpack
 ```
 
 or `pbl configure --board unawatch -DCONFIG_RELEASE=y && pbl build`. The
-build writes `pebbleos.bin`, the image, and `system_resources.pbpack`, the
-resources that go with it. The packer refuses an image that would not fit a
-2 MiB part; `--max-size 0x3a0000` lets it take up to the end of a 4 MiB one.
-The `.forgejo/workflows/unawatch.yml` workflow does the same and publishes the
-`.ota` and the `.pbpack`.
+build writes `pebbleos.bin`, the code, `system_resources.pbpack`, the
+resources, and `pebbleos_resources.bin`, the two at their addresses, which is
+what gets packed. The packer takes up to 3712 KiB, the end of the 4 MiB
+flash, its default. The `.forgejo/workflows/unawatch.yml` workflow does the
+same and publishes the `.ota`.
 
 ## Installing
 
 1. Turn the watch off, then hold the power button (top right) for 4 s as it
    turns on: the bootloader menu appears.
-2. Connect USB: the update drive appears. Copy the `.ota` and the `.pbpack`
-   of the same build to its root, the `.ota` under a name ending in lowercase
-   `.ota`.
+2. Connect USB: the update drive appears. Copy the `.ota`, the only file
+   needed, to its root, under a name ending in lowercase `.ota`.
 3. Eject the drive, unplug, and choose **Continue**. The bootloader checks
-   the file, erases the flash from `0x08060000`, writes the image, deletes the
-   `.ota` and starts it. The firmware then copies the resources from the
-   `.pbpack`, a few seconds behind the splash screen, the first time it
-   starts. The `.pbpack` stays on the drive, and may stay there.
+   the file, erases the flash from `0x08060000`, writes the image with its
+   resources, deletes the `.ota` and starts it.
 
-If the watch turns off right after the splash, the resources of its build are
-not on the drive: copy that `.pbpack` and start again. The battery must be
-above about 10% for the bootloader to look for updates. The image can also be
-flashed over SWD: `pebbleos.bin` at `0x08060000`, with the `probe-rs` runner
-or any probe, which leaves the rest of the flash alone; the resources still
-come from the update drive.
+A `.pbpack` left on the drive by an earlier build is no longer used, and may
+be deleted. The battery must be above about 10% for the bootloader to look
+for updates. The image can also be flashed over SWD:
+`pebbleos_resources.bin` at `0x08060000`, with any probe; `pebbleos.bin`
+alone leaves the resources out, and a firmware without them powers off.
 
 ## Recovering
 
@@ -350,7 +346,7 @@ without the bootloader menu.
 | --- | --- |
 | **Runs on a watch** | The first port (`b697864b4`): clocks, display and frontlight, buttons, haptics, storage and resources in the embedded flash; the watch has the 4 MiB STM32U5A5 |
 | **Runs on a watch, from the tether slot** | The storage and the system resources on the eMMC, with the write timeout (decision 261127-123202-01) and the display thread (261127-130125-01): 11 minutes, the watchface ticking, no reset |
-| **Built, not yet run on a watch** | The eMMC driver on its own, the PCA9420 charger and MAX17262 fuel gauge, the boot trace (TAMP 30 and 31; the stock firmware uses 0 to 23, PebbleOS 24 to 29), the Lab |
+| **Built, not yet run on a watch** | The storage on the eMMC with the resources back in the image, one `.ota` (261127-131711-01); the eMMC driver on its own, the PCA9420 charger and MAX17262 fuel gauge, the boot trace (TAMP 30 and 31; the stock firmware uses 0 to 23, PebbleOS 24 to 29), the Lab |
 | **Stand-ins, which nothing feeds** | Accelerometer, ambient light, microphone and die temperature are simulators: no steps |
 | **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS, buzzer or USB |
 | **Unknown** | Whether the panel is round (its round mask is a computed circle); whether the panel and haptics rails are on at power-on as expected |
@@ -367,13 +363,13 @@ Things to watch on a first boot:
   that fails is tried again after a power cycle. Then the flash class stops
   the firmware with an error. Watch the log for `Card init failed`, a
   fallback from High Speed, or `Window past the ... blocks of the card`.
-- **Resources**: the first start after an install copies about 900 KiB from
-  the update drive; the log says `Copying ... bytes of resources`. A watch
-  that turns itself off after the splash did not find them.
+- **Resources**: read in place from `0x08280000`; the log says `Valid system
+  resources found!`. A watch that turns itself off after the splash did not
+  find them, which only an image flashed without them should do.
 - **Clocks**: PLL1 now also gives 80 MHz on Q for the eMMC, which the SoC
   start-up turns off first, whatever the bootloader left running.
 - **Battery**: `charger` and `gauge` in the shell, and `battery status`,
-  show what the drivers read. Check that the charge stops at about 4.20 V and
+  show what the drivers read. Check that the charge stops at about 4.36 V and
   14 mA (`gauge` voltage and current), that the gauge's temperature is
   plausible, that plugging in and out shows at once (the PMIC interrupt) and
   that the percentage follows the stock firmware's. A watch that shows 5% and
@@ -381,9 +377,9 @@ Things to watch on a first boot:
 - **CPU time**: each display update takes 63 ms of busy CPU, on the
   `Display` thread at priority 1; an animation runs at about 15 frames a
   second and takes the CPU left over.
-- **Code space**: images of 1619 KiB in release and about 1651 KiB in debug
-  builds, of the 1664 KiB a 2 MiB part takes. The battery test takes about
-  6 KiB (`CONFIG_BATTERY_TEST`).
+- **Code space**: code of 1617 KiB in release and 1649 KiB in debug builds,
+  of the 2176 KiB before the resources. The battery test takes about 6 KiB
+  (`CONFIG_BATTERY_TEST`).
 
 (unawatch-boot-trace)=
 
@@ -438,7 +434,7 @@ again. Those that change something ask for a second Select.
 | eMMC supply cut | The supply cut under the driver as the eMMC builds' board did at boot: does the driver recover? |
 | NOR window | The NOR emulation on scratch blocks: erase, program, read back, timed for a 16 MiB format |
 | Update drive | fat_ro's mount of the update drive, its root files, the packs and the version check, no copy |
-| Copy resources | The matching pack into the eMMC builds' resource bank 0, compared with the file |
+| Copy resources | The matching pack into the earlier eMMC builds' resource bank 0, now free space, compared with the file |
 | B's storage | Read only: their resource banks, core dump storage and filesystem page headers |
 | B's logs | Read only: the newest generation of their flash log, the last boot of an eMMC build |
 | Battery | The gauge and the charger read raw, without their drivers: what the PMIC charges to |

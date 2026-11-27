@@ -9,9 +9,11 @@
 #endif
 
 #include <stdlib.h>
+#include <string.h>
 
 #include <pbl/board/partitions.h>
 #include <pbl/boot_trace/boot_trace.h>
+#include <pbl/crc/crc.h>
 #include <pbl/drivers/flash.h>
 #include <pbl/logging/logging.h>
 #include <pbl/services/process_management/app_storage.h>
@@ -20,6 +22,16 @@
 #include <resource/resource_version.auto.h>
 #include <system/bootbits.h>
 
+#ifdef CONFIG_RESOURCES_IN_CODE_FLASH
+// One bank, installed with the image in the flash the code runs from, offsets from FLASH_BASE:
+// read in place, never written
+static const SystemResourceBank s_resource_banks[] = {
+  {
+    .begin = CONFIG_RESOURCES_CODE_FLASH_OFFSET,
+    .end = CONFIG_RESOURCES_CODE_FLASH_OFFSET + CONFIG_RESOURCES_CODE_FLASH_SIZE,
+  },
+};
+#else
 static const SystemResourceBank s_resource_banks[] = {
   {
     .begin = PART_SYSTEM_RESOURCES_BANK_0_OFFSET,
@@ -30,6 +42,7 @@ static const SystemResourceBank s_resource_banks[] = {
     .end = PART_SYSTEM_RESOURCES_BANK_1_OFFSET + PART_SYSTEM_RESOURCES_BANK_1_SIZE,
   },
 };
+#endif
 
 //! Index into s_resource_banks
 static unsigned int s_active_bank = 0;
@@ -104,6 +117,11 @@ static void resource_storage_system_bank_init(void) {
 }
 
 const SystemResourceBank *resource_storage_flash_get_unused_bank(void) {
+#ifdef CONFIG_RESOURCES_IN_CODE_FLASH
+  // None to write: the resources only come with the image
+  static const SystemResourceBank s_no_bank = {};
+  return &s_no_bank;
+#else
   size_t unused_bank_index;
   if (s_valid_resources_found) {
     unused_bank_index = (s_active_bank + 1) % PBL_ARRAY_SIZE(s_resource_banks);
@@ -123,6 +141,7 @@ const SystemResourceBank *resource_storage_flash_get_unused_bank(void) {
     unused_bank_index = s_unused_bank_index;
   }
   return &s_resource_banks[unused_bank_index];
+#endif
 }
 
 static uint32_t resource_storage_system_bank_metadata_size(ResourceStoreEntry *entry) {
@@ -132,12 +151,21 @@ static uint32_t resource_storage_system_bank_metadata_size(ResourceStoreEntry *e
 static uint32_t resource_storage_system_bank_get_crc(ResourceStoreEntry *entry, uint32_t num_bytes,
                                                      uint32_t entry_offset) {
   uint32_t start_offset = resource_store_get_metadata_size(entry) + entry_offset;
+#ifdef CONFIG_RESOURCES_IN_CODE_FLASH
+  return pbl_crc32_legacy((const void *)(uintptr_t)(CONFIG_FLASH_BASE + BANK.begin + start_offset),
+                          num_bytes);
+#else
   return pbl_flash_crc32_legacy(FLASH, BANK.begin + start_offset, num_bytes);
+#endif
 }
 
 static uint32_t resource_storage_system_bank_read(ResourceStoreEntry *entry, uint32_t offset,
                                                   void *data, size_t num_bytes) {
+#ifdef CONFIG_RESOURCES_IN_CODE_FLASH
+  memcpy(data, (const void *)(uintptr_t)(CONFIG_FLASH_BASE + BANK.begin + offset), num_bytes);
+#else
   pbl_flash_read(FLASH, BANK.begin + offset, data, num_bytes);
+#endif
   return num_bytes;
 }
 
@@ -164,8 +192,10 @@ static const uint8_t *resource_storage_system_bank_readonly_bytes(ResourceStoreE
 }
 
 static void resource_storage_system_bank_clear(ResourceStoreEntry *entry) {
+#ifndef CONFIG_RESOURCES_IN_CODE_FLASH
   uint8_t buffer[MANIFEST_SIZE] = {};
   pbl_flash_write(FLASH, BANK.begin, buffer, MANIFEST_SIZE);
+#endif
 }
 
 bool resource_storage_system_bank_check(ResAppNum app_num, uint32_t resource_id,

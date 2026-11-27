@@ -1,6 +1,6 @@
 # The code partition takes the rest of the flash; images stay within 2 MiB parts
 
-- Status: Accepted
+- Status: Superseded by 261127-131711-03-embedded-flash-layout
 - Date: 2026-11-26 17:21 UTC
 - Decided by: agent
 

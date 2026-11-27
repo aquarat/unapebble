@@ -9,12 +9,15 @@ config FLASH_SIZE
 config RESOURCES_BOARD
     default "getafix"
 
-# Linked after the tether stub (tools/una/tether), which flashes and starts it.
+# Linked after the tether stub (tools/una/tether), which flashes and starts it,
+# the code partition 128 KiB shorter: up to the system resources, at 0x280000,
+# or at 0x200000 in the experiments firmware (pebble/boards/unawatch*.overlay).
 config FLASH_OFFSET
     default 0x80000 if BOARD_UNAWATCH_TETHER_SLOT
 
 config FW_FLASH_SIZE
-    default 0x380000 if BOARD_UNAWATCH_TETHER_SLOT
+    default 0x180000 if BOARD_UNAWATCH_TETHER_SLOT && BOARD_UNAWATCH_LAB
+    default 0x200000 if BOARD_UNAWATCH_TETHER_SLOT
 
 # The reserved boot_trace region of the devicetree
 if BOOT_TRACE
@@ -22,8 +25,9 @@ config BOOT_TRACE_RAM_BASE
     default 0x2025dc00
 endif
 
-# The storage is on the eMMC: the embedded flash only holds the code. The
-# experiments firmware keeps it there, as the first port did.
+# The storage is on the eMMC: the embedded flash only holds the code and the
+# system resources, read in place. The experiments firmware keeps it there,
+# as the first port did.
 config FLASH_STM32U5
     default n if !BOARD_UNAWATCH_LAB
 

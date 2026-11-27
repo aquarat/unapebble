@@ -106,6 +106,15 @@ static PBL_DELAYED_WORK_DEFINE(s_boot_done_timer, prv_boot_done);
 
 static void prv_resource_banks_region_add(void) {
 #ifdef CONFIG_MMAP_RESOURCES
+#ifdef CONFIG_RESOURCES_IN_CODE_FLASH
+  // The one bank, in the flash the code runs from
+  static const struct pbl_mpu_region s_region = {
+    .name = "resource banks",
+    .base = CONFIG_FLASH_BASE + CONFIG_RESOURCES_CODE_FLASH_OFFSET,
+    .size = CONFIG_RESOURCES_CODE_FLASH_SIZE,
+    .attr = PBL_MPU_P_RO_U_RO | PBL_MPU_NORMAL_WT | PBL_MPU_SHAREABLE,
+  };
+#else
   static_assert(PART_SYSTEM_RESOURCES_BANK_0_OFFSET + PART_SYSTEM_RESOURCES_BANK_0_SIZE ==
                     PART_SYSTEM_RESOURCES_BANK_1_OFFSET,
                 "resource banks must be contiguous");
@@ -117,6 +126,7 @@ static void prv_resource_banks_region_add(void) {
     .size = PART_SYSTEM_RESOURCES_BANK_0_SIZE + PART_SYSTEM_RESOURCES_BANK_1_SIZE,
     .attr = PBL_MPU_P_RO_U_RO | PBL_MPU_NORMAL_WT | PBL_MPU_SHAREABLE,
   };
+#endif
   PBL_ASSERTN(pbl_mpu_region_add(&s_region) == 0);
 #endif
 }

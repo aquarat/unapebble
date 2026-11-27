@@ -1,6 +1,6 @@
 # Storage layout in the first 32 MiB of the GUI region
 
-- Status: Accepted
+- Status: Superseded by 261127-131711-03-embedded-flash-layout
 - Date: 2026-11-26 17:21 UTC
 - Decided by: agent
 

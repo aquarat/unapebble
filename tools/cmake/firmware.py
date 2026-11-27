@@ -47,6 +47,8 @@ def enabled(config, key):
 
 def max_resources_size(config, config_path):
     # Resources that take their whole partition
+    if enabled(config, "CONFIG_RESOURCES_IN_CODE_FLASH"):
+        return int(config["CONFIG_RESOURCES_CODE_FLASH_SIZE"], 0)
     if enabled(config, "CONFIG_RESOURCES_IN_IMAGE") or enabled(
         config, "CONFIG_RESOURCES_FROM_VOLUME"
     ):
@@ -205,10 +207,15 @@ def qemu_resources_offset(config_path):
 def cmd_image_resources(args):
     """The image, then the resources at their partition, the gap read as erased flash."""
     config = read_config(args.config)
-    regions = flash_regions(args.config)
-    if "SYSTEM_RESOURCES_BANK_0" not in regions:
-        sys.exit("image-resources: the board has no system-resources-bank-0 partition")
-    bank, bank_size = regions["SYSTEM_RESOURCES_BANK_0"]
+    if enabled(config, "CONFIG_RESOURCES_IN_CODE_FLASH"):
+        # In the code's flash, while the flash role is another one
+        bank = int(config["CONFIG_RESOURCES_CODE_FLASH_OFFSET"], 0)
+        bank_size = int(config["CONFIG_RESOURCES_CODE_FLASH_SIZE"], 0)
+    else:
+        regions = flash_regions(args.config)
+        if "SYSTEM_RESOURCES_BANK_0" not in regions:
+            sys.exit("image-resources: the board has no system-resources-bank-0 partition")
+        bank, bank_size = regions["SYSTEM_RESOURCES_BANK_0"]
     code = int(config.get("CONFIG_FLASH_OFFSET", "0"), 0)
 
     with open(args.bin, "rb") as f:

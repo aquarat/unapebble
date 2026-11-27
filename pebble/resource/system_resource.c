@@ -38,9 +38,9 @@ void system_resource_init(void) {
   PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_RES_CRC, SYSTEM_RESOURCE_VERSION.crc);
   prv_watch_language_packs();
   if (!resource_init_app(SYSTEM_APP, &SYSTEM_RESOURCE_VERSION)) {
-#ifdef CONFIG_RESOURCES_FROM_VOLUME
-    // No recovery firmware to go to: only the resource pack of this firmware on the update drive
-    // brings the watch back, which a reset would not
+#if defined(CONFIG_RESOURCES_FROM_VOLUME) || defined(CONFIG_RESOURCES_IN_CODE_FLASH)
+    // No recovery firmware to go to: only the resources of this firmware, on the update drive or
+    // installed with its image, bring the watch back, which a reset would not
     PBL_LOG_ERR("System resources <%#010" PRIx32 ", %" PRIu32 "> missing! Powering off",
                 SYSTEM_RESOURCE_VERSION.crc, SYSTEM_RESOURCE_VERSION.timestamp);
     PBL_BOOT_TRACE(PBL_BT_RES, PBL_BT_RES_MISSING);
