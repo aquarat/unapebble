@@ -399,7 +399,7 @@ static void prv_results(struct prv_text *t) {
   char c[12];
   char d[12];
 
-  prv_cat(t, "Usable charge from 4.20 V to the 3.35 V power-off\n");
+  prv_cat(t, "Usable charge from full to the 3.35 V power-off\n");
   prv_span(t, "Out", &s_st.dis);
   prv_cat(t, "%" PRId32 "%% of %d, %" PRId32 "%% of %d mAh\n%s load\n",
           s_st.dis.uah / (UNA_MAH_1 * 10), UNA_MAH_1, s_st.dis.uah / (UNA_MAH_2 * 10), UNA_MAH_2,
