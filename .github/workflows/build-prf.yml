@@ -12,6 +12,10 @@ on:
         type: boolean
         default: false
 
+# Upstream PebbleOS CI kept on the GitHub mirror (decision 261127-144548-01).
+permissions:
+  contents: read
+
 jobs:
   changes-prf:
     runs-on: ubuntu-24.04
@@ -162,23 +166,6 @@ jobs:
         with:
           name: prf-${{ steps.artifact_board.outputs.NAME }}-${{ matrix.mode }}
           path: artifacts
-
-      - name: Get Build ID
-        id: build_id
-        run: |
-          echo "BUILD_ID=$(readelf -n build/pebbleos.elf | sed -n -e 's/^.*Build ID: //p')" >> "$GITHUB_OUTPUT"
-
-      - name: Upload log hash dictionary
-        if: ${{ matrix.mode != 'mfg' && github.event_name == 'push' && github.repository == 'coredevices/PebbleOS' }}
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.LOG_HASH_BUCKET_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.LOG_HASH_BUCKET_SECRET }}
-          AWS_DEFAULT_REGION: us-east-1
-        run: |
-          pip install awscli
-          aws s3 cp build/log.dict.json \
-            "s3://${{ vars.LOG_HASH_BUCKET_NAME }}/${{ steps.build_id.outputs.BUILD_ID }}-${{ github.sha }}-prf.json" \
-            --endpoint-url "${{ vars.LOG_HASH_BUCKET_ENDPOINT }}"
 
   build-prf-status:
     needs: [changes-prf, build-prf]

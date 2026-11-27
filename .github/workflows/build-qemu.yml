@@ -7,6 +7,10 @@ on:
     branches: [main, '*-branch']
   workflow_call:
 
+# Upstream PebbleOS CI kept on the GitHub mirror (decision 261127-144548-01).
+permissions:
+  contents: read
+
 jobs:
   changes-qemu:
     runs-on: ubuntu-24.04

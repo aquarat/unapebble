@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, '*-branch']
 
+# Upstream PebbleOS CI kept on the GitHub mirror (decision 261127-144548-01).
+permissions:
+  contents: read
+
 jobs:
   changes-test:
     runs-on: ubuntu-24.04
