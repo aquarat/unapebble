@@ -23,10 +23,10 @@ FLASH_BASE = 0x08060000
 RAM_START = 0x20000000
 # The bootloader refuses to jump unless the initial SP is at or below this.
 RAM_SP_LIMIT = 0x20270000
-# The image may use flash up to the end of a 2 MB part, the STM32U595 of
-# early watches. The code partition goes on to the end of a 4 MB part, but
-# an image that needs it only installs there: --max-size 0x3a0000.
-DEFAULT_MAX_SIZE = 0x200000 - 0x60000
+# The image may use flash up to the end of the 4 MB STM32U5A5, the bootloader's
+# limit. --max-size 0x1a0000 checks it also fits a 2 MB part, the STM32U595
+# some sources mention for early watches.
+DEFAULT_MAX_SIZE = 0x400000 - 0x60000
 
 DEFAULT_KEYS = Path(__file__).with_name("SecurityKeys.pem")
 
