@@ -461,6 +461,42 @@ to find out whether the module is fitted.
 | PB12 | GPIO | SENSOR2_CS | Unused |
 | PD12 / PD13 | I2C4 SCL / SDA, AF4 | SENSOR2_SCL / SDA | EEPROM, BMI270, BMM350 |
 
+#### 2.6.1 The AG3335M on PebbleOS (measured)
+
+Read on a watch through PebbleOS's driver (`drivers/gnss/ag3335.c`,
+decisions 261127-194525-01 and -02), indoors:
+
+- **Firmware**: `AG3335M_V3.2.1.AG3335_20240426`, which the receiver
+  announces on its own (`$PAIR021,...`) after power-up and answers to
+  PAIR020.
+- **Power-up**: about 0.35 s after GNSS_EN goes high it sends
+  `$PAIR001,002,1` then `$PAIR001,002,0` (GNSS subsystem on), with
+  `$PAIR011,001` (started) and its aiding requests, `$PAIR010,1,-1` (time) and
+  `$PAIR010,2,-1` (location), which nothing answers yet. It acknowledges a
+  command in 2 to 80 ms, often first with result 1 (processing); a query's
+  answer comes after its acknowledgement.
+- **Lost commands**: a command is sometimes neither acknowledged nor carried
+  out, seen after PAIR003 (GNSS subsystem off) and always with its system
+  sleep unlocked (PAIR382,0): the receiver's UART seems to sleep, and the
+  first characters wake it. Sending again after 0.5 s gets the answer; the
+  driver sends a command up to four times.
+- **Defaults**: GPS, GLONASS, Galileo, BeiDou and QZSS searched, NavIC not
+  (`$PAIR067,1,1,1,1,1,0`); L5 off once set so (`$PAIR105,0`). Before it knows
+  the time, its RMC dates are 1980-01-05 or -06.
+- **Output**: one burst a second: GGA, RMC, four GSA, GSV per constellation
+  and signal, and three sentences more, about 450 bytes with no satellites in
+  view, under 6 ms of the line.
+  Indoors it listed up to 4 satellites in view, 2 or 3 of them with a signal
+  of 17 to 21 dB-Hz, and had the UTC time within 3.5 to 4.5 minutes of power-up,
+  without a fix.
+- **Draw**, the receiver searching, the watch otherwise idle on its watchface
+  with the CPU in Stop 2 about 97% of the time: about 10 mA with its system
+  sleep locked on L1, as UNA's firmware runs it, 9.2 mA with it unlocked,
+  8 to 9 mA on GPS alone, 16 to 17.5 mA on L1 and L5; back to the board's
+  0.8 to 1.0 mA off (index, Power).
+- **Start-up garbage**: each power-up gives 4 lines that are not sentences
+  (bad checksums or stray characters) before `$PAIR001,002`.
+
 ### 2.7 Body module (PPG PAH8316LS, MS5837 barometer)
 
 | Pin | Function / AF | Label | Use |
@@ -717,7 +753,8 @@ on PLL1 at 160 MHz, 1.0 mA with it in Stop 2, which leaves about 1 mA to the
 board: the PMIC, the panel and its VCOM, the modules in reset or standby,
 the eMMC off. The USB OTG HS with its PHY and the HSE adds about 11 mA. The
 tethered stub, polling with the USB at high speed and the frontlight on,
-draws 31.5 mA. The figures and how they were taken are in {doc}`index`
+draws 31.5 mA. The GNSS receiver searching adds about 9 mA (section
+2.6.1). The figures and how they were taken are in {doc}`index`
 (Power). With the input normal and charging off, the battery current swings
 by several milliamps either way, so the gauge's offset could not be read
 on the watch plugged in.
