@@ -23,6 +23,9 @@ static const struct pbl_gpio s_off_at_boot[] = {
   PBL_GPIO(&dt_gpiob, 8, 0), /* BUZZER_PWM */
   PBL_GPIO(&dt_gpiob, 9, 0), /* BUZZER_EN1 */
   PBL_GPIO(&dt_gpiod, 5, 0), /* BUZZER_EN2 */
+#ifndef CONFIG_REGULATOR_FIXED
+  PBL_GPIO(&dt_gpiog, 0, 0), /* ALTIMETER_EN, which must not float */
+#endif
   PBL_GPIO(&dt_gpioa, 8, 0), /* SENSOR1_RST_L, BLE in reset */
 #ifndef CONFIG_GNSS_AG3335
   PBL_GPIO(&dt_gpiog, 5, 0), /* GNSS_EN */
