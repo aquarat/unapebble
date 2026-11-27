@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# This repository is a read-only mirror (decision 261127-144548-03).
+blank_issues_enabled: true
+contact_links:
+  - name: PebbleOS itself, on Pebble watches
+    url: https://github.com/coredevices/PebbleOS/issues
+    about: >-
+      This is an unofficial fork for the UNA Watch. Report problems that are
+      not specific to it to upstream PebbleOS.
