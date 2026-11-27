@@ -19,8 +19,9 @@ can be put back.
 The port runs the full firmware, on the gabbro platform of the Pebble Round
 2: the SoC with its clocks, console, system timer, RTC, watchdog, RNG and CRC
 unit, the buttons, the display, the haptics, storage on the eMMC and the
-battery: its charger and its fuel gauge. Bluetooth, USB and the sensors come
-next; see
+battery: its charger and its fuel gauge. Bluetooth advertises and takes
+connections, but carries no data yet (see [](#unawatch-bluetooth)); USB and
+the sensors come next; see
 [](#unawatch-status). The first port, with its storage in the embedded flash,
 boots on a watch, and so does the firmware with the storage on the eMMC,
 started from the tether slot: it ran 11 minutes without a reset.
@@ -358,6 +359,36 @@ take tens of microamps, so most of it is the board (the PMIC's regulators,
 the panel, the modules' standby). The next wins are there, and in the
 display, whose frames are clocked out on the CPU for 63 ms each.
 
+(unawatch-bluetooth)=
+
+## Bluetooth
+
+PebbleOS's NimBLE host runs on the STM32 and drives the BlueNRG-2 of the
+BLE module as an HCI controller, on the DTM firmware v3.2.0 it ships with,
+in link-layer-only mode (decision 261127-190543-01). The HCI transport,
+`third_party/nimble/transport/hci_bluenrg2.c`, speaks the chip's SPI
+protocol on SPI1 at 1.25 MHz (`drivers/spi/stm32.c`) and owns its quirks:
+it never sends `HCI_Reset`, which starts the chip's updater, and answers
+the host's itself; it checks each start's reason and restarts the chip with
+its SPI lines undriven, which is what keeps it out of the updater; it sets
+link-layer-only mode after each start; it gives the host the module's own
+address, `C1:CE:E6:EC:45:CE` on this watch (config 0x80 as a static random
+address), as the chip has no public one (decisions from 261127-191406-01).
+The chip starts 2.2 s after its reset is released: at boot it is set up
+about 2 s after the services have started, and the host synchronises at
+once.
+
+On the watch the host synchronises, advertises connectable, and a BlueZ
+central connects, with a data length update. But the DTM, in
+link-layer-only mode, passes no ACL data either way (hardware.md, 2.5.1;
+decision 261127-204244-01), so there is no GATT, no pairing and no PPoGATT
+yet. Without the mode the chip's own stack answers over the air instead.
+Getting data through needs one of: an `HCI_Reset` before the mode, as
+STM32duinoBLE does (untried: the brief rules it out), a DTM built with
+ST's `LL_ONLY` option (reflashing, ruled out too), or ST's ACI with the
+stack on the chip (option (b)). `CONFIG_NIMBLE_HCI_FAKE=y` puts the fake
+controller back.
+
 ## Display
 
 The 240 × 240 memory-in-pixel panel shows the centre of the 260 × 260
@@ -479,7 +510,8 @@ setting (`CONFIG_DEV_USB`): {doc}`tether` too.
 | **Runs on a watch, from the tether slot** | The current firmware, linked for the slot: storage on the eMMC (with the write timeout, decision 261127-123202-01, and the display thread, 261127-130125-01), the system resources read in place from the embedded flash, the PCA9420 charger and MAX17262 fuel gauge (charge registers read back at 4.36 V while it runs), the boot trace, and the USB developer access ({doc}`tether`); 11 minutes and 5 minutes without a reset, the watchface ticking |
 | **Built, not yet run on a watch** | The same firmware installed as one `.ota` through the bootloader (it differs only in its address); the Lab; the Battery test app (it is in the launcher, but no test has run); the USB Developer setting in a normal install |
 | **Stand-ins, which nothing feeds** | Accelerometer, ambient light, microphone and die temperature are simulators: no steps |
-| **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS or buzzer; USB only for development |
+| **Runs on a watch, from the tether slot, in part** | Bluetooth on the BlueNRG-2 under NimBLE (see [](#unawatch-bluetooth)): the chip starts and is set up at every boot, the host synchronises, the watch advertises connectable as `Pebble 45CE` at its own static address and a BlueZ central connects, but no ACL data passes, so no GATT, pairing or phone connection: apps and updates only come with the image |
+| **Off** | No magnetometer, heart rate, barometer, GNSS or buzzer; USB only for development |
 | **Unknown** | Whether the haptics work: their rail and driver have not been checked on the watch. The panel is round, and the computed round mask fits it (see the photos) |
 
 Things to watch on a first boot:

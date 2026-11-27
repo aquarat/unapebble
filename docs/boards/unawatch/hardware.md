@@ -365,13 +365,19 @@ none.
 | `HCI_Reset`: Command Complete with status 0, then the chip restarts by itself | 71 ms | `04 ff 03 01 00 04`: reason 4, **updater mode** | 4 of 4 |
 | A reset of 5 ms to 3 s, straight after a start (normal or updater) | 94 ms | reason 4 | every time, 16 times; MISO pulled up, down or floating made no difference |
 | From updater mode: RESET low, the SPI pins set up again, 2 s, then a 5 ms pulse (mode 6) | 2.2 s | reason 1 | 8 of 8 |
+| A reset of 5 ms or 300 ms straight after a normal start, SCK, MOSI and CS analog in reset, CS driven high 5 ms before the release (mode 7) | 2.2 s | reason 1 | 2 of 2 |
+| PebbleOS's transport at boot: RESET held since the device's init, CS an input, the SPI pins analog | 2.2 s | reason 1 | 9 of 9 boots |
 
 The DTM's reason codes are: 2, updater by ACI command; 3, bad BLUE flag;
 4, updater by boot pin. In ST's DTM the boot pin is the chip's IO3, which
 is the SPI MISO line. On this module the state of MISO doesn't decide it.
-Why the mode 6 sequence recovers and a plain long reset doesn't is **not
-established**. The only difference in code is that the GPIO registers of
-the SPI pins are written during the hold. What PA8 really drives on the
+What decides it is the state of the SPI lines during the reset: with SCK,
+MOSI and CS driven (CS high) a reset of any length after a start ends in
+the updater; with them undriven (analog), even a 5 ms reset straight after
+a start starts normally (mode 7, 2026-11-27). Mode 6 left them as the stub
+found them, undriven. Driving CS high may feed the chip through its pin
+while RESET is low, so that it does not go through a power-on start
+(inferred). What PA8 really drives on the
 module is not known: the slow RESET rise and the 2.2 s start look like an
 RC or a supply switch (inferred).
 
@@ -385,6 +391,8 @@ driver:
   STM32duinoBLE do the same.
 - **It must check the start event's reason**, and restart with the mode 6
   sequence until it gets reason 1.
+- **It must leave the SPI lines undriven while RESET is low**, CS too, and
+  drive CS high only shortly before the release.
 
 **What it runs.** After a normal start:
 
@@ -420,10 +428,33 @@ both with its stack on and in link-layer-only mode:
 (`01 0c fc 03 2c 01 01`), sent as the first command after the start event,
 returns success. Config 0x2C then reads 1, and the HCI commands above
 behave as before. The setting is in RAM and lasts until the next restart.
-In this mode the DTM passes ACL data to and from the host as H4 packets
-(`02`), according to ST's DTM source and the drivers that use it:
-Zephyr's `st,hci-spi-v2` with `req-ll-only`, and STM32duinoBLE on the
-BlueNRG-M2SP. This was **not** tried here, because it needs a connection.
+A restart, even a short one, clears it (mode 7: it reads 0 again).
+
+ST's DTM source and the drivers that use the mode (Zephyr's
+`st,hci-spi-v2` with `req-ll-only`, STM32duinoBLE on the BlueNRG-M2SP)
+have the DTM pass ACL data to and from the host as H4 packets (`02`).
+**On this chip it does not** (PebbleOS's NimBLE transport and a BlueZ
+central, 2026-11-27):
+
+| Run | Seen |
+|---|---|
+| Mode on, then `aci_gatt_init` and `aci_gap_init` or not; NimBLE as host (4 runs) | LE Enhanced Connection Complete, a Data Length Change (251 bytes), then nothing from the chip but HCI events for 22 s: no ACL, no vendor event. The host's first ACL packet, 15 bytes, gets no Number Of Completed Packets. The central's service discovery times out and it disconnects. |
+| Mode off, `aci_gatt_init` and `aci_gap_init` (1 run) | The central discovers the chip's own GAP and GATT services in 1 s, reads Appearance, Device Name (empty) and the preferred connection parameters, and writes the Service Changed CCCD: the chip's stack answers. NimBLE's ACL packet gets no completion either. |
+
+So the mode turns the chip's host off, but does not route the link's data
+to the SPI. ST's community forum has the same report for the stock DTM,
+and ST's answer is a DTM built with its `LL_ONLY` option (decision
+261127-204244-01). Other findings of those runs:
+
+- **Disconnections** come with reason `0x03`, whoever ends the link.
+- **LE Read Remote Features** just after a connection gets a Command
+  Status of Controller Busy (`0x3A`) whose opcode reads `0x0016`, the OGF
+  bits clear (decision 261127-194000-01).
+- **Config 0x80** reads `ce 45 ec e6 ce 01` on this watch, least
+  significant octet first: its top two bits are clear, so it is no static
+  random address as it stands (decision 261127-193700-01).
+- The connection came at an interval of 36 (45 ms) from BlueZ, and the
+  link was updated to 251-byte PDUs.
 
 **Replacing the firmware.** There are three ways:
 
