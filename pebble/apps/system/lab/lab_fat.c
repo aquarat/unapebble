@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2026 Core Devices LLC */
+/* SPDX-FileCopyrightText: 2026 The unapebble authors */
 /* SPDX-License-Identifier: Apache-2.0 */
 
 // The update drive as the eMMC builds read it (lib/fat_ro): its root files, the resource packs

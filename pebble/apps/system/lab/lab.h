@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2026 Core Devices LLC */
+/* SPDX-FileCopyrightText: 2026 The unapebble authors */
 /* SPDX-License-Identifier: Apache-2.0 */
 
 // The Lab: experiments run on demand, each a list of steps, with a breadcrumb and a marker on

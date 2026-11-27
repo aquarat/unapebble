@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2026 Core Devices LLC */
+/* SPDX-FileCopyrightText: 2026 The unapebble authors */
 /* SPDX-License-Identifier: Apache-2.0 */
 
 // The battery's chips read raw over I2C1, without their drivers and without writing to them: the

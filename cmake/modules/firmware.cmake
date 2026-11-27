@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-FileCopyrightText: 2026 The unapebble authors
 # SPDX-License-Identifier: Apache-2.0
 #
 # The firmware image: the final link, the hex/bin images derived from it,

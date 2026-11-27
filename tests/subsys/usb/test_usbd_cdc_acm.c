@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Core Devices LLC */
+/* SPDX-FileCopyrightText: 2026 The unapebble authors */
 /* SPDX-License-Identifier: Apache-2.0 */
 
 // Two serial ports on a controller of 8 endpoints whose numbers each serve one direction

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2026 Core Devices LLC */
+/* SPDX-FileCopyrightText: 2026 The unapebble authors */
 /* SPDX-License-Identifier: Apache-2.0 */
 
 // The report of the run before: how it ended (the SoC's reset flags, PebbleOS's reboot reason),

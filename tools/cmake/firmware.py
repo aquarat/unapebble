@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-FileCopyrightText: 2026 The unapebble authors
 # SPDX-License-Identifier: Apache-2.0
 
 """Firmware image steps: size and syscall checks, bundling and QEMU flash images."""

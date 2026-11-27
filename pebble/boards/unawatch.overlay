@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Core Devices LLC
+// SPDX-FileCopyrightText: 2026 The unapebble authors
 // SPDX-License-Identifier: Apache-2.0
 
 // The firmware's storage, on the eMMC, in the 32 MiB window of its GUI region the board gives it

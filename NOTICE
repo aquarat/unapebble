@@ -1,0 +1,62 @@
+unapebble
+=========
+
+This is a fork of PebbleOS (https://github.com/coredevices/PebbleOS),
+Copyright Google LLC, Core Devices LLC and the PebbleOS contributors, licensed
+under the Apache License, Version 2.0 (see LICENSE). It adds a port to the
+UNA Watch.
+
+The unapebble authors changed and added files from 2026 on. Files they wrote
+or changed substantially carry "SPDX-FileCopyrightText: 2026 The unapebble
+authors"; files adapted from PebbleOS's own keep its copyright lines as well.
+The changes are under the same licence, Apache-2.0.
+
+This project is not affiliated with or endorsed by Core Devices LLC or UNA
+Watch Ltd. "Pebble" and "UNA" are their trademarks, used here only to say
+what the software runs on and comes from.
+
+
+UNA Watch kernel
+----------------
+
+The UNA Watch port was written from the hardware as UNA Watch Ltd's own
+kernel drives it: its source (https://github.com/UNAWatch/una-kernel-public,
+MIT licence, below) and the bootloader image published with it. Taken from
+it are register values, timings and sequences, among them those of the
+display (LS012B7DD06A), the haptics (DRV2625), the fuel gauge's cell model
+(MAX17262), the charger (PCA9420), the eMMC (SDMMC) and the USB PHY; the
+format of its .ota update files (tools/una/pack_ota.py makes the same files);
+the analysis in docs/boards/unawatch/hardware.md, which cites its sources
+file by file; and tools/una/SecurityKeys.pem, the update key every UNA
+Watch's bootloader uses, copied unchanged. That key is published by UNA Watch
+Ltd and is not a secret.
+
+    MIT License
+
+    Copyright (c) 2026 UNA Watch Ltd
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+
+unscii-8
+--------
+
+tools/una/tether/stub/font8x8.h holds the glyphs of unscii-8 by Viznut, which
+is in the public domain, converted by tools/una/tether/stub/gen_font.py from
+LVGL's lv_font_unscii_8.c (third_party/lvgl, MIT licence).

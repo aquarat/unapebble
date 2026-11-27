@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Core Devices LLC */
+/* SPDX-FileCopyrightText: 2026 The unapebble authors */
 /* SPDX-License-Identifier: Apache-2.0 */
 
 // The battery state from a fuel gauge chip, which estimates the state of charge itself: the
