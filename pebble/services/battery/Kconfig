@@ -89,6 +89,18 @@ config BATTERY_TEST
       its current. Logs to the filesystem across the power-off; the
       "battery test" shell commands print the log and the results.
 
+config BATTERY_POWER_MEASURE
+    bool "Power measurement"
+    default y if DEV_USB
+    depends on BATTERY_SOC_GAUGE && SHELL
+    help
+      The "power measure" shell command: what the watch draws from its
+      battery over a window, averaged from the fuel gauge's current, with
+      the CPU time per idle state. Plugged in, the charger's input is
+      suspended meanwhile where the charger can (the system runs from the
+      battery, nothing charges), and the USB developer access can be held
+      off, so that it measures without unplugging.
+
 module = SERVICE_BATTERY
 module-str = Battery
 source "subsys/logging/Kconfig.template.log_level"
