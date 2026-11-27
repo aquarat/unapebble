@@ -15,3 +15,10 @@ pbl_clar_test(test_gnss
     CONFIG_DRIVER_GNSS_LOG_LEVEL=0
     CONFIG_SERVICE_LOCATION_LOG_LEVEL=0
 )
+
+pbl_clar_test(test_nmea
+  SOURCES
+    drivers/gnss/nmea.c
+  INCLUDES
+    drivers/gnss
+)

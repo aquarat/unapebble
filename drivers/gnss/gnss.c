@@ -113,6 +113,23 @@ int pbl_gnss_peek(const struct pbl_gnss *gnss, struct pbl_gnss_fix *fix) {
   return ret;
 }
 
+int pbl_gnss_get_stats(const struct pbl_gnss *gnss, struct pbl_gnss_stats *stats) {
+  if (!pbl_device_is_ready(&gnss->dev)) {
+    return -ENODEV;
+  }
+
+  if (gnss->ops->get_stats == nullptr) {
+    return -ENOTSUP;
+  }
+
+  *stats = (struct pbl_gnss_stats){0};
+  pbl_gnss_lock(gnss);
+  gnss->ops->get_stats(gnss, stats);
+  pbl_gnss_unlock(gnss);
+
+  return 0;
+}
+
 void pbl_gnss_report_fix(const struct pbl_gnss *gnss, const struct pbl_gnss_fix *fix) {
   const struct pbl_gnss_listener *listener = gnss->state->listener;
 

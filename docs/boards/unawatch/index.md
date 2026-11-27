@@ -20,8 +20,8 @@ The port runs the full firmware, on the gabbro platform of the Pebble Round
 2: the SoC with its clocks, console, system timer, RTC, watchdog, RNG and CRC
 unit, the buttons, the display, the haptics, storage on the eMMC and the
 battery: its charger and its fuel gauge, and the motion and environment
-sensors: the accelerometer, the magnetometer and the barometer. Bluetooth,
-the GNSS, the heart rate sensor and USB come next; see
+sensors: the accelerometer, the magnetometer and the barometer, and the
+GNSS receiver. Bluetooth, the heart rate sensor and USB come next; see
 [](#unawatch-status). The first port, with its storage in the embedded flash,
 boots on a watch, and so does the firmware with the storage on the eMMC,
 started from the tether slot: it ran 11 minutes without a reset.
@@ -84,7 +84,8 @@ The tethered stub, which stands in for a debug probe (see {doc}`tether`):
   200 mAh battery
 - **Haptics**: TI DRV2625, and a buzzer
 - **Bluetooth**: ST BlueNRG-2 module, on SPI1
-- **GNSS**: Airoha AG3335M module, on LPUART1
+- **GNSS**: Airoha AG3335M module, on LPUART1 at 921600 baud, powered by
+  GNSS_EN (PG5)
 - **Sensors**: Bosch BMI270 and BMM350, PixArt PAH8316LS heart rate,
   TE MS5837 pressure
 - **Buttons**: four, Back (PD8), Up (PD4), Select (PD15, also the power
@@ -331,6 +332,20 @@ counter agree with it.
 | TicToc, the eMMC kept powered and idle (`CONFIG_MMC_IDLE_OFF_MS=0`) | | 0.9 to 1.1 mA: the idle card is below what the gauge resolves |
 | An animation (Bouncing Box demo, about 15 frames a second) | | 10.5 mA, CPU 100% busy |
 | USB developer access connected, at high speed | 17.0 mA (launcher) | 19.1 mA (TicToc): Stop blocked by the USB |
+| TicToc, the GNSS receiver searching indoors, every constellation on L1, its sleep locked (the default) | | 10.0 to 10.4 mA, 97% in Stop 2 |
+| The same, the receiver's sleep unlocked (`gnss pair PAIR382,0`) | | 9.2 mA, 97% in Stop 2 |
+| The same, GPS alone (`gnss pair PAIR066,1,0,0,0,0,0`), its sleep locked | | 7.9 to 8.9 mA, 97% in Stop 2 |
+| The same, every constellation on L1 and L5 (PAIR104,1), its sleep locked | | 15.6 to 17.5 mA, 96% in Stop 2 |
+| TicToc, the GNSS receiver off again | | 0.8 mA |
+| The sensors' drivers in, the BMI270 at 50 Hz for shakes, the BMM350 suspended, the barometer powered (5 min, the face as left) | | Current 1.36 mA (sd 3.6 mA), AvgCurrent 0.91 mA, 98% in Stop 2 |
+| As above, the accelerometer streaming at 25 Hz in batches of 125 (`imu accel stream`), an interrupt every 5 s | | Current 0.96 mA (sd 5.4 mA), AvgCurrent 0.89 mA, 96% in Stop 2 |
+
+The GNSS figures are of 3 to 4 minute windows (8 minutes for the default),
+the gauge's Current and AvgCurrent, which differ by up to 2 mA there: the
+receiver's draw swings with its bursts (a spread of 6 to 9 mA). It was
+searching each time, indoors, with at most 4 satellites in view, which draws
+more than tracking would; outdoors with a fix it should be less. With the
+USB connected the CPU stays out of Stop, as it does without the receiver.
 
 The tethered stub draws 31.5 mA: it polls, with the USB at high speed and
 the frontlight on. A frame costs about 0.6 mA s (63 ms of CPU), so a second-tick face would
@@ -392,6 +407,37 @@ asks for its recovery firmware, which the UNA bootloader does not have: the
 watch just resets. Holding Back quits the app, as on every
 Pebble. The DRV2625 on I2C1 drives the ERM in real-time playback, open loop,
 at the stock firmware's voltages.
+
+(unawatch-gnss)=
+
+## GNSS
+
+The AG3335M (`drivers/gnss/ag3335.c`) is a GNSS class device, child of
+LPUART1, which the location service and the sport apps use when they are on
+(they are not yet, decision 261127-194525-03). Off, its supply is cut
+(GNSS_EN low), the UART's clock gated and its pins analog. Started, the
+driver powers it, waits for its `$PAIR001,002,0`, and sets it up as UNA's
+firmware does: system sleep locked, L1 only, a hot start (decision
+261127-194525-02). Each burst of NMEA, once a second, makes an epoch: fix
+quality, UTC time, position, altitude, speed, course, HDOP, satellites used
+and in view. The UART receives in Stop 2: MSIK keeps running for it, its
+first character wakes the CPU, GPDMA1 takes the burst, and the CPU goes back
+to Stop when the line is idle (decision 261127-194525-01). The receiver's
+findings are in {doc}`hardware`, section 2.6.1.
+
+In the shell (builds with one):
+
+| Command | |
+| --- | --- |
+| `gnss on`, `gnss off` | Start the receiver at 1 Hz, stop it |
+| `gnss status` | The driver's state, the receiver's firmware, bytes and sentences received by type, bad lines, overruns, epochs, satellites with a signal and the strongest, time to first fix, the last epoch |
+| `gnss pair PAIRnnn,...` | Send the running receiver a PAIR command and print its result and answer, e.g. `gnss pair PAIR067` (constellations); only commands that set the running receiver or query it, none that writes its flash |
+| `gnss` | The last epoch, in short |
+
+`CONFIG_GNSS_AG3335_DUAL_BAND` adds L5, `CONFIG_GNSS_AG3335_SLEEP` unlocks
+the receiver's system sleep. The receiver's requests for time and location
+aiding are not answered yet; setting the RTC from its time is proposed
+(decision 261127-194525-04).
 
 ## Power off
 
@@ -481,8 +527,9 @@ setting (`CONFIG_DEV_USB`): {doc}`tether` too.
 | **Runs on a watch, from the tether slot** | The current firmware, linked for the slot: storage on the eMMC (with the write timeout, decision 261127-123202-01, and the display thread, 261127-130125-01), the system resources read in place from the embedded flash, the PCA9420 charger and MAX17262 fuel gauge (charge registers read back at 4.36 V while it runs), the boot trace, and the USB developer access ({doc}`tether`); 11 minutes and 5 minutes without a reset, the watchface ticking |
 | **Built, not yet run on a watch** | The same firmware installed as one `.ota` through the bootloader (it differs only in its address); the Lab; the Battery test app (it is in the launcher, but no test has run); the USB Developer setting in a normal install |
 | **Runs on a watch, from the tether slot: the sensors** | The BMI270 accelerometer (FIFO and interrupt, shakes), the BMM350 magnetometer and the MS5837 barometer, read on the watch lying still (see [](#unawatch-sensors)); not yet moved: steps, shakes, the compass's calibration and the X and Y signs need someone to move the watch |
+| **Runs on a watch, from the tether slot: GNSS** | The AG3335M answers and starts, NMEA flows at 1 Hz and is parsed into epochs with the UART receiving in Stop 2 (no overrun nor bad sentence in 400 epochs); indoors, up to 4 satellites in view and 3 with a signal, the UTC time after about 4 minutes, no fix yet. Draw in [](#unawatch-power). The location service and the sport apps stay off (decision 261127-194525-03) |
 | **Stand-ins, which nothing feeds** | Ambient light, microphone and die temperature are simulators |
-| **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No heart rate, GNSS or buzzer; USB only for development |
+| **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No heart rate or buzzer; USB only for development. No GNSS fix seen yet: the watch has only been indoors |
 | **Unknown** | Whether the haptics work: their rail and driver have not been checked on the watch. The panel is round, and the computed round mask fits it (see the photos) |
 
 Things to watch on a first boot:
@@ -524,7 +571,7 @@ The motion and environment sensors have PebbleOS drivers, which its own
 services use: the accelerometer service for apps, shakes, health's step
 counting and activity, the compass and the pressure service. The reasons are
 in the decision log, from 261127-194845-01, the measurements in
-{doc}`hardware`, sections 2.6.1 and 2.7.1.
+{doc}`hardware`, sections 2.6.2 and 2.7.1.
 
 | Sensor | Bus | Driver | How it runs |
 | --- | --- | --- | --- |
@@ -534,7 +581,7 @@ in the decision log, from 261127-194845-01, the measurements in
 
 The axes are PebbleOS's: X to 3 o'clock, Y to 12 o'clock, Z out of the face;
 the accelerometer gives the gravity vector, z = -1000 mg face up. The heart
-rate sensor and the GNSS are not covered here.
+rate sensor is not covered here, the GNSS in its own section.
 
 In the shell (debug builds):
 

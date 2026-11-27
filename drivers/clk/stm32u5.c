@@ -156,7 +156,7 @@ static const struct gate s_gates[PBL_CLK_STM32U5_NUM_CLKS] = {
   [C(USART1)] = GATE_MUX(APB2ENR, 14, USART1),
   [C(USART2)] = GATE_MUX(APB1ENR1, 17, USART2),
   [C(USART3)] = GATE_MUX(APB1ENR1, 18, USART3),
-  [C(LPUART1)] = GATE_MUX(APB3ENR, 6, LPUART1),
+  [C(LPUART1)] = GATE_MUX_AM(APB3ENR, 6, LPUART1, 6),
   [C(I2C1)] = GATE_MUX(APB1ENR1, 21, I2C1),
   [C(I2C2)] = GATE_MUX(APB1ENR1, 22, I2C2),
   [C(I2C3)] = GATE_MUX(APB3ENR, 7, I2C3),
@@ -346,8 +346,10 @@ static int prv_enable(const struct pbl_clk_controller *ctrl, uint32_t id) {
     case C(HSI48):
       return prv_osc_on(rcc, STM32U5_RCC_CR_OFFSET, RCC_CR_HSI48ON, RCC_CR_HSI48RDY,
                         OSCRDY_TIMEOUT_US);
+    // The kernel clock of the peripherals that receive in Stop: on in it too, as a fast LPUART
+    // cannot wait for it to start at each character
     case C(MSIK):
-      return prv_osc_on(rcc, STM32U5_RCC_CR_OFFSET, RCC_CR_MSIKON, RCC_CR_MSIKRDY,
+      return prv_osc_on(rcc, STM32U5_RCC_CR_OFFSET, RCC_CR_MSIKON | RCC_CR_MSIKERON, RCC_CR_MSIKRDY,
                         OSCRDY_TIMEOUT_US);
     case C(LSI):
       prv_bdcr_unlock(rcc);
@@ -392,7 +394,7 @@ static int prv_disable(const struct pbl_clk_controller *ctrl, uint32_t id) {
       pbl_modifyl(RCC_CR_HSI48ON, 0U, rcc->base + STM32U5_RCC_CR_OFFSET);
       return 0;
     case C(MSIK):
-      pbl_modifyl(RCC_CR_MSIKON, 0U, rcc->base + STM32U5_RCC_CR_OFFSET);
+      pbl_modifyl(RCC_CR_MSIKON | RCC_CR_MSIKERON, 0U, rcc->base + STM32U5_RCC_CR_OFFSET);
       return 0;
     case C(LSI):
       prv_bdcr_unlock(rcc);

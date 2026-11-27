@@ -43,3 +43,11 @@ config IMU_SHELL
 
 config PRESSURE_SHELL
     default y
+
+# The GNSS receiver, the AG3335M on LPUART1, powered only while something uses it, with its shell
+# commands in builds that have a shell. Not in the experiments firmware.
+config GNSS
+    default y if !BOARD_UNAWATCH_LAB
+
+config GNSS_SHELL
+    default y if SHELL

@@ -15,6 +15,7 @@ vibe: haptics
 battery: battery
 charger: pmic
 gauge: fuel_gauge
+gnss: gnss
 accel: bmi270
 mag: bmm350
 pressure: ms5837

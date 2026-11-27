@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-FileCopyrightText: 2026 The unapebble authors
 # SPDX-License-Identifier: Apache-2.0
 
 menuconfig DMA
@@ -40,5 +41,20 @@ config DMA_STM32H7_IRQ_PRIO
     depends on DMA_STM32H7
     help
       Priority of the stream interrupts.
+
+config DMA_STM32U5
+    bool "ST STM32U5 GPDMA1"
+    default y
+    depends on DT_HAS_ST_STM32U5_GPDMA_ENABLED
+    select CLK
+    help
+      The STM32U5 general purpose DMA controller, GPDMA1.
+
+config DMA_STM32U5_IRQ_PRIO
+    int "Interrupt priority"
+    default 0
+    depends on DMA_STM32U5
+    help
+      Priority of the channel interrupts.
 
 endif # DMA

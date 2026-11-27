@@ -33,6 +33,7 @@
 /* Register bit definitions */
 
 #define RCC_CR_MSISON   PBL_BIT(0)
+#define RCC_CR_MSIKERON PBL_BIT(1)
 #define RCC_CR_MSISRDY  PBL_BIT(2)
 #define RCC_CR_MSIKON   PBL_BIT(4)
 #define RCC_CR_MSIKRDY  PBL_BIT(5)

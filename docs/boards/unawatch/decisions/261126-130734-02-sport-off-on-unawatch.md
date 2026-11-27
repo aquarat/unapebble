@@ -1,6 +1,6 @@
 # Keep the sport apps off on the watch until its sensors have drivers
 
-- Status: Accepted
+- Status: Superseded by 261127-194525-03-gnss-on-the-watch-sport-still-off.md (for `CONFIG_GNSS`)
 - Date: 2026-11-26 13:07 UTC
 - Decided by: agent
 
