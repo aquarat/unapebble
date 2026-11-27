@@ -3,9 +3,6 @@
 
 # Stand-ins for the hardware without a driver yet, which nothing feeds: the
 # firmware expects every one of these
-accel:
-  symbol: SIM_ACCEL
-  include: pbl/drivers/imu/sim.h
 als:
   symbol: SIM_ALS
   include: pbl/drivers/als/sim.h

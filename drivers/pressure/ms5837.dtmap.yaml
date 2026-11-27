@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 The unapebble authors
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: meas,ms5837
+config: PRESSURE_MS5837
+class: pressure
+define: PBL_MS5837_DEFINE
+args:
+  - parent: i2c
+  - reg: 0
+  - supply: vdd
+    default: nullptr

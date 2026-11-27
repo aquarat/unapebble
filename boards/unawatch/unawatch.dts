@@ -64,6 +64,23 @@
 		regulator-always-on;
 	};
 
+	// The barometer's LDO, an AP7350 on ALTIMETER_EN, which must always be driven: its driver
+	// switches it, off for 20 ms, then on, 10 ms to come up (BaroMs5837.cpp:554-558)
+	baro_ldo: regulator-baro {
+		compatible = "regulator-fixed";
+		regulator-name = "baro";
+		gpios = <&gpiog 0 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		startup-delay-us = <10000>;
+	};
+
+	// The link2 module's supply, on whenever the watch is
+	vdd_link2: regulator-vdd-link2 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd-link2";
+		regulator-always-on;
+	};
+
 	// The reflective color memory-in-pixel panel, 240 x 240, mounted a quarter turn round: line 0
 	// is the right column of the image, top to bottom. FRP and XFRP are driven separately.
 	panel: panel {
@@ -277,11 +294,19 @@
 	};
 };
 
+// The body module: the heart rate sensor, the barometer and the module's EEPROM
 &i2c2 {
 	pinctrl-0 = <&i2c2_default>;
 	pinctrl-names = "default";
 	clock-frequency = <400000>;
 	status = "okay";
+
+	// The MS5837-02BA01, on the barometer's LDO
+	ms5837: pressure@76 {
+		compatible = "meas,ms5837";
+		reg = <0x76>;
+		vdd-supply = <&baro_ldo>;
+	};
 };
 
 &i2c3 {
@@ -291,11 +316,42 @@
 	status = "okay";
 };
 
+// The link2 module: the GNSS's EEPROM, the IMU and the magnetometer
 &i2c4 {
 	pinctrl-0 = <&i2c4_default>;
 	pinctrl-names = "default";
 	clock-frequency = <1000000>;
 	status = "okay";
+
+	// Its INT2 on SENSOR2_INT2, PA1, which the stock firmware sets push-pull, active high
+	// (ImuBosch.cpp:541-557). The mount matrix gives PebbleOS's axes: X to 3 o'clock, Y to 12,
+	// Z out of the face, as the gravity vector, z = -1000 mg face up.
+	bmi270: imu@68 {
+		compatible = "bosch,bmi270";
+		reg = <0x68>;
+		vdd-supply = <&vdd_link2>;
+		vddio-supply = <&vdd_link2>;
+		interrupt-parent = <&gpioa>;
+		interrupts = <1 IRQ_TYPE_EDGE_RISING>;
+		interrupt-names = "INT2";
+		mount-matrix = "0", "1", "0",
+			       "-1", "0", "0",
+			       "0", "0", "-1";
+	};
+
+	// Its interrupt, on PC2, is not used: the driver polls. The mount matrix, X to 3 o'clock, Y
+	// to 12, Z out of the face, is the stock firmware's, measured on a watch (MagBosch.cpp:20-29).
+	bmm350: magnetometer@14 {
+		compatible = "bosch,bmm350";
+		reg = <0x14>;
+		vdd-supply = <&vdd_link2>;
+		vddio-supply = <&vdd_link2>;
+		interrupt-parent = <&gpioc>;
+		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
+		mount-matrix = "0", "1", "0",
+			       "1", "0", "0",
+			       "0", "0", "-1";
+	};
 };
 
 // The BlueNRG-2 of the BLE module (link1), running ST's DTM firmware, an HCI controller; the stock
