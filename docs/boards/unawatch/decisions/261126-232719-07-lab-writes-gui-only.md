@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-26 23:27 UTC
-- Decided by: owner (rule); agent (blocks)
+- Decided by: maintainer (rule); agent (blocks)
 
 ## Context
 The update drive, SYS and the user drive belong to UNA's firmware and

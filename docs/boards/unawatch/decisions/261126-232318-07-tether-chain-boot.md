@@ -5,7 +5,7 @@
 - Decided by: agent
 
 ## Context
-The owner asked for fast PebbleOS iteration over USB if it could be done
+The maintainer asked for fast PebbleOS iteration over USB if it could be done
 cleanly. PebbleOS links at `CONFIG_FLASH_OFFSET`, from the `code` partition,
 and sets VTOR from its own vector table; its start-up already resets what a
 bootloader leaves running.

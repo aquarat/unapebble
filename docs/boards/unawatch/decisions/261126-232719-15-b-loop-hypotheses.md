@@ -33,6 +33,6 @@ The hypotheses, most likely first, each with what decides it:
    a cause.
 
 ## Consequences
-The owner runs the Lab's experiments, then E, then the Lab again; the
+The maintainer runs the Lab's experiments, then E, then the Lab again; the
 results decide between them. This record is superseded when the cause is
 known.

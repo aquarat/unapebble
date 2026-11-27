@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-26 23:23 UTC
-- Decided by: owner
+- Decided by: maintainer
 
 ## Context
 The bootloader and UNA's libc below `0x08060000` are the way back to the

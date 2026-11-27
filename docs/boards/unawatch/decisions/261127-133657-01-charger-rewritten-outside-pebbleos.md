@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-27 13:37 UTC
-- Decided by: owner (keep re-applying 4.36 V at boot); agent (finding)
+- Decided by: maintainer (keep re-applying 4.36 V at boot); agent (finding)
 
 ## Context
 A one-file build (`55b699bf6`, slot build) ran 301 s on the watch with no
@@ -23,7 +23,7 @@ cell's use so far, but the 4.36 V of
 ## Decision
 PebbleOS keeps applying its own 4.36 V at every boot, as the charger driver
 already does (written with charging off, read back, and checked on every
-poll); the owner judged that the safer course. The bootloader's I2C writes
+poll); the maintainer judged that the safer course. The bootloader's I2C writes
 to 0x61 are traced for interest, to confirm what sets 4.40 V.
 
 ## Consequences
@@ -49,4 +49,4 @@ puts the PMIC in ship mode, taking bit 7 for a PMIC at its power-on
 defaults. PebbleOS writes bit 7 set (0x95), so a reset on battery that the
 PMIC does not latch may leave the watch looking dead until USB or a press
 of the power button (inferred, not tried). Writing CHG_CNTL6 with bit 7
-clear (0x15) would avoid it; that is for the owner to decide.
+clear (0x15) would avoid it; that is for the maintainer to decide.

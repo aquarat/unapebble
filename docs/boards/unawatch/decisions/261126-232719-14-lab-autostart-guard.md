@@ -5,7 +5,7 @@
 - Decided by: agent
 
 ## Context
-Opening on the report at boot saves the owner a step, but a fault in the
+Opening on the report at boot saves the maintainer a step, but a fault in the
 report would then loop the experiments firmware itself.
 
 ## Decision

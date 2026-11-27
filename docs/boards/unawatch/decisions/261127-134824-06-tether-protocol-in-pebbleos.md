@@ -5,7 +5,7 @@
 - Decided by: agent
 
 ## Context
-The owner asked for the stub's functions in PebbleOS, the same protocol so
+The maintainer asked for the stub's functions in PebbleOS, the same protocol so
 that `tether.py` works unchanged, and to decide on running code and on
 flashing.
 

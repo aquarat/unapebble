@@ -20,7 +20,7 @@ by the charge voltage: 0 for 4.2 V, 1 above 4.25 V (UG6597).
 The devicetree's charge voltage is 4.20 V (VBAT_REG code 0x1E). The gauge
 model follows from it: VChg = 0, FullSOCThr stays at Maxim's 80%, so the
 end of a 4.20 V charge is the gauge's full, 100%, and FullCapRep learns the
-capacity to 4.20 V. The limit option stays off, for a future owner choice of
+capacity to 4.20 V. The limit option stays off, for a future maintainer choice of
 stopping short of full. 4.20 V is the nominal setting: with the charger's
 0.75% it may regulate at up to 4.23 V, within the usual 4.20 V +/- 50 mV of a
 standard cell.

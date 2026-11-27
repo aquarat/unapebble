@@ -2,10 +2,10 @@
 
 - Status: Accepted
 - Date: 2026-11-26 13:07 UTC
-- Decided by: owner (CI build, downloads in the repo); agent (design)
+- Decided by: maintainer (CI build, downloads in the repo); agent (design)
 
 ## Context
-The owner wanted CI to build the firmware and keep it in the repository for
+The maintainer wanted CI to build the firmware and keep it in the repository for
 easy download. Forgejo reads `.forgejo/workflows`; the runners are arm64 and
 the job image has no Node. Recorded after the fact.
 

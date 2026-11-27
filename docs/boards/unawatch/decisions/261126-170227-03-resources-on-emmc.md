@@ -2,7 +2,7 @@
 
 - Status: Superseded by 261127-131711-01-resources-in-the-ota
 - Date: 2026-11-26 17:02 UTC
-- Decided by: owner
+- Decided by: maintainer
 
 ## Context
 With the resources in the image (261126-130659-05-resources-in-image), the

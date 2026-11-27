@@ -17,7 +17,7 @@ the battery's, such as 4100 for about 75 to 80% of a 4.4 V cell. With it set,
 not count the early end as full. The percentage shown stays the gauge's, so a
 limited watch shows about 80% when its charge is done. Not the default: 4.36 V
 at 0.5C is already gentle, and a fifth less runtime on a 200 mAh watch is a
-choice for its owner.
+choice for its user.
 
 ## Consequences
 A build option, not a setting on the watch; a user setting would need UI and

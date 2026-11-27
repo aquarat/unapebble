@@ -2,10 +2,10 @@
 
 - Status: Accepted
 - Date: 2026-11-26 13:07 UTC
-- Decided by: owner (on-watch sensors, more sports later); agent (structure)
+- Decided by: maintainer (on-watch sensors, more sports later); agent (structure)
 
 ## Context
-The owner asked for a Garmin-style running app on the watch's own sensors,
+The maintainer asked for a Garmin-style running app on the watch's own sensors,
 not the phone's, and said cycling and other sports should follow, leaving the
 structure open. Recorded after the fact.
 

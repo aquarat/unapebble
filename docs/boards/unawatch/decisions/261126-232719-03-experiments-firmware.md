@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-26 23:27 UTC
-- Decided by: owner (asked for it); agent (form)
+- Decided by: maintainer (asked for it); agent (form)
 
 ## Context
 Without a console, finding why B loops takes experiments whose results show

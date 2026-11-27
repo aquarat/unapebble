@@ -2,10 +2,10 @@
 
 - Status: Accepted
 - Date: 2026-11-27 14:23 UTC
-- Decided by: owner (publish the source, these fixes); agent (how)
+- Decided by: maintainer (publish the source, these fixes); agent (how)
 
 ## Context
-The owner asked whether the repository could be published. A review found
+The maintainer asked whether the repository could be published. A review found
 no secrets, private hosts, addresses or paths, no committed binaries, and
 compatible licences: PebbleOS is Apache-2.0, UNA Watch Ltd's kernel source,
 with its bootloader image and update key, MIT. But 172 files the port added
@@ -28,7 +28,7 @@ file format and key taken from its MIT-licensed source.
 - The README starts with a fork notice: unofficial, experimental, the battery
   charging, where the board documentation is, install and recovery, the key.
 - Board config files keep no licence header, as upstream's have none.
-- Not done, by the owner's choice: the pid.codes test USB IDs (1209:0001 and
+- Not done, by the maintainer's choice: the pid.codes test USB IDs (1209:0001 and
   0002) stay while no firmware is distributed; GitHub workflows come later.
 
 ## Consequences

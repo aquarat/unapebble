@@ -2,11 +2,11 @@
 
 - Status: Accepted
 - Date: 2026-11-27 13:48 UTC
-- Decided by: owner (a setting, off by default; the tether functions in PebbleOS); agent (the rest)
+- Decided by: maintainer (a setting, off by default; the tether functions in PebbleOS); agent (the rest)
 
 ## Context
 Without a console, nothing could tell PebbleOS to reboot, and every look at
-the hardware needed the tethered stub. The owner asked for the console over
+the hardware needed the tethered stub. The maintainer asked for the console over
 USB and for the stub's functions inside PebbleOS, behind a settings toggle
 that is off by default and kept.
 

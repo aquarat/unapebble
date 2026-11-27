@@ -15,15 +15,15 @@ them. Read the log before changing something it covers.
 - A record isn't rewritten when the decision changes. Write a new record, set
   the old one's status to `Superseded by <new file name>`, and link both ways.
 - Status is one of `Proposed`, `Accepted`, `Superseded by ...` or `Rejected`.
-- Say who decided: `owner` for the project owner, `agent` for a choice an
-  agent made within what the owner asked for.
+- Say who decided: `maintainer` for the project's maintainer, `agent` for a
+  choice an agent made within what the maintainer asked for.
 
 ```text
 # Title
 
 - Status: Accepted
 - Date: 2026-11-26 13:06 UTC
-- Decided by: owner | agent
+- Decided by: maintainer | agent
 
 ## Context
 ## Decision

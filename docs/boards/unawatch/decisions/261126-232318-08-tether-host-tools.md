@@ -2,10 +2,10 @@
 
 - Status: Accepted
 - Date: 2026-11-26 23:23 UTC
-- Decided by: owner
+- Decided by: maintainer
 
 ## Context
-The watch is plugged into the owner's Mac while experiments are driven from a
+The watch may be plugged into a Mac while experiments are driven from a
 Linux machine. Neither should need extra Python packages.
 
 ## Decision

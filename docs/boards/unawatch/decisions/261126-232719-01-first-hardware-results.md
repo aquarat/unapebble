@@ -2,10 +2,10 @@
 
 - Status: Accepted
 - Date: 2026-11-26 23:27 UTC
-- Decided by: owner (results); agent (record)
+- Decided by: maintainer (results); agent (record)
 
 ## Context
-The owner installed the first images on a watch, without a console or a
+The maintainer installed the first images on a watch, without a console or a
 probe: only the display, the frontlight, the vibration motor and the update
 drive show anything.
 

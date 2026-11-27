@@ -6,7 +6,7 @@
 
 ## Context
 With storage and resources on the eMMC, nothing else uses the second bank of
-the embedded flash. The owner wants an image that fits a 2 MiB part and more
+the embedded flash. The maintainer wants an image that fits a 2 MiB part and more
 flash for code. Whether watches ship with the 4 MiB STM32U5A5 or the 2 MiB
 STM32U595 is not confirmed; the bootloader takes an image up to the flash size
 less 384 KiB.

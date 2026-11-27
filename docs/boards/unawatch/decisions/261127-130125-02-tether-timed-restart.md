@@ -7,7 +7,7 @@
 ## Context
 While PebbleOS runs from the tether slot, the stub and its USB port are gone:
 its boot trace and flash log can only be read once the watch resets into the
-stub. A run that does not fail never does, and the owner, who would have to
+stub. A run that does not fail never does, and the maintainer, who would have to
 press buttons, wants to stay out of the loop. PebbleOS has no button combo
 that resets; the stub's Back and Select only work in the stub.
 

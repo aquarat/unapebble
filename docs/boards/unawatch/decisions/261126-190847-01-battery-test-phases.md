@@ -5,7 +5,7 @@
 - Decided by: agent
 
 ## Context
-The owner asked for an on-watch test of the cell's capacity at the 4.20 V cap
+The maintainer asked for an on-watch test of the cell's capacity at the 4.20 V cap
 (261126-185344-01): charge to full, discharge to the firmware's own power-off
 (261126-173552-15), recharge on the next boot. The cell's 200 or 280 mAh is
 unknown (hardware notes, open question 8).

@@ -5,7 +5,7 @@
 - Decided by: agent
 
 ## Context
-The owner asked for a "reboot into the bootloader menu", if the stock
+The maintainer asked for a "reboot into the bootloader menu", if the stock
 bootloader can be asked. Bootloader 0.1.4 was traced (hardware.md, 9.6).
 
 ## Decision

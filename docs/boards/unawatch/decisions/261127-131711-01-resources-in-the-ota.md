@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-27 13:17 UTC
-- Decided by: owner
+- Decided by: maintainer
 
 ## Context
 261126-170227-03-resources-on-emmc moved the resources to the eMMC so that
@@ -11,8 +11,8 @@ the image would fit a 2 MiB part, which was not ruled out, and
 `.pbpack` next to the `.ota`. The watch has since been confirmed to carry
 the 4 MiB STM32U5A5, and the two-file install proved fragile on it: the
 `.pbpack` went missing from the drive and the firmware powered off at boot.
-Supersedes 261126-170227-03-resources-on-emmc. The owner: "you can bundle
-everything into the ota".
+Supersedes 261126-170227-03-resources-on-emmc. The maintainer chose to carry
+everything in the `.ota` again.
 
 ## Decision
 The `.ota` carries the system resources with the code, as the first port's

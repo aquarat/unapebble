@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-26 19:08 UTC
-- Decided by: owner (on for the watch); agent (option)
+- Decided by: maintainer (on for the watch); agent (option)
 
 ## Context
 The test needs a fuel gauge chip (BATTERY_SOC_GAUGE), which only the UNA
