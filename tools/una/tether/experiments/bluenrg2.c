@@ -22,6 +22,12 @@
  *                written and read back, then a restart from args[1] ms in reset (5 by default)
  *                with those lines analog again, CS high from 5 ms before the release: its
  *                start reason, and the mode read back
+ *   args[0] = 8  a normal start as in mode 7, then hci_reset (approved for this test, decision
+ *                261127-233626-01) with SCK, MOSI and CS made analog as soon as its Command
+ *                Complete is read; the restart's IRQ and start reason; on a normal start,
+ *                link-layer-only mode written and read back; otherwise the chip is recovered
+ *                from 2 s in reset with the lines analog. args[1]: bit 0 keeps CS driven high
+ *                through the restart, bit 1 writes link-layer-only mode before hci_reset too
  *   args[1] != 0 in modes 0 to 2, also advertise for args[1] seconds (at most
  *                10) with standard HCI commands, non-connectable, as
  *                "unapebble-test"
@@ -514,6 +520,78 @@ uint32_t blob_main(const uint32_t *args, uint32_t nargs) {
       }
     }
     prv_versions();
+  } else if (mode == 8U) {
+    static const uint8_t s_ll_only[3] = {0x2cU, 0x01U, 0x01U};
+    static const uint8_t s_off = 0x2cU;
+    const uint32_t flags = nargs > 1U ? args[1] : 0U;
+    uint8_t r[260];
+    uint32_t n;
+
+    tprintf("normal start from 2000 ms in reset, SCK MOSI CS analog:\n");
+    prv_set(RST_PORT, RST_PIN, 0U);
+    prv_analog(SCK_PORT, SCK_PIN);
+    prv_analog(MOSI_PORT, MOSI_PIN);
+    prv_analog(CS_PORT, CS_PIN);
+    tether_delay_ms(2000U);
+    prv_out(CS_PORT, CS_PIN, false, 1U);
+    prv_out(SCK_PORT, SCK_PIN, false, 0U);
+    prv_out(MOSI_PORT, MOSI_PIN, false, 0U);
+    prv_reset();
+    if (s_errors == 0 && s_pkt[5] == 1U) {
+      if (flags & 2U) {
+        tprintf("  status %d\n",
+                prv_cmd("aci_hal_write_config_data (ll only)", 0xfc0cU, s_ll_only, 3U, r, &n));
+      }
+      (void)prv_cmd("aci_hal_read_config_data", 0xfc0dU, &s_off, 1U, r, &n);
+      const int st = prv_cmd("hci_reset", 0x0c03U, NULL, 0U, r, &n);
+      prv_analog(SCK_PORT, SCK_PIN);
+      prv_analog(MOSI_PORT, MOSI_PIN);
+      if ((flags & 1U) == 0U) {
+        prv_analog(CS_PORT, CS_PIN);
+      }
+      const uint32_t t0 = tether->millis();
+      tprintf("  hci_reset status %d, lines released (CS %s)\n", st,
+              (flags & 1U) ? "kept high" : "analog");
+      bool up = false;
+      while (!up && tether->millis() - t0 < 3000U) {
+        tether->watchdog_feed();
+        up = prv_irq();
+      }
+      const uint32_t t_up = tether->millis() - t0;
+      prv_out(CS_PORT, CS_PIN, false, 1U);
+      prv_out(SCK_PORT, SCK_PIN, false, 0U);
+      prv_out(MOSI_PORT, MOSI_PIN, false, 0U);
+      int reason = -1;
+      if (up) {
+        const int k = prv_read(s_pkt, sizeof(s_pkt), true);
+        prv_dump("  start event", s_pkt, (uint32_t)k);
+        if (k >= 6 && s_pkt[1] == 0xffU && s_pkt[3] == 0x01U && s_pkt[4] == 0x00U) {
+          reason = s_pkt[5];
+        }
+      }
+      tprintf("  restart: IRQ %s after %lu ms, reason %d\n", up ? "high" : "never high",
+              (unsigned long)t_up, reason);
+      if (reason == 1) {
+        (void)prv_cmd("aci_hal_read_config_data", 0xfc0dU, &s_off, 1U, r, &n);
+        tprintf("  status %d\n",
+                prv_cmd("aci_hal_write_config_data (ll only)", 0xfc0cU, s_ll_only, 3U, r, &n));
+        (void)prv_cmd("aci_hal_read_config_data", 0xfc0dU, &s_off, 1U, r, &n);
+        prv_versions();
+      } else {
+        s_errors++;
+        tprintf("recovery: 2000 ms in reset, SCK MOSI CS analog:\n");
+        prv_set(RST_PORT, RST_PIN, 0U);
+        prv_analog(SCK_PORT, SCK_PIN);
+        prv_analog(MOSI_PORT, MOSI_PIN);
+        prv_analog(CS_PORT, CS_PIN);
+        tether_delay_ms(2000U);
+        prv_out(CS_PORT, CS_PIN, false, 1U);
+        prv_out(SCK_PORT, SCK_PIN, false, 0U);
+        prv_out(MOSI_PORT, MOSI_PIN, false, 0U);
+        prv_reset();
+        prv_versions();
+      }
+    }
   } else if (mode == 4U) {
     REG32(GPIO_PORT(MISO_PORT) + 0x0cU) |= 2U << (MISO_PIN * 2U);
     for (int i = 0; i < 3; i++) {

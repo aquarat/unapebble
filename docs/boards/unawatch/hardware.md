@@ -366,6 +366,7 @@ none.
 | A reset of 5 ms to 3 s, straight after a start (normal or updater) | 94 ms | reason 4 | every time, 16 times; MISO pulled up, down or floating made no difference |
 | From updater mode: RESET low, the SPI pins set up again, 2 s, then a 5 ms pulse (mode 6) | 2.2 s | reason 1 | 8 of 8 |
 | A reset of 5 ms or 300 ms straight after a normal start, SCK, MOSI and CS analog in reset, CS driven high 5 ms before the release (mode 7) | 2.2 s | reason 1 | 2 of 2 |
+| `HCI_Reset` after a normal start, SCK, MOSI and CS analog from its Command Complete on (mode 8; approved, decision 261127-233626-01) | 1.7 s | reason 1 | 2 of 2 (the experiment, and the NimBLE transport once) |
 | PebbleOS's transport at boot: RESET held since the device's init, CS an input, the SPI pins analog | 2.2 s | reason 1 | 9 of 9 boots |
 
 The DTM's reason codes are: 2, updater by ACI command; 3, bad BLUE flag;
@@ -387,8 +388,9 @@ away with a 5 ms pulse because it resets only after the chip has been held
 in reset since boot, and it never sends `HCI_Reset`. Consequences for a
 driver:
 
-- **It must never send `HCI_Reset`.** Zephyr's `no-reset` quirk and
-  STM32duinoBLE do the same.
+- **It must not send `HCI_Reset` with the SPI lines driven.** With them
+  released from its Command Complete on, the chip restarts normally
+  (mode 8); PebbleOS's transport sends none anyway, as nothing needs it.
 - **It must check the start event's reason**, and restart with the mode 6
   sequence until it gets reason 1.
 - **It must leave the SPI lines undriven while RESET is low**, CS too, and
@@ -440,6 +442,7 @@ central, 2026-11-27):
 |---|---|
 | Mode on, then `aci_gatt_init` and `aci_gap_init` or not; NimBLE as host (4 runs) | LE Enhanced Connection Complete, a Data Length Change (251 bytes), then nothing from the chip but HCI events for 22 s: no ACL, no vendor event. The host's first ACL packet, 15 bytes, gets no Number Of Completed Packets. The central's service discovery times out and it disconnects. |
 | Mode off, `aci_gatt_init` and `aci_gap_init` (1 run) | The central discovers the chip's own GAP and GATT services in 1 s, reads Appearance, Device Name (empty) and the preferred connection parameters, and writes the Service Changed CCCD: the chip's stack answers. NimBLE's ACL packet gets no completion either. |
+| Mode written after a restart from `HCI_Reset` (mode 8's restart), then `aci_gatt_init` and `aci_gap_init`, as STM32duinoBLE orders them; NimBLE as host (1 run) | The same as with the mode on: no ACL, discovery timed out (decision 261127-233959-01). |
 
 So the mode turns the chip's host off, but does not route the link's data
 to the SPI. ST's community forum has the same report for the stock DTM,
