@@ -102,9 +102,16 @@ int pbl_accel_set_num_samples(const struct pbl_accel *accel, uint32_t num_sample
 
   pbl_accel_lock(accel);
   ret = accel->ops->set_num_samples(accel, num_samples);
+  if (ret == 0) {
+    accel->state->num_samples = num_samples;
+  }
   pbl_accel_unlock(accel);
 
   return ret;
+}
+
+uint32_t pbl_accel_get_num_samples(const struct pbl_accel *accel) {
+  return accel->state->num_samples;
 }
 
 uint32_t pbl_accel_get_max_num_samples(const struct pbl_accel *accel) {
