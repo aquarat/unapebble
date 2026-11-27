@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 The unapebble authors
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: st,bluenrg-2
+config: BT_HCI_BLUENRG2
+class: bt_hci
+define: PBL_BT_HCI_BLUENRG2_DEFINE
+args:
+  - name: true
+  - parent: spi
+  - reg: 0
+  - prop: spi-max-frequency
+  - flags:
+      spi-cpha: PBL_SPI_CPHA
+      spi-cpol: PBL_SPI_CPOL
+  - gpio: irq
+  - gpio: reset
