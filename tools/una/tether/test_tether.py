@@ -20,6 +20,7 @@ import unittest
 import zlib
 
 import bridge
+import console
 import tether
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -76,6 +77,7 @@ class Constants(unittest.TestCase):
             "TETHER_STUB_RAM": tether.STUB_RAM,
             "TETHER_STUB_RAM_SIZE": tether.STUB_RAM_SIZE,
             "TETHER_FLASH_PAGE": tether.FLASH_PAGE,
+            "TETHER_INFO_PEBBLEOS": tether.INFO_PEBBLEOS,
             "TETHER_FLASH_PROG_ALIGN": tether.FLASH_PROG_ALIGN,
             "TETHER_BLOB_MAGIC": tether.BLOB_MAGIC,
             "TETHER_FAULT_MAGIC": tether.FAULT_MAGIC,
@@ -317,6 +319,106 @@ class Simulated(unittest.TestCase):
         self.t.reset(tether.RESET_POWER_OFF)
 
 
+class Ports(unittest.TestCase):
+    """Telling the stub's port from PebbleOS's two."""
+
+    def test_classify(self):
+        self.assertEqual(tether.classify(0x1209, 0x0001, 0), "stub")
+        self.assertEqual(tether.classify(0x1209, 0x0002, 0), "console")
+        self.assertEqual(tether.classify(0x1209, 0x0002, 2), "tether")
+        self.assertIsNone(tether.classify(0x1209, 0x0002, 1))
+        self.assertIsNone(tether.classify(0x0483, 0x5740, 0))
+
+    def test_macos_names_without_ioreg(self):
+        real = tether.glob.glob
+        try:
+            tether.glob.glob = lambda pat: ["/dev/cu.usbmodem1234"]
+            self.assertEqual(tether._guess_macos_names("tether"), ["/dev/cu.usbmodem1234"])
+            self.assertEqual(tether._guess_macos_names("console"), [])
+            tether.glob.glob = lambda pat: ["/dev/cu.usbmodemAB121", "/dev/cu.usbmodemAB123"]
+            self.assertEqual(tether._guess_macos_names("tether"), ["/dev/cu.usbmodemAB123"])
+            self.assertEqual(tether._guess_macos_names("console"), ["/dev/cu.usbmodemAB121"])
+        finally:
+            tether.glob.glob = real
+
+
+class FakeShell(threading.Thread):
+    """PebbleOS's shell as the console port shows it: echo, CR LF, a prompt, logs between."""
+
+    def __init__(self, rfd, wfd):
+        super().__init__(daemon=True)
+        self.rfd, self.wfd = rfd, wfd
+        self.active = False
+        self.line = b""
+        self.stop = False
+
+    def out(self, data):
+        os.write(self.wfd, data)
+
+    def run(self):
+        while not self.stop:
+            try:
+                data = os.read(self.rfd, 1)
+            except OSError:
+                return
+            if not data:
+                return
+            if not self.active:
+                self.active = True
+                self.out(b"\r\npebble> ")
+            c = data
+            if c == b"\x03":
+                self.line = b""
+                self.out(b"^C\r\npebble> ")
+            elif c == b"\r":
+                self.out(b"\r\n")
+                cmd, self.line = self.line.decode(), b""
+                if cmd == "battery status":
+                    self.out(b"\r\x1b[K[INFO] a log line\r\n")
+                    self.out(b"Charge: 50%\r\nVoltage: 4000 mV\r\n")
+                    self.out(b"pebble> ")
+                elif cmd == "reboot":
+                    self.out(b"Restarting\r\n")
+                else:
+                    self.out(f"error: unknown command '{cmd}'\r\npebble> ".encode())
+            else:
+                self.line += c
+                self.out(c)
+
+
+class Console(unittest.TestCase):
+    def setUp(self):
+        to_shell_r, to_shell_w = os.pipe()
+        from_shell_r, from_shell_w = os.pipe()
+        self.shell = FakeShell(to_shell_r, from_shell_w)
+        self.shell.start()
+        self.fds = (to_shell_r, to_shell_w, from_shell_r, from_shell_w)
+        self.con = console.Console(tether.PipeTransport(from_shell_r, to_shell_w, "shell"))
+
+    def tearDown(self):
+        self.shell.stop = True
+        for fd in self.fds:
+            os.close(fd)
+
+    def test_command(self):
+        self.assertTrue(self.con.prompt())
+        out, ok = self.con.run("battery status", 5.0)
+        self.assertTrue(ok)
+        self.assertEqual(out, "[INFO] a log line\nCharge: 50%\nVoltage: 4000 mV\n")
+
+    def test_unknown_and_reboot(self):
+        self.assertTrue(self.con.prompt())
+        out, ok = self.con.run("nope", 5.0)
+        self.assertTrue(ok)
+        self.assertIn("unknown command", out)
+        out, ok = self.con.run("reboot", 5.0)
+        self.assertTrue(ok)
+        self.assertIn("Restarting", out)
+
+    def test_clean(self):
+        self.assertEqual(console.clean("pebble> \r\x1b[Klog\r\npebble> "), "log\npebble> ")
+
+
 def have_pty():
     try:
         m, s = pty.openpty()
@@ -396,6 +498,54 @@ class OverSerialAndTcp(unittest.TestCase):
         self.assertEqual(r.stdout.strip(), "00 c8")
         r = run("gpio", "PF3", "od-low")
         self.assertIn("PF3 = 0", r.stdout)
+
+
+@unittest.skipUnless(os.access(SIM, os.X_OK), f"no simulator at {SIM}: make sim")
+@unittest.skipUnless(have_pty(), "no pseudo-terminals here")
+class PebbleOS(unittest.TestCase):
+    """The simulator answering as PebbleOS does, a slot build that resets into the stub."""
+
+    def setUp(self):
+        self.master, self.slave = pty.openpty()
+        self.slave_path = os.ttyname(self.slave)
+        tether._raw_tty(self.slave)
+        env = {**os.environ, "TETHER_SIM_PEBBLEOS": "1"}
+        self.proc = subprocess.Popen([SIM], stdin=self.master, stdout=self.master,
+                                     stderr=subprocess.DEVNULL, env=env)
+
+    def tearDown(self):
+        self.proc.kill()
+        self.proc.wait(5)
+        os.close(self.slave)
+        os.close(self.master)
+
+    def test_info_and_refusals(self):
+        t = tether.Tether(tether.SerialTransport(self.slave_path))
+        i = t.info()
+        self.assertTrue(tether.is_pebbleos(i))
+        self.assertEqual(i["version"], "PebbleOS sim")
+        t.write32(0x20200000, 0x55AA55AA)
+        self.assertEqual(t.read32(0x20200000), 0x55AA55AA)
+        with self.assertRaises(tether.TetherError) as e:
+            t.flash_erase(tether.SLOT_BASE, tether.FLASH_PAGE)
+        self.assertEqual(e.exception.status, tether.ERR_UNSUPPORTED)
+        self.assertEqual(t.call(tether.LOAD_BASE + 0x31)[0], tether.ERR_UNSUPPORTED)
+        t.t.close()
+
+    def test_flash_goes_through_the_stub(self):
+        path = os.path.join(HERE, "build", "test_slot.bin")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        img = image(0x3000)
+        with open(path, "wb") as f:
+            f.write(img)
+        r = subprocess.run(["python3", os.path.join(HERE, "tether.py"), "--port", self.slave_path,
+                            "flash", path], capture_output=True, text=True, timeout=60, check=False)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("resetting it to the stub", r.stderr)
+        t = tether.Tether(tether.SerialTransport(self.slave_path))
+        self.assertFalse(tether.is_pebbleos(t.info()))
+        self.assertEqual(t.crc32(tether.SLOT_BASE, len(img)), zlib.crc32(img))
+        t.t.close()
 
 
 if __name__ == "__main__":

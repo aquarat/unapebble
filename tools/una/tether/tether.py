@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 The unapebble authors
 # SPDX-License-Identifier: Apache-2.0
-"""Drive the UNA Watch tether stub over USB (its CDC-ACM port) or TCP.
+"""Drive the UNA Watch tether stub, or PebbleOS's USB developer access, over USB or TCP.
 
 The stub (tools/una/tether/stub) runs from 0x08060000 and answers framed
 commands: memory and registers, I2C, GPIO, running blobs loaded into SRAM,
 and flashing and booting a PebbleOS image in the slot at 0x08080000.
-Standard library only. See docs/boards/unawatch/tether.md.
+PebbleOS with its USB developer access on answers the same protocol on the
+second of its two serial ports, but for calls and flashing: `flash` resets it
+to the stub first. Standard library only. See docs/boards/unawatch/tether.md.
 
     tether.py info
     tether.py peek 0x46020c00 4
@@ -17,6 +19,7 @@ Standard library only. See docs/boards/unawatch/tether.md.
 import argparse
 import glob
 import os
+import re
 import select
 import socket
 import struct
@@ -110,6 +113,10 @@ FAULT_TIMEOUT = 0x200
 
 USB_VID = 0x1209
 USB_PID = 0x0001
+# PebbleOS's developer access: the console on interface 0, the tether protocol on interface 2
+USB_PID_PEBBLEOS = 0x0002
+PEBBLEOS_CONSOLE_IFACE = 0
+PEBBLEOS_TETHER_IFACE = 2
 
 FAULT_FIELDS = (
     "magic exc exc_return cfsr hfsr mmfar bfar afsr r0 r1 r2 r3 r12 lr pc xpsr sp "
@@ -133,7 +140,9 @@ CALL_RESULT_SIZE = struct.calcsize(CALL_RESULT_FMT)
 BLOB_HEADER_FMT = "<6I24s"
 BLOB_HEADER_SIZE = struct.calcsize(BLOB_HEADER_FMT)
 
-INFO_FLAGS = ["pll", "hse", "lse", "display", "boot-fault", "slot-valid", "usb-fs-forced", "flash-ok"]
+INFO_FLAGS = ["pll", "hse", "lse", "display", "boot-fault", "slot-valid", "usb-fs-forced", "flash-ok",
+              "pebbleos"]
+INFO_PEBBLEOS = 1 << 8
 USB_STATES = ["off", "waiting", "reset", "configured", "open", "suspended", "error"]
 RESET_FLAGS = {25: "OBL", 26: "PIN", 27: "BOR", 28: "SFT", 29: "IWDG", 30: "WWDG", 31: "LPWR"}
 EXC_NAMES = {2: "NMI", 3: "HardFault", 4: "MemManage", 5: "BusFault", 6: "UsageFault",
@@ -254,7 +263,9 @@ class SerialTransport:
         return data
 
     def close(self):
-        os.close(self.fd)
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
 
 
 class TcpTransport:
@@ -311,25 +322,97 @@ class PipeTransport:
         pass
 
 
-def find_ports():
-    """The stub's ports on this machine: by USB IDs on Linux, by name on macOS."""
+def _read(path):
+    with open(path) as f:
+        return f.read()
+
+
+def _linux_ports():
+    """(path, vid, pid, interface) of each CDC-ACM port, from sysfs."""
     found = []
     for tty in sorted(glob.glob("/sys/class/tty/ttyACM*")):
         dev = os.path.realpath(os.path.join(tty, "device"))
+        try:
+            iface = int(_read(os.path.join(dev, "bInterfaceNumber")), 16)
+        except (OSError, ValueError):
+            iface = None
         for d in (os.path.dirname(dev), os.path.dirname(os.path.dirname(dev))):
             try:
-                vid = int(open(os.path.join(d, "idVendor")).read(), 16)
-                pid = int(open(os.path.join(d, "idProduct")).read(), 16)
-            except OSError:
+                vid = int(_read(os.path.join(d, "idVendor")), 16)
+                pid = int(_read(os.path.join(d, "idProduct")), 16)
+            except (OSError, ValueError):
                 continue
-            if (vid, pid) == (USB_VID, USB_PID):
-                found.append("/dev/" + os.path.basename(tty))
+            found.append(("/dev/" + os.path.basename(tty), vid, pid, iface))
             break
-    if not found:
-        found = sorted(glob.glob("/dev/serial/by-id/*UNA_Watch_tether*"))
-    if not found:
-        found = sorted(glob.glob("/dev/cu.usbmodem*"))
     return found
+
+
+def _macos_ports():
+    """(path, vid, pid, interface) of each USB serial port, from ioreg's tree of USB devices."""
+    import subprocess
+
+    try:
+        out = subprocess.run(["ioreg", "-r", "-l", "-w0", "-c", "IOUSBHostDevice"],
+                             capture_output=True, text=True, timeout=5, check=False).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    found, vid, pid, iface = [], None, None, None
+    for line in out.splitlines():
+        m = re.search(r'"(idVendor|idProduct|bInterfaceNumber|IOCalloutDevice)" = (\S+)', line)
+        if not m:
+            continue
+        key, value = m.group(1), m.group(2).strip('"')
+        if key == "idVendor":
+            vid, iface = int(value), None
+        elif key == "idProduct":
+            pid = int(value)
+        elif key == "bInterfaceNumber":
+            iface = int(value)
+        elif value.startswith("/dev/cu."):
+            found.append((value, vid, pid, iface))
+    return found
+
+
+def classify(vid, pid, iface):
+    """What a port is: "stub", "console" or "tether" (PebbleOS's), or None."""
+    if vid != USB_VID:
+        return None
+    if pid == USB_PID:
+        return "stub"
+    if pid == USB_PID_PEBBLEOS:
+        return {PEBBLEOS_CONSOLE_IFACE: "console", PEBBLEOS_TETHER_IFACE: "tether"}.get(iface)
+    return None
+
+
+def find_ports(role="tether"):
+    """The ports on this machine for a role: "tether", the stub's port or PebbleOS's tether port,
+    whichever is there; or "console", PebbleOS's console. By USB IDs and interface on Linux and
+    macOS (ioreg), by name otherwise."""
+    wanted = ("stub", "tether") if role == "tether" else ("console",)
+    listed = _linux_ports() if sys.platform.startswith("linux") else _macos_ports()
+    found = [path for path, vid, pid, iface in listed if classify(vid, pid, iface) in wanted]
+    if found or listed:
+        return found
+    if role == "tether":
+        found = sorted(glob.glob("/dev/serial/by-id/*UNA_Watch_tether*"))
+        found += sorted(glob.glob("/dev/serial/by-id/*UNA_Watch_PebbleOS*-if02"))
+    else:
+        found = sorted(glob.glob("/dev/serial/by-id/*UNA_Watch_PebbleOS*-if00"))
+    if not found:
+        found = _guess_macos_names(role)
+    return found
+
+
+def _guess_macos_names(role):
+    """Without ioreg: one usbmodem port is the stub's; two of a device, ending in 1 and 3, are
+    PebbleOS's console and tether ports, the interface number plus 1 ending their names."""
+    ports = sorted(glob.glob("/dev/cu.usbmodem*"))
+    if len(ports) == 1:
+        return ports if role == "tether" else []
+    pairs = [p for p in ports if p.endswith("1") and p[:-1] + "3" in ports]
+    if len(pairs) == 1:
+        return [pairs[0][:-1] + "3"] if role == "tether" else pairs
+    return []
 
 
 def open_transport(port=None, tcp=None):
@@ -341,10 +424,14 @@ def open_transport(port=None, tcp=None):
         ports = find_ports()
         if len(ports) != 1:
             raise SystemExit(
-                "tether: no stub port found" if not ports
+                "tether: no stub or PebbleOS tether port found" if not ports
                 else f"tether: several ports, pick one with --port: {' '.join(ports)}")
         port = ports[0]
     return SerialTransport(port)
+
+
+def is_pebbleos(info):
+    return bool(info["flags"] & INFO_PEBBLEOS)
 
 
 # The client
@@ -615,7 +702,8 @@ def cmd_info(t, args):
     resets = [n for b, n in RESET_FLAGS.items() if i["reset_csr"] & (1 << b)]
     speed = {1: "full speed", 2: "high speed"}.get(i["usb_speed"], "?")
     state = USB_STATES[i["usb_state"]] if i["usb_state"] < len(USB_STATES) else i["usb_state"]
-    print(f"stub      {i['version']} (protocol {i['proto_version']}), up {i['uptime_ms'] / 1000:.1f} s")
+    who = "firmware" if is_pebbleos(i) else "stub    "
+    print(f"{who}  {i['version']} (protocol {i['proto_version']}), up {i['uptime_ms'] / 1000:.1f} s")
     print(f"chip      IDCODE {i['idcode']:#010x} (dev {i['idcode'] & 0xfff:#05x}, rev {i['idcode'] >> 16:#06x}), "
           f"{i['flash_kb']} KiB flash, OPTR {i['optr']:#010x}")
     print(f"uid       {i['uid0']:08x} {i['uid1']:08x} {i['uid2']:08x}")
@@ -624,9 +712,14 @@ def cmd_info(t, args):
     print(f"usb       {state}, {speed}" + (f", init failed at step {i['usb_error']}" if i["usb_error"] else ""))
     print(f"flags     {' '.join(flags)}")
     print(f"buttons   {i['buttons']:#x}")
-    print(f"blobs     load {i['load_base']:#010x}..{i['load_end']:#010x}, stack top {i['blob_stack_top']:#010x}, "
-          f"output {i['out_buf']:#010x} ({i['out_len']}/{i['out_size']}), api {i['api']:#010x}")
-    print(f"slot      {i['slot_base']:#010x}..{i['slot_end']:#010x}")
+    if is_pebbleos(i):
+        print("blobs     not under PebbleOS: `reset` goes back to the stub in a slot build")
+        if i["slot_base"]:
+            print(f"slot      running from {i['slot_base']:#010x}")
+    else:
+        print(f"blobs     load {i['load_base']:#010x}..{i['load_end']:#010x}, stack top {i['blob_stack_top']:#010x}, "
+              f"output {i['out_buf']:#010x} ({i['out_len']}/{i['out_size']}), api {i['api']:#010x}")
+        print(f"slot      {i['slot_base']:#010x}..{i['slot_end']:#010x}")
     print(f"commands  {i['cmd_count']}, {i['err_count']} failed")
     for key, label in (("boot_fault", "boot fault"), ("last_fault", "last fault")):
         if i[key]:
@@ -753,12 +846,36 @@ def cmd_flash(t, args):
     def progress(what, done, total):
         print(f"\r{what} {done * 100 // total:3d}%", end="", file=sys.stderr, flush=True)
 
+    if is_pebbleos(t.info()):
+        print("PebbleOS answers: resetting it to the stub", file=sys.stderr)
+        t = to_stub(t, args)
     t0 = time.monotonic()
     n = t.flash_image(image, args.addr, progress)
     print(f"\r{n} bytes at {args.addr:#010x}, verified, {time.monotonic() - t0:.1f} s", file=sys.stderr)
     if args.boot:
         t.boot(args.addr)
         print("booting", file=sys.stderr)
+
+
+def to_stub(t, args, timeout=30.0):
+    """Resets PebbleOS, a slot build, and returns a Tether on the stub once it answers. Over TCP
+    the bridge follows the ports, so the connection stays; a serial port is opened again."""
+    t.reset(RESET_SYSTEM)
+    deadline = time.monotonic() + timeout
+    time.sleep(1.0)
+    while time.monotonic() < deadline:
+        try:
+            if not args.tcp and not os.environ.get("TETHER_TCP"):
+                t.t.close()
+                t = Tether(open_transport(args.port, None), timeout=1.0, verbose=t.verbose)
+            info = t.info()
+            if not is_pebbleos(info):
+                t.timeout = args.timeout
+                return t
+        except (TimeoutError, ConnectionError, OSError, SystemExit, TetherError):
+            pass
+        time.sleep(0.5)
+    raise TimeoutError("the stub did not answer after the reset: is this a slot build?")
 
 
 def cmd_boot(t, args):
@@ -775,7 +892,8 @@ def cmd_clear_fault(t, args):
 
 def build_parser():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--port", help="serial port of the stub (default: found by its USB IDs, $TETHER_PORT)")
+    p.add_argument("--port", help="serial port of the stub or of PebbleOS's tether interface "
+                                  "(default: found by their USB IDs, $TETHER_PORT)")
     p.add_argument("--tcp", help="HOST:PORT of a bridge.py or socat serving the port ($TETHER_TCP)")
     p.add_argument("--timeout", type=float, default=3.0, help="seconds to wait for a reply")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -837,7 +955,8 @@ def build_parser():
     s.add_argument("action", nargs="?", default="get",
                    choices=("get", "high", "low", "od-high", "od-low", "in", "analog"))
     s.add_argument("pull", nargs="?", default="none", choices=("none", "up", "down"))
-    add("reset", cmd_reset, "reset the watch (the bootloader starts the stub again)")
+    add("reset", cmd_reset, "reset the watch (the bootloader starts the stub again; from PebbleOS, "
+                            "only a slot build goes back to it)")
     add("poweroff", cmd_poweroff, "power off through the bootloader")
     s = add("flash", cmd_flash, "program a PebbleOS image linked for the slot")
     s.add_argument("image")
