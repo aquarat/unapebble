@@ -38,6 +38,17 @@ config NIMBLE_HCI_UART
       option; either can be attached to a host controller such as an
       nRF52840 dongle running an H4 HCI firmware.
 
+config NIMBLE_HCI_BLUENRG2
+    bool "ST BlueNRG-2 over SPI"
+    depends on DT_HAS_ST_BLUENRG_2_ENABLED
+    select BT_HCI
+    select BT_HCI_BLUENRG2
+    help
+      Talk H4 HCI to the board's BlueNRG-2 (the bt_hci role) running
+      ST's DTM firmware, in link-layer-only mode, over its SPI protocol.
+      The host's HCI_Reset is answered by the transport, as it would
+      start the chip's updater.
+
 config NIMBLE_HCI_FAKE
     bool "Fake controller"
     help
@@ -49,12 +60,13 @@ endchoice
 
 config NIMBLE_HCI_THREAD_STACK_SIZE
     int "HCI transport thread stack size in bytes"
-    depends on NIMBLE_HCI_SF32LB || NIMBLE_HCI_UART
+    depends on NIMBLE_HCI_SF32LB || NIMBLE_HCI_UART || NIMBLE_HCI_BLUENRG2
+    default 1536 if NIMBLE_HCI_BLUENRG2
     default 1024
 
 config NIMBLE_HCI_THREAD_PRIO
     int "HCI transport thread priority"
-    depends on NIMBLE_HCI_SF32LB || NIMBLE_HCI_UART
+    depends on NIMBLE_HCI_SF32LB || NIMBLE_HCI_UART || NIMBLE_HCI_BLUENRG2
     default 3
 
 config NIMBLE_DRIVER_NRF5X
@@ -89,6 +101,16 @@ config NIMBLE_ID_ADDR_QEMU
       -global pebble-sysctrl.bt-addr=ADDRESS. The controller's address
       is used if none is given.
 
+config NIMBLE_ID_ADDR_BLUENRG2
+    bool "BlueNRG-2 static random address"
+    depends on NIMBLE_HCI_BLUENRG2
+    select NIMBLE_ID_ADDR
+    help
+      The static random address in the BlueNRG-2's configuration data
+      (offset 0x80), read by the transport at each start of the chip:
+      the address the stock firmware of the UNA Watch gives the watch.
+      The chip has no public address.
+
 config NIMBLE_ID_ADDR_POSIX
     bool "Host option"
     depends on SOC_POSIX
@@ -104,3 +126,9 @@ config NIMBLE_ID_ADDR
     help
       An identity address backend is selected (pbl/bluetooth/id_addr.h).
       The HCI transport programs a public one into its controller.
+
+if NIMBLE_HCI_BLUENRG2
+module = NIMBLE_HCI_BLUENRG2
+module-str = BlueNRG-2 HCI transport
+source "subsys/logging/Kconfig.template.log_level"
+endif
