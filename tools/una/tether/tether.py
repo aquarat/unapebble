@@ -356,14 +356,20 @@ def _macos_ports():
                              capture_output=True, text=True, timeout=5, check=False).stdout
     except (OSError, subprocess.SubprocessError):
         return []
+    # Each interface repeats the device's IDs after its bInterfaceNumber, so only a new device
+    # node starts afresh. The callout device hangs off a CDC data interface, the one after its
+    # control interface, which classify() takes for its function.
     found, vid, pid, iface = [], None, None, None
     for line in out.splitlines():
+        if "<class IOUSBHostDevice" in line:
+            vid, pid, iface = None, None, None
+            continue
         m = re.search(r'"(idVendor|idProduct|bInterfaceNumber|IOCalloutDevice)" = (\S+)', line)
         if not m:
             continue
         key, value = m.group(1), m.group(2).strip('"')
         if key == "idVendor":
-            vid, iface = int(value), None
+            vid = int(value)
         elif key == "idProduct":
             pid = int(value)
         elif key == "bInterfaceNumber":
@@ -380,7 +386,9 @@ def classify(vid, pid, iface):
     if pid == USB_PID:
         return "stub"
     if pid == USB_PID_PEBBLEOS:
-        return {PEBBLEOS_CONSOLE_IFACE: "console", PEBBLEOS_TETHER_IFACE: "tether"}.get(iface)
+        # A CDC function's control interface, or its data interface just after it (macOS)
+        control = None if iface is None else iface & ~1
+        return {PEBBLEOS_CONSOLE_IFACE: "console", PEBBLEOS_TETHER_IFACE: "tether"}.get(control)
     return None
 
 

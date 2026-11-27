@@ -326,8 +326,41 @@ class Ports(unittest.TestCase):
         self.assertEqual(tether.classify(0x1209, 0x0001, 0), "stub")
         self.assertEqual(tether.classify(0x1209, 0x0002, 0), "console")
         self.assertEqual(tether.classify(0x1209, 0x0002, 2), "tether")
-        self.assertIsNone(tether.classify(0x1209, 0x0002, 1))
+        # macOS names a CDC function's port after its data interface, the one after the control
+        self.assertEqual(tether.classify(0x1209, 0x0002, 1), "console")
+        self.assertEqual(tether.classify(0x1209, 0x0002, 3), "tether")
+        self.assertIsNone(tether.classify(0x1209, 0x0002, 4))
         self.assertIsNone(tether.classify(0x0483, 0x5740, 0))
+
+    def test_macos_ioreg(self):
+        # As ioreg prints it: each interface repeats the device's IDs after bInterfaceNumber
+        tree = """+-o UNA Watch PebbleOS@01100000  <class IOUSBHostDevice, id 0x1>
+  |   "idProduct" = 2
+  |   "idVendor" = 4617
+  +-o IOUSBHostInterface@1  <class IOUSBHostInterface, id 0x2>
+  | |   "idProduct" = 2
+  | |   "bInterfaceNumber" = 1
+  | |   "idVendor" = 4617
+  |         "IOCalloutDevice" = "/dev/cu.usbmodemX1"
+  +-o IOUSBHostInterface@3  <class IOUSBHostInterface, id 0x3>
+  | |   "idProduct" = 2
+  | |   "bInterfaceNumber" = 3
+  | |   "idVendor" = 4617
+  |         "IOCalloutDevice" = "/dev/cu.usbmodemX3"
++-o Other@02100000  <class IOUSBHostDevice, id 0x4>
+  |   "idProduct" = 4372
+  |   "idVendor" = 1452
+"""
+        import subprocess
+        real = subprocess.run
+        try:
+            subprocess.run = lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=tree)
+            ports = tether._macos_ports()
+        finally:
+            subprocess.run = real
+        self.assertEqual(ports, [("/dev/cu.usbmodemX1", 4617, 2, 1),
+                                 ("/dev/cu.usbmodemX3", 4617, 2, 3)])
+        self.assertEqual([tether.classify(*p[1:]) for p in ports], ["console", "tether"])
 
     def test_macos_names_without_ioreg(self):
         real = tether.glob.glob
