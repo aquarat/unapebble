@@ -15,7 +15,7 @@ void test_pca9420__unawatch(void) {
   cl_assert_equal_i(s_regs[2], 0x08); // ICHG_LOW 8 mA
   cl_assert_equal_i(s_regs[3], 0x04); // ICHG_DEAD 4 mA, 5 s
   cl_assert_equal_i(s_regs[4], 0x66); // VBAT_RESTART 240 mV, VBAT_REG 4.36 V
-  cl_assert_equal_i(s_regs[5], 0x95); // 5 h, 30 min, 6.4 min
+  cl_assert_equal_i(s_regs[5], 0x15); // 5 h, 30 min, 6.4 min; bit 7 clear (ship-mode flag)
 }
 
 void test_pca9420__rounds_down(void) {

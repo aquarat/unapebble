@@ -79,9 +79,11 @@ enum pca9420_chg_state {
 // CHG_CNTL5 VBAT_RESTART, bit 6: recharge 240 mV below VBAT_REG rather than 140 mV
 #define PCA9420_CHG_CNTL5_RESTART_240MV (1U << 6)
 
-// CHG_CNTL6: 10 kOhm NTC bias (unused, NTC off), timers not doubled, 5 h fast charge timer,
-// 30 min pre-qualification timer, 6.4 min top-off timer
-#define PCA9420_CHG_CNTL6_VALUE ((1U << 7) | (0U << 6) | (1U << 4) | (1U << 2) | (1U << 0))
+// CHG_CNTL6: timers not doubled, 5 h fast charge timer, 30 min pre-qualification timer, 6.4 min
+// top-off timer. Bit 7, the NTC bias, stays clear: the NTC is off, and the stock bootloader reads
+// the bit at boot as a request for ship mode (hardware.md, section 9.6), so with it set a reset on
+// battery could leave the watch looking dead. Clear is also what the bootloader leaves.
+#define PCA9420_CHG_CNTL6_VALUE ((0U << 7) | (0U << 6) | (1U << 4) | (1U << 2) | (1U << 0))
 
 //! The charge registers, CHG_CNTL1 to CHG_CNTL6, for a charge current, a termination current
 //! and a charge voltage. Every value rounds down, so the charger never exceeds what is asked.
