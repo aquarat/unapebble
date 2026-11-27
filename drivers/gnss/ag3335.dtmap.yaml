@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 The unapebble authors
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: airoha,ag3335m
+config: GNSS_AG3335
+class: gnss
+define: PBL_GNSS_AG3335_DEFINE
+args:
+  - parent: uart
+  - gpio: enable
