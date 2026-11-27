@@ -100,6 +100,22 @@ config DISPLAY_JDI_GPIO
       Support for a memory-in-pixel panel on the JDI parallel interface
       clocked by the CPU on STM32 GPIO, as on the UNA Watch.
 
+config DISPLAY_JDI_GPIO_THREAD_PRIO
+    int "Priority of the thread clocking the frames out"
+    default 1
+    depends on DISPLAY_JDI_GPIO
+    help
+      The thread that clocks each frame out, some 60 ms of busy-waiting,
+      in the background. Below the thread that updates the display, so
+      that animations do not take the CPU from the threads below it; at
+      the background work queue's by default, which shares the CPU with
+      it.
+
+config DISPLAY_JDI_GPIO_THREAD_STACK_SIZE
+    int "Stack size of the thread clocking the frames out"
+    default 1024
+    depends on DISPLAY_JDI_GPIO
+
 config DISPLAY_QEMU
     bool "QEMU framebuffer display"
     default y

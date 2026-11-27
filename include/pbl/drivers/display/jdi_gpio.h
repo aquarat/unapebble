@@ -8,6 +8,8 @@
 #include <pbl/drivers/display.h>
 #include <pbl/drivers/gpio.h>
 #include <pbl/drivers/panel.h>
+#include <pbl/kernel/sem.h>
+#include <pbl/kernel/thread.h>
 
 /**
  * @defgroup drivers_display_jdi_gpio JDI parallel interface on GPIO
@@ -16,10 +18,12 @@
  * on GPIO.
  *
  * For a SoC without a controller generating the interface: the CPU clocks every frame out on
- * STM32 GPIO, the data pins on one port, as the UNA Watch firmware does. A frame takes about 40
- * ms, during which the updating thread busy-waits, preemptible; an update is always the whole
- * frame and completes before pbl_display_update() returns. The panel, from its port, powers up
- * and drives VCOM.
+ * STM32 GPIO, the data pins on one port, as the UNA Watch firmware does. A frame takes about 60
+ * ms of busy-waiting, which a thread of the driver does in the background, as a controller's DMA
+ * would, at @c CONFIG_DISPLAY_JDI_GPIO_THREAD_PRIO: below the updating thread, so that a stream of
+ * frames does not take the CPU from the threads of lower priority. An update is always the whole
+ * frame, reported to the callback from that thread. The panel, from its port, powers up and
+ * drives VCOM.
  *
  * The framebuffer may be larger than the image of the panel, which then shows its centre: the
  * round mask hides the rest, with the panel's own mask. The panel is mounted turned by its
@@ -48,6 +52,11 @@ struct pbl_display_jdi_gpio_state {
   uint32_t *msb;
   uint32_t *lsb;
   uint16_t rotation;
+  /** The frame the thread sends next, given when start is. */
+  const uint8_t *fb;
+  uint32_t pitch;
+  struct pbl_sem start;
+  struct pbl_thread thread;
 };
 /** @endcond */
 
@@ -73,6 +82,9 @@ struct pbl_display_jdi_gpio {
   struct pbl_gpio vst, vck, enb, xrst, hst, hck;
   /** R1, R2, G1, G2, B1 and B2, on one port. */
   struct pbl_gpio data[6];
+  /** Stack of the thread sending the frames. */
+  uint8_t *stack;
+  size_t stack_size;
 };
 
 /** @cond INTERNAL_HIDDEN */
@@ -111,6 +123,7 @@ extern const struct pbl_display_ops pbl_display_jdi_gpio_ops;
                 "rotation of 0, 90, 180 or 270 degrees");                                           \
   static_assert(((_hactive) % 2) == 0, "pixels go in pairs");                                       \
   PBL_DISPLAY_STATE_DEFINE(sym);                                                                    \
+  PBL_THREAD_STACK_DEFINE(sym##_stack, CONFIG_DISPLAY_JDI_GPIO_THREAD_STACK_SIZE);                  \
   static uint32_t sym##_planes[2][(_hactive) / 2];                                                  \
   static struct pbl_display_jdi_gpio_state sym##_jdi_state = {                                      \
     .msb = sym##_planes[0],                                                                         \
@@ -127,7 +140,7 @@ extern const struct pbl_display_ops pbl_display_jdi_gpio_ops;
     .state = &sym##_jdi_state, .panel = (_panel), .panel_mask = (_round_mask),                      \
     .fb_mask = sym##_fb_mask, .hactive = (_hactive), .vactive = (_vactive),                         \
     .rotation = (_rotation), .vst = _vst, .vck = _vck, .enb = _enb, .xrst = _xrst, .hst = _hst,     \
-    .hck = _hck, .data = {__VA_ARGS__},                                                             \
+    .hck = _hck, .data = {__VA_ARGS__}, .stack = sym##_stack, .stack_size = sizeof(sym##_stack),    \
   }
 
 /** @} */
