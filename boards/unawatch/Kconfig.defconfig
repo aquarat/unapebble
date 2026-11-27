@@ -37,6 +37,13 @@ config FLASH_STM32U5
 config GAUGE
     default y if !BOARD_UNAWATCH_LAB
 
+# The sensors' shell commands, in the builds with a shell: imu, bmi270, pressure
+config IMU_SHELL
+    default y
+
+config PRESSURE_SHELL
+    default y
+
 # The GNSS receiver, the AG3335M on LPUART1, powered only while something uses it, with its shell
 # commands in builds that have a shell. Not in the experiments firmware.
 config GNSS

@@ -162,6 +162,8 @@ struct pbl_accel_state {
   bool shake_detection;
   /** Double tap detection enabled. */
   bool double_tap_detection;
+  /** Samples batched, as last set. */
+  uint32_t num_samples;
 };
 
 /** @brief An accelerometer. */
@@ -290,6 +292,14 @@ uint32_t pbl_accel_get_sampling_interval(const struct pbl_accel *accel);
  * @return 0 on success, or a negative errno.
  */
 int pbl_accel_set_num_samples(const struct pbl_accel *accel, uint32_t num_samples);
+
+/**
+ * @brief Get the number of samples batched, as last set with pbl_accel_set_num_samples().
+ *
+ * @param accel Accelerometer.
+ * @return Number of samples, 0 when not batching.
+ */
+uint32_t pbl_accel_get_num_samples(const struct pbl_accel *accel);
 
 /**
  * @brief Get the maximum number of samples the driver can batch.

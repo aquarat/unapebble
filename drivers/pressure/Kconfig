@@ -25,6 +25,24 @@ config PRESSURE_BMP390
       Support for the Bosch BMP380 and BMP390 barometric pressure sensors
       (devicetree compatible bosch,bmp380).
 
+config PRESSURE_MS5837
+    bool "TE Connectivity MS5837-02BA"
+    default y
+    depends on DT_HAS_MEAS_MS5837_ENABLED
+    select I2C
+    help
+      Support for the TE Connectivity (Measurement Specialties) MS5837-02BA
+      pressure sensor (devicetree compatible meas,ms5837).
+
+config PRESSURE_MS5837_OSR
+    int "Oversampling, as OSR 256 << n"
+    depends on PRESSURE_MS5837
+    range 0 5
+    default 4
+    help
+      The oversampling of each conversion, from 256 (0) to 8192 (5): the
+      default, 4096, takes 9 ms a conversion, two a read.
+
 module = DRIVER_PRESSURE
 module-str = Pressure sensor
 source "subsys/logging/Kconfig.template.log_level"

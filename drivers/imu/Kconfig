@@ -19,6 +19,17 @@ menuconfig ACCEL
 
 if ACCEL
 
+config ACCEL_BMI270
+    bool "Bosch BMI270"
+    default y
+    depends on DT_HAS_BOSCH_BMI270_ENABLED
+    select GPIO
+    select I2C
+    select KERNEL_SYS_WORKQ_HIGH
+    help
+      Support for the accelerometer of the Bosch BMI270 IMU, with
+      Bosch's configuration file for its feature engine.
+
 config ACCEL_LIS2DW12
     bool "ST LIS2DW12"
     default y
@@ -126,6 +137,47 @@ config ACCEL_LSM6DSO_SCALE_MG
 
 endif # ACCEL_LSM6DSO
 
+if ACCEL_BMI270
+
+config ACCEL_BMI270_SCALE_MG
+    int "Full-scale range (mg)"
+    default 4000
+    help
+      Acceleration full-scale range in mg (2000, 4000, 8000 or 16000).
+
+config ACCEL_BMI270_AVG_LOG2
+    int "Samples averaged, as a power of 2"
+    range 0 7
+    default 2
+    help
+      The low power mode's averaging, from 1 sample (0) to 128 (7): more
+      samples, less noise and more current.
+
+config ACCEL_BMI270_SHAKE_MIN_MG
+    int "Shake threshold at the highest sensitivity (mg)"
+    range 1 999
+    default 32
+    help
+      Any-motion threshold at 100% shake sensitivity and in high
+      sensitivity mode.
+
+config ACCEL_BMI270_SHAKE_MAX_MG
+    int "Shake threshold at the lowest sensitivity (mg)"
+    range 2 999
+    default 999
+    help
+      Any-motion threshold at 0% shake sensitivity.
+
+config ACCEL_BMI270_SHAKE_DURATION
+    int "Shake duration (20 ms samples)"
+    range 1 8191
+    default 2
+    help
+      Samples of the feature engine's 50 Hz above the threshold that
+      make a shake.
+
+endif # ACCEL_BMI270
+
 menuconfig MAG
     bool "Magnetometer"
     help
@@ -133,6 +185,24 @@ menuconfig MAG
       the magnetometer it has and exports it as MAG.
 
 if MAG
+
+config MAG_BMM350
+    bool "Bosch BMM350"
+    default y
+    depends on DT_HAS_BOSCH_BMM350_ENABLED
+    select I2C
+    select KERNEL_SYS_WORKQ_HIGH
+    help
+      Support for the Bosch BMM350 magnetometer.
+
+config MAG_BMM350_AVG_LOG2
+    int "Samples averaged, as a power of 2"
+    depends on MAG_BMM350
+    range 0 3
+    default 2
+    help
+      Samples averaged in each measurement, from 1 (0) to 8 (3), reduced
+      to what the ODR allows: more samples, less noise and more current.
 
 config MAG_MMC5603NJ
     bool "MEMSIC MMC5603NJ"

@@ -25,7 +25,9 @@ MIT licence, below) and the bootloader image published with it. Taken from
 it are register values, timings and sequences, among them those of the
 display (LS012B7DD06A), the haptics (DRV2625), the fuel gauge's cell model
 (MAX17262), the charger (PCA9420), the eMMC (SDMMC), the USB PHY and the
-GNSS receiver (AG3335M: its UART settings and its start-up commands); the
+sensors (the BMI270's interrupt pin, the BMM350's mounting, the MS5837's power
+sequence and checks) and the GNSS receiver (AG3335M: its UART settings and its
+start-up commands); the
 format of its .ota update files (tools/una/pack_ota.py makes the same files);
 the analysis in docs/boards/unawatch/hardware.md, which cites its sources
 file by file; and tools/una/SecurityKeys.pem, the update key every UNA
@@ -61,3 +63,45 @@ unscii-8
 tools/una/tether/stub/font8x8.h holds the glyphs of unscii-8 by Viznut, which
 is in the public domain, converted by tools/una/tether/stub/gen_font.py from
 LVGL's lv_font_unscii_8.c (third_party/lvgl, MIT licence).
+
+
+Bosch Sensortec SensorAPI
+-------------------------
+
+drivers/imu/bmi270/bmi270_config.c is the configuration file of the BMI270,
+"bmi270_config_file" of Bosch Sensortec's BMI270 SensorAPI (bmi270.c, v2.86.1),
+unchanged, which the driver loads into the part. The compensation of the
+BMM350's readings in drivers/imu/bmm350/bmm350_regs.h is ported from its
+BMM350 SensorAPI (bmm350.c, v1.4.0): the layout of the calibration in the
+part's OTP, its scaling and the formulas. Both are under this licence:
+
+    Copyright (c) 2023 Bosch Sensortec GmbH. All rights reserved.
+
+    BSD-3-Clause
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+    FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+    COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+    INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
