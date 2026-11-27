@@ -39,6 +39,7 @@ PBL_LOG_MODULE_DEFINE(dev_usb, CONFIG_DEV_USB_LOG_LEVEL);
 static atomic_bool s_enabled;
 static atomic_bool s_plugged;
 static atomic_bool s_ready;
+static atomic_bool s_held_off;
 static EventServiceInfo s_battery_event_info;
 
 static bool prv_load(void) {
@@ -76,6 +77,9 @@ bool dev_usb_is_forced(void) {
 }
 
 static bool prv_wanted(void) {
+  if (atomic_load(&s_held_off)) {
+    return false;
+  }
   if (dev_usb_is_forced()) {
     return true;
   }
@@ -151,6 +155,11 @@ bool dev_usb_is_connected(void) {
   return pbl_usbd_is_enabled();
 }
 
+void dev_usb_hold_off(bool hold) {
+  atomic_store(&s_held_off, hold);
+  prv_schedule();
+}
+
 // The host sees the device go before the restart, and gets what the console still had to send
 static void prv_sys_off(enum pbl_sys_off_mode mode, void *user_data) {
   if (!pbl_usbd_is_enabled()) {
@@ -191,9 +200,9 @@ static int prv_cmd_reboot(const struct pbl_shell *sh, size_t argc, char **argv) 
 
   if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "menu") == 0) {
     // The bootloader has no flag for its menu: a power-on with the button held 4 s is the way in
-    pbl_shell_print(sh, "Powering off%s", strcmp(argv[1], "menu") == 0
-                                              ? ": hold the power button 4 s to get the menu"
-                                              : "");
+    pbl_shell_print(
+        sh, "Powering off%s",
+        strcmp(argv[1], "menu") == 0 ? ": hold the power button 4 s to get the menu" : "");
     dev_usb_power_off();
   }
 

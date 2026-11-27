@@ -36,4 +36,13 @@ bool dev_usb_is_forced(void);
 /** @brief Whether the device is connected to the bus now. */
 bool dev_usb_is_connected(void);
 
+/**
+ * @brief Keep the USB off for a while whatever the setting, e.g. to measure the power without it.
+ *
+ * Not kept: the setting applies again once released, and after a restart.
+ *
+ * @param hold True to disconnect and power the USB down, false to let it follow the setting.
+ */
+void dev_usb_hold_off(bool hold);
+
 /** @} */
