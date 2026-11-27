@@ -330,6 +330,125 @@ code.
 | PA8 | GPIO, OD at run time, PP low at boot | SENSOR1_RST_L | BLE reset, active low. Held low (BLE off) at boot (`main.cpp:777-780`). |
 | PC0 / PC1 | I2C3 SCL / SDA, AF4 | SENSOR1_SCL / SDA | Module EEPROM only |
 
+#### 2.5.1 The BlueNRG-2's firmware and HCI (measured)
+
+This was measured on the watch on 2026-11-27 with the tether experiment
+`tools/una/tether/experiments/bluenrg2.c`. The experiment bit-bangs the SPI
+protocol on the pins above. Its modes are explained at the top of the file.
+Command opcodes and event layouts come from ST's DTM sources (STSW-BLUENRG1-DK
+3.2.3, `DTM_cmd_db.c`), the BlueNRG-2N datasheet DS13280 (6.5, SPI protocol)
+and Zephyr's `drivers/bluetooth/hci/hci_spi_st.c`. Nothing was written to the
+chip's flash, and no updater command was sent.
+
+**SPI framing (confirmed on the watch).** UNA's driver and DS13280 agree,
+and so did the chip:
+
+- **Write.** Take CS low, wait for IRQ to go high, then exchange 5 bytes:
+  `0x0A 0 0 0 0` out, and `xx WBUF_L WBUF_H RBUF_L RBUF_H` back. Send the
+  packet if WBUF is at least its size. Wait for IRQ to go low, then raise CS.
+- **Read.** When IRQ goes high on its own, do the same with `0x0B` and read
+  RBUF bytes.
+- **Packets.** They are H4 packets with their type byte: `01` command,
+  `04` event, `02` ACL.
+- **Bus speed.** Bit-banged at about 250 kHz, mode 1, it worked first time.
+  The first byte back was `0xff` every time.
+
+**Start-up.** The RESET line rises slowly: it still reads low 50 µs after
+the pin is released. Its pull-up is on the module, since the STM32 pin has
+none.
+
+| Restart | IRQ after | Start event (`aci_blue_initialized_event`) |
+|---|---|---|
+| Restart | IRQ after | Start event (`aci_blue_initialized_event`) | Seen |
+|---|---|---|---|
+| First reset of each experiment run (RESET held low by the stub for a second or more, then a 5 ms pulse) | 2.2 s | `04 ff 03 01 00 01`: reason 1, firmware started properly | every time, 20 runs |
+| `HCI_Reset`: Command Complete with status 0, then the chip restarts by itself | 71 ms | `04 ff 03 01 00 04`: reason 4, **updater mode** | 4 of 4 |
+| A reset of 5 ms to 3 s, straight after a start (normal or updater) | 94 ms | reason 4 | every time, 16 times; MISO pulled up, down or floating made no difference |
+| From updater mode: RESET low, the SPI pins set up again, 2 s, then a 5 ms pulse (mode 6) | 2.2 s | reason 1 | 8 of 8 |
+
+The DTM's reason codes are: 2, updater by ACI command; 3, bad BLUE flag;
+4, updater by boot pin. In ST's DTM the boot pin is the chip's IO3, which
+is the SPI MISO line. On this module the state of MISO doesn't decide it.
+Why the mode 6 sequence recovers and a plain long reset doesn't is **not
+established**. The only difference in code is that the GPIO registers of
+the SPI pins are written during the hold. What PA8 really drives on the
+module is not known: the slow RESET rise and the 2.2 s start look like an
+RC or a supply switch (inferred).
+
+In updater mode, every HCI and ACI command gets Command Status `0x01`
+(unknown command) until a restart that starts normally. Stock UNA gets
+away with a 5 ms pulse because it resets only after the chip has been held
+in reset since boot, and it never sends `HCI_Reset`. Consequences for a
+driver:
+
+- **It must never send `HCI_Reset`.** Zephyr's `no-reset` quirk and
+  STM32duinoBLE do the same.
+- **It must check the start event's reason**, and restart with the mode 6
+  sequence until it gets reason 1.
+
+**What it runs.** After a normal start:
+
+| Query | Answer |
+|---|---|
+| `HCI_Read_Local_Version_Information` (0x1001) | HCI version 0x0B, revision 0x1242, LMP version 0x0B, manufacturer 0x0030 (ST), subversion 0x0013 |
+| `aci_hal_get_fw_build_number` (0xFC00) | 2353 |
+| `aci_hal_get_firmware_details` (0xFC01) | **DTM v3.2.0, SPI variant**; **BLE stack v2.1.3** (ST writes it 2.1c), variant 0x000F (privacy, secure connections, central role, data length extension), build 2353 |
+| `HCI_Read_BD_ADDR` / config data 0x00 | 02:80:E1:00:00:00: no public address programmed |
+| config data 0x80 | a static random address, which stock UNA uses as the watch's address |
+| config data 0x2C (link layer only) | 0, and 1 after the write below |
+
+So the module runs ST's standard **DTM network-coprocessor firmware**,
+with ST's BLE stack 2.1 on the chip and the SPI updater kept. It is not a
+custom UNA image.
+
+**Standard HCI.** The chip accepts the standard LE controller commands,
+both with its stack on and in link-layer-only mode:
+
+| Command | Answer |
+|---|---|
+| `HCI_LE_Read_Buffer_Size` | 251-byte ACL packets, 7 of them |
+| `HCI_LE_Read_Local_Supported_Features` | `e9 00 00 08`: encryption, peripheral-initiated feature exchange, data length extension, LL privacy, extended scanner filter policies, bit 27. **No 2M PHY, no extended advertising, no CSA #2, no LE ping, no connection parameters request.** |
+| `HCI_LE_Read_Maximum_Data_Length` | 251 bytes / 2120 µs both ways |
+| White list / resolving list | 31 / 15 entries |
+| `HCI_LE_Read_Advertising_Channel_Tx_Power` | 8 dBm |
+| `HCI_Read_Local_Supported_Commands` | Every LE 4.2 command: advertising, scanning, connections, encryption, LTK replies, data length, P-256 key and DHKey, resolving list and address resolution. None from 5.0: no PHY commands. Of the controller-baseband commands, only Reset, Set Event Mask, Read Transmit Power Level and Read RSSI. |
+| `HCI_Read_Buffer_Size` (0x1005) | unknown command, as on an LE-only controller |
+| `HCI_Set_Event_Mask`, `HCI_LE_Set_Event_Mask` | success |
+| `HCI_LE_Set_Advertising_Parameters` / `Data` / `Enable` | success. The non-connectable advertising was seen on air by a scanner next to the watch. |
+
+**Link-layer-only mode.** `aci_hal_write_config_data(0x2C, 1, 0x01)`
+(`01 0c fc 03 2c 01 01`), sent as the first command after the start event,
+returns success. Config 0x2C then reads 1, and the HCI commands above
+behave as before. The setting is in RAM and lasts until the next restart.
+In this mode the DTM passes ACL data to and from the host as H4 packets
+(`02`), according to ST's DTM source and the drivers that use it:
+Zephyr's `st,hci-spi-v2` with `req-ll-only`, and STM32duinoBLE on the
+BlueNRG-M2SP. This was **not** tried here, because it needs a connection.
+
+**Replacing the firmware.** There are three ways:
+
+1. **The DTM's SPI updater.** It lives at 0x10040000 to 0x10042000 in the
+   chip's flash. It starts by command (`aci_hal_updater_start`, 0xFC20),
+   when IO3/MISO is high at start-up, or when the BLUE flag is bad. Its
+   commands 0xFC21 to 0xFC2A erase, program and CRC the application area
+   only. Because a bad BLUE flag starts it, an interrupted update starts
+   the updater again rather than a broken image. That makes it
+   recoverable, as long as the updater is not overwritten, which it
+   refuses to do in software.
+2. **The ROM UART bootloader.** It starts when IO7 is high at reset; IO7
+   is the SPI IRQ line, PA9. It talks on DIO8/DIO11, and those UART pins
+   are not known to reach the STM32. PA10 (SENSOR1_RX_INT1) is a
+   candidate (inferred).
+3. **SWD on the module.** It needs the module opened.
+
+Nothing needs replacing: the image the module already runs works as an
+HCI controller in link-layer-only mode. ST's images are under ST's
+licences (PLLA, SLA0055), not open ones.
+
+**Module EEPROM.** This is an N24S64B at 0x50, with its identification
+page at 0x58. Both answered on I2C3. Stock UNA reads only its unique ID,
+to find out whether the module is fitted.
+
 ### 2.6 Link2 module (GNSS AG3335M, BMI270, BMM350)
 
 | Pin | Function / AF | Label | Use |
