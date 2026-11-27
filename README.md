@@ -21,6 +21,12 @@
 > - **The update key** in `tools/una/SecurityKeys.pem` is the one every UNA Watch
 >   uses, published by UNA Watch Ltd. It is not a secret.
 > - **Build:** in Docker, see [`docker/README.md`](docker/README.md).
+> - **Downloads and CI:** the [releases](https://github.com/aquarat/unapebble/releases)
+>   have the `.ota` of the latest main (`unawatch-latest`) and of each `v*` tag,
+>   built by [GitHub Actions](https://github.com/aquarat/unapebble/actions).
+> - **This repository is a read-only mirror.** Development happens in the
+>   maintainer's own repository, which pushes here and overwrites anything
+>   merged on GitHub; an accepted pull request is applied there, its author kept.
 
 <p align="center">
   <img src="docs/boards/unawatch/images/watchface-tictoc.webp" alt="PebbleOS's TicToc watchface on a UNA Watch" width="45%">

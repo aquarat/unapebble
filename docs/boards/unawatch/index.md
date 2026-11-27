@@ -349,8 +349,27 @@ or `pbl configure --board unawatch -DCONFIG_RELEASE=y && pbl build`. The
 build writes `pebbleos.bin`, the code, `system_resources.pbpack`, the
 resources, and `pebbleos_resources.bin`, the two at their addresses, which is
 what gets packed. The packer takes up to 3712 KiB, the end of the 4 MiB
-flash, its default. The `.forgejo/workflows/unawatch.yml` workflow does the
-same and publishes the `.ota`.
+flash, its default.
+
+### CI and releases
+
+Development happens in a Forgejo repository, which push-mirrors every branch
+and tag to [GitHub](https://github.com/aquarat/unapebble). GitHub is read-only:
+the mirror overwrites anything pushed or merged there (decision
+261127-144548-03).
+
+- **Forgejo**: `.forgejo/workflows/unawatch.yml` builds the release firmware
+  and the tether stub on each push to main and `v*` tag, and publishes the
+  `.ota`, ELF, HEX, log dictionary, tether files and `SHA256SUMS` as the
+  rolling prerelease `unawatch-latest` and a release per `v*` tag. Forgejo
+  runs only `.forgejo/workflows` when it exists, never `.github/workflows`.
+- **GitHub**: `.github/workflows/unawatch.yml` builds the same with the same
+  `docker/setup.sh`, on pushes to main and on pull requests, and publishes
+  GitHub Releases on the tags the mirror pushes, never moving one: the
+  prerelease `unawatch-latest` when Forgejo moves that tag after its build,
+  so both rolling releases are of the same commit, and a release per `v*`
+  tag (decision 261127-144548-02). Upstream's builds of its own boards and
+  its unit tests run there too (decision 261127-144548-01).
 
 ## Installing
 
