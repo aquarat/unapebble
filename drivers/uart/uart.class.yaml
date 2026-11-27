@@ -4,6 +4,8 @@
 class: uart
 type: struct pbl_uart
 include: pbl/drivers/uart.h
+provides:
+  uart: "&{sym}"
 roles:
   console_uart:
   qemu_uart:

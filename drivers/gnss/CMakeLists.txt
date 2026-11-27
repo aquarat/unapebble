@@ -4,5 +4,6 @@
 
 pbl_library()
 pbl_library_sources(gnss.c)
+pbl_library_sources_ifdef(CONFIG_GNSS_AG3335 ag3335.c nmea.c)
 pbl_library_sources_ifdef(CONFIG_GNSS_SIM sim.c sim_track.c)
 pbl_library_sources_ifdef(CONFIG_GNSS_SHELL shell.c)

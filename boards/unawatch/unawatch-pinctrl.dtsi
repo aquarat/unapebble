@@ -104,6 +104,14 @@
 		};
 	};
 
+	// The AG3335M powered down: nothing drives or pulls its lines
+	lpuart1_sleep: lpuart1-1 {
+		pins1 {
+			pinmux = <STM32_PINMUX('A', 2, ANALOG)>, /* LPUART1_TX */
+				 <STM32_PINMUX('A', 3, ANALOG)>; /* LPUART1_RX */
+		};
+	};
+
 	// The eMMC, 4-bit
 	sdmmc1_default: sdmmc1-0 {
 		pins1 {

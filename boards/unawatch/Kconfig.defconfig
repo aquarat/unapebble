@@ -37,6 +37,14 @@ config FLASH_STM32U5
 config GAUGE
     default y if !BOARD_UNAWATCH_LAB
 
+# The GNSS receiver, the AG3335M on LPUART1, powered only while something uses it, with its shell
+# commands in builds that have a shell. Not in the experiments firmware.
+config GNSS
+    default y if !BOARD_UNAWATCH_LAB
+
+config GNSS_SHELL
+    default y if SHELL
+
 # Bluetooth on the BlueNRG-2, an HCI controller in link-layer-only mode under the NimBLE host, its
 # static random address the identity; the experiments firmware keeps the fake controller.
 choice NIMBLE_HCI

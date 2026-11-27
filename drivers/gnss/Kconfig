@@ -17,6 +17,30 @@ config GNSS_SHELL
       The gnss shell command, to start, stop and read the receiver, and
       to drive the simulator.
 
+config GNSS_AG3335
+    bool "Airoha AG3335"
+    default y
+    depends on DT_HAS_AIROHA_AG3335M_ENABLED
+    depends on UART
+    select GPIO
+    help
+      The Airoha AG3335 receivers on a UART, powered by an enable line:
+      NMEA sentences, set up with the receiver's PAIR commands.
+
+config GNSS_AG3335_DUAL_BAND
+    bool "L1 and L5"
+    depends on GNSS_AG3335
+    help
+      Receive the L5 band as well as L1 (PAIR104). Off, as UNA's
+      firmware runs the receiver, on L1 alone.
+
+config GNSS_AG3335_SLEEP
+    bool "Let the receiver's system sleep"
+    depends on GNSS_AG3335
+    help
+      Unlock the sleep of the receiver's own system (PAIR382,0) once it
+      is set up. UNA's firmware keeps it locked on L1 alone.
+
 config GNSS_SIM
     bool "Simulator"
     depends on SOC_QEMU_PEBBLE || SOC_POSIX

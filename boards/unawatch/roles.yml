@@ -15,4 +15,5 @@ vibe: haptics
 battery: battery
 charger: pmic
 gauge: fuel_gauge
+gnss: gnss
 bt_hci: bluetooth

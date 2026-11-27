@@ -20,7 +20,9 @@
 
 /* Register bit definitions */
 
-#define USART_CR1_UE     PBL_BIT(0)
+#define USART_CR1_UE PBL_BIT(0)
+/* Receives in Stop, on the STM32U5 */
+#define USART_CR1_UESM   PBL_BIT(1)
 #define USART_CR1_RE     PBL_BIT(2)
 #define USART_CR1_TE     PBL_BIT(3)
 #define USART_CR1_IDLEIE PBL_BIT(4)
@@ -29,6 +31,8 @@
 #define USART_CR1_PS     PBL_BIT(9)
 #define USART_CR1_PCE    PBL_BIT(10)
 #define USART_CR1_M0     PBL_BIT(12)
+/* FIFO mode, where RXNE and TXE are the FIFOs' not empty and not full */
+#define USART_CR1_FIFOEN PBL_BIT(29)
 
 #define USART_CR3_DMAR PBL_BIT(6)
 #define USART_CR3_RTSE PBL_BIT(8)
@@ -44,6 +48,7 @@
 #define USART_ISR_RXNE  PBL_BIT(5)
 #define USART_ISR_TC    PBL_BIT(6)
 #define USART_ISR_TXE   PBL_BIT(7)
+#define USART_ISR_BUSY  PBL_BIT(16)
 #define USART_ISR_TEACK PBL_BIT(21)
 
 #define USART_ICR_PECF   PBL_BIT(0)
@@ -54,3 +59,7 @@
 
 #define USART_BRR_MIN 0x10U
 #define USART_BRR_MAX 0xffffU
+
+/* An LPUART divides 256 times its kernel clock */
+#define LPUART_BRR_MIN 0x300U
+#define LPUART_BRR_MAX 0xfffffU
