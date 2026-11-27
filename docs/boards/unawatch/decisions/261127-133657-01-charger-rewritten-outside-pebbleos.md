@@ -1,8 +1,8 @@
 # Find what sets the charge voltage to 4.40 V outside PebbleOS
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-27 13:37 UTC
-- Decided by: agent
+- Decided by: owner (keep re-applying 4.36 V at boot); agent (finding)
 
 ## Context
 A one-file build (`55b699bf6`, slot build) ran 301 s on the watch with no
@@ -21,11 +21,12 @@ cell's use so far, but the 4.36 V of
 261127-131711-04-charge-to-4v36 only holds while PebbleOS runs.
 
 ## Decision
-Find the writer: the bootloader's I2C writes to 0x61 (disassembly), and
-the registers read while PebbleOS runs (through the developer USB access
-once it exists) and in the stub after a cold power-on. Then decide whether
-the stub should also set 4.36 V, and how to treat the bootloader's value.
+PebbleOS keeps applying its own 4.36 V at every boot, as the charger driver
+already does (written with charging off, read back, and checked on every
+poll); the owner judged that the safer course. The bootloader's I2C writes
+to 0x61 are traced for interest, to confirm what sets 4.40 V.
 
 ## Consequences
-Until then, a watch left in the stub or the bootloader menu while plugged in
-charges to 4.40 V, as with the stock firmware.
+A watch left in the stub or the bootloader menu while plugged in charges to
+4.40 V, as with the stock firmware; PebbleOS returns it to 4.36 V when it
+starts.
