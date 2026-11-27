@@ -288,12 +288,42 @@ static void prv_fault(enum pbl_fault_reason reason, uint32_t *frame, uint32_t ex
   prv_handle(&info, frame, recoverable);
 }
 
+// Faults from stacking or unstacking leave no frame to resume
+#define CFSR_STACKING_ERRORS                                                                   \
+  (ARM_SCB_CFSR_MSTKERR | (1UL << 3) /* MUNSTKERR */ | (1UL << 11) /* UNSTKERR */ |            \
+   (1UL << 12) /* STKERR */ | ARM_SCB_CFSR_STKOF)
+
+// A fault the code that caused it expects, as a probe of an address: it resumes there
+static bool prv_fixup(enum pbl_fault_reason reason, uint32_t *frame) {
+  const uint32_t cfsr = arch_readl(ARM_SCB_CFSR);
+  struct pbl_fault_info info;
+
+  if (frame == nullptr || (cfsr & CFSR_STACKING_ERRORS) != 0U) {
+    return false;
+  }
+
+  prv_fill_info(&info, reason, frame, cfsr);
+  if (!pbl_fault_fixup(&info, frame, cfsr)) {
+    return false;
+  }
+
+  arch_writel(cfsr, ARM_SCB_CFSR);
+  if (reason == PBL_FAULT_HARD) {
+    arch_writel(arch_readl(ARM_SCB_HFSR), ARM_SCB_HFSR);
+  }
+
+  return true;
+}
+
 static void prv_log_mpu_line(void *ctx, const char *line) {
   PBL_LOG_FAULT("%s", line);
 }
 
 static PBL_USED void prv_mem_manage(uint32_t *frame, uint32_t exc_return) {
   // On a stack overflow the frame may be in the guard: don't touch it before checking.
+  if (prv_fixup(PBL_FAULT_MEMORY, frame)) {
+    return;
+  }
   PBL_LOG_FAULT("\r\n\r\n[Memory Management Failure!]");
   PBL_LOG_FAULT("Configured Regions: ");
   pbl_mpu_regions_print(prv_log_mpu_line, nullptr);
@@ -308,6 +338,9 @@ static PBL_USED void prv_mem_manage(uint32_t *frame, uint32_t exc_return) {
 }
 
 static PBL_USED void prv_bus_fault(uint32_t *frame, uint32_t exc_return) {
+  if (prv_fixup(PBL_FAULT_BUS, frame)) {
+    return;
+  }
   PBL_LOG_FAULT("\r\n\r\n[BusFault_Handler!]");
   prv_fault(PBL_FAULT_BUS, frame, exc_return);
 }
@@ -326,6 +359,10 @@ static PBL_USED void prv_usage_fault(uint32_t *frame, uint32_t exc_return) {
 }
 
 static PBL_USED void prv_hard_fault(uint32_t *frame, uint32_t exc_return) {
+  if (prv_fixup(PBL_FAULT_HARD, frame)) {
+    return;
+  }
+
   // Faults inside exception handlers, e.g. the context switch saving a thread's registers onto
   // an exhausted stack, escalate straight to a HardFault.
   const uint32_t cfsr = arch_readl(ARM_SCB_CFSR);

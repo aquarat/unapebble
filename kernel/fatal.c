@@ -22,6 +22,11 @@
   pbl_reboot_emergency();
 }
 
+PBL_WEAK bool pbl_fault_fixup(const struct pbl_fault_info *info, uint32_t *frame,
+                              uint32_t status) {
+  return false;
+}
+
 PBL_WEAK void pbl_fault_fatal_record(const struct pbl_fault_info *info) {
 }
 
