@@ -75,6 +75,16 @@ config USB_CDC_ACM
     help
       Serial ports over USB, CDC ACM, as UARTs (pbl/usb/cdc_acm.h).
 
+config USB_CDC_ACM_CONNECT
+    bool "Connect when a port comes up"
+    default y
+    depends on USB_CDC_ACM
+    help
+      Connect the device to the bus as soon as a serial port comes up,
+      the console's at boot included. Without it the application
+      connects the device with pbl_usbd_enable(), and may disconnect it
+      with pbl_usbd_disable(), as a developer setting does.
+
 config USB_CDC_ACM_COUNT
     int "Number of serial ports"
     default 1

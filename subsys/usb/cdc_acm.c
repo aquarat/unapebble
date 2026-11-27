@@ -376,7 +376,11 @@ static int prv_init(const struct pbl_uart *uart) {
 
   memcpy(s_ports[prv_port_of(uart)].line_coding, line_coding, sizeof(line_coding));
 
+#ifdef CONFIG_USB_CDC_ACM_CONNECT
   return pbl_usbd_enable();
+#else
+  return 0;
+#endif
 }
 
 static int prv_configure(const struct pbl_uart *uart, const struct pbl_uart_config *cfg) {
@@ -415,6 +419,35 @@ static const struct pbl_uart_ops s_ops = {
   .rx_enable = prv_rx_enable,
   .rx_disable = prv_rx_disable,
 };
+
+size_t pbl_usb_cdc_acm_write(const struct pbl_uart *uart, const uint8_t *data, size_t len) {
+  uint8_t n = prv_port_of(uart);
+  struct prv_port *p = &s_ports[n];
+  size_t done = 0U;
+
+  pbl_irq_lock();
+  while (done < len && prv_ring_used(p) < TX_RING - 1U) {
+    p->tx_ring[p->tx_head] = data[done++];
+    p->tx_head = (uint16_t)((p->tx_head + 1U) % TX_RING);
+  }
+  if (done != 0U && prv_open(p) && !p->tx_busy) {
+    prv_tx_start(n);
+  }
+  pbl_irq_unlock();
+
+  return done;
+}
+
+bool pbl_usb_cdc_acm_tx_idle(const struct pbl_uart *uart) {
+  const struct prv_port *p = &s_ports[prv_port_of(uart)];
+  bool idle;
+
+  pbl_irq_lock();
+  idle = !p->tx_busy && prv_ring_used(p) == 0U;
+  pbl_irq_unlock();
+
+  return idle;
+}
 
 bool pbl_usb_cdc_acm_dtr(const struct pbl_uart *uart) {
   const struct prv_port *p = &s_ports[prv_port_of(uart)];

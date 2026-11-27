@@ -4,6 +4,8 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #include <pbl/drivers/uart.h>
 #include <pbl/util/listify.h>
@@ -45,5 +47,26 @@ PBL_LISTIFY(CONFIG_USB_CDC_ACM_COUNT, PBL_USB_CDC_ACM_DECLARE)
  * @return true while the host has the port open.
  */
 bool pbl_usb_cdc_acm_dtr(const struct pbl_uart *uart);
+
+/**
+ * @brief Queue bytes to send, as many as the buffer has room for, without dropping any.
+ *
+ * Unlike the UART class's output, which drops what does not fit, this tells how much was taken,
+ * for a caller that waits for the host to read the rest.
+ *
+ * @param uart Port, from USB_CDC_ACM_UART().
+ * @param data Bytes.
+ * @param len Number of bytes.
+ * @return Number of bytes queued, from 0 to @p len.
+ */
+size_t pbl_usb_cdc_acm_write(const struct pbl_uart *uart, const uint8_t *data, size_t len);
+
+/**
+ * @brief Whether a port has sent everything queued.
+ *
+ * @param uart Port, from USB_CDC_ACM_UART().
+ * @return true when the buffer is empty and no transfer is under way.
+ */
+bool pbl_usb_cdc_acm_tx_idle(const struct pbl_uart *uart);
 
 /** @} */

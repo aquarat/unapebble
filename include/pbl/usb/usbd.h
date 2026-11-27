@@ -128,6 +128,30 @@ struct pbl_usbd_function {
 int pbl_usbd_enable(void);
 
 /**
+ * @brief Disconnect the device from the bus: the host sees it go. The functions are told the
+ * device is no longer configured, and a controller that can powers down until the next
+ * pbl_usbd_enable().
+ *
+ * @return 0, or a negative errno.
+ */
+int pbl_usbd_disable(void);
+
+/**
+ * @brief Whether the device is connected to the bus, from pbl_usbd_enable() to
+ * pbl_usbd_disable().
+ *
+ * @return true while connected.
+ */
+bool pbl_usbd_is_enabled(void);
+
+/**
+ * @brief Whether the host has configured the device.
+ *
+ * @return true while configured.
+ */
+bool pbl_usbd_is_configured(void);
+
+/**
  * @brief Maximum packet size of the bulk endpoints, at the speed the bus runs.
  *
  * @return 64 at full speed, 512 at high speed.
