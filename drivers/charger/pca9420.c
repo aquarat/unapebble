@@ -115,9 +115,26 @@ static int prv_apply_enable(const struct pbl_charger_pca9420 *chg) {
   }
 
   // Writing CHG_CNTL0 with CHG_LOCK cleared keeps the charge registers locked
-  return pbl_i2c_reg_update_byte(&chg->i2c, PCA9420_CHG_CNTL0,
-                                 PCA9420_CHG_CNTL0_LOCK_MASK | PCA9420_CHG_CNTL0_CHG_EN,
-                                 chg->data->enabled ? PCA9420_CHG_CNTL0_CHG_EN : 0U);
+  return pbl_i2c_reg_update_byte(
+      &chg->i2c, PCA9420_CHG_CNTL0, PCA9420_CHG_CNTL0_LOCK_MASK | PCA9420_CHG_CNTL0_CHG_EN,
+      (chg->data->enabled && !chg->data->input_suspended) ? PCA9420_CHG_CNTL0_CHG_EN : 0U);
+}
+
+// ASYS from VBAT only, or from VIN or VBAT as the PMIC starts, read back
+static int prv_asys_set(const struct pbl_charger_pca9420 *chg, bool vbat_only) {
+  const uint8_t sel = vbat_only ? PCA9420_TOP_CNTL1_ASYS_VBAT : PCA9420_TOP_CNTL1_ASYS_VIN_VBAT;
+  uint8_t val;
+  int ret;
+
+  ret = pbl_i2c_reg_update_byte(&chg->i2c, PCA9420_TOP_CNTL1, PCA9420_TOP_CNTL1_ASYS_MASK, sel);
+  if (ret == 0) {
+    ret = prv_read(chg, PCA9420_TOP_CNTL1, &val);
+  }
+  if ((ret == 0) && ((val & PCA9420_TOP_CNTL1_ASYS_MASK) != sel)) {
+    ret = -EIO;
+  }
+
+  return ret;
 }
 
 // The PMIC loses its registers in a reset of its own, and takes its defaults back: check the
@@ -213,6 +230,7 @@ static int prv_init(const struct pbl_charger *charger) {
 
   chg->data->chg = chg;
   chg->data->enabled = false;
+  chg->data->input_suspended = false;
   pbl_delayed_work_init(&chg->data->debounce_timer, prv_handle_irq);
 
   // No more than 1C, whatever the description says
@@ -228,6 +246,12 @@ static int prv_init(const struct pbl_charger *charger) {
   ret = prv_configure(chg);
   if (ret != 0) {
     PBL_LOG_ERR("Configuration failed (%d)", ret);
+  }
+
+  // A run that suspended the input and reset meanwhile: ASYS takes VIN again
+  ret = prv_asys_set(chg, false);
+  if (ret != 0) {
+    PBL_LOG_ERR("Input restore failed (%d)", ret);
   }
 
   // Without the interrupt, plugging in shows on the next poll
@@ -287,12 +311,41 @@ static int prv_enable(const struct pbl_charger *charger, bool enable) {
   return prv_apply_enable(chg);
 }
 
+// Charging stops before the input goes, and starts again, if allowed, once it is back
+static int prv_set_input_suspend(const struct pbl_charger *charger, bool suspend) {
+  const struct pbl_charger_pca9420 *chg = prv_chg(charger);
+  int ret;
+
+  if (suspend) {
+    chg->data->input_suspended = true;
+    ret = prv_apply_enable(chg);
+    if (ret == 0) {
+      ret = prv_asys_set(chg, true);
+    }
+    if (ret != 0) {
+      (void)prv_asys_set(chg, false);
+      chg->data->input_suspended = false;
+      (void)prv_apply_enable(chg);
+    }
+    return ret;
+  }
+
+  ret = prv_asys_set(chg, false);
+  if (ret != 0) {
+    return ret;
+  }
+  chg->data->input_suspended = false;
+
+  return prv_apply_enable(chg);
+}
+
 const struct pbl_charger_ops pbl_charger_pca9420_ops = {
   .init = prv_init,
   .is_online = prv_is_online,
   .get_status = prv_get_status,
   .get_measurements = prv_get_measurements,
   .enable = prv_enable,
+  .set_input_suspend = prv_set_input_suspend,
 };
 
 #include PBL_DT_INSTANCES(nxp_pca9420)

@@ -16,6 +16,7 @@
 #define PCA9420_SUB_INT1      0x04U
 #define PCA9420_SUB_INT1_MASK 0x05U
 #define PCA9420_TOP_CNTL0     0x09U
+#define PCA9420_TOP_CNTL1     0x0AU
 #define PCA9420_CHG_CNTL0     0x10U
 #define PCA9420_CHG_CNTL1     0x11U
 #define PCA9420_CHG_CNTL5     0x15U
@@ -30,6 +31,13 @@
 // VIN_ILIM_SEL, bits 7:5: 001 is 255 mA typical, 222 mA minimum
 #define PCA9420_TOP_CNTL0_ILIM_MASK  0xE0U
 #define PCA9420_TOP_CNTL0_ILIM_255MA 0x20U
+
+// ASYS_INPUT_SEL, bits 5:4: 00 ASYS from VIN or VBAT, whichever is higher (the default, which a
+// PMIC reset or power cycle restores), 01 from VBAT only. ASYS feeds the regulators and the linear
+// charger: from VBAT only, the system runs from the battery and nothing charges, VIN connected.
+#define PCA9420_TOP_CNTL1_ASYS_MASK     0x30U
+#define PCA9420_TOP_CNTL1_ASYS_VIN_VBAT 0x00U
+#define PCA9420_TOP_CNTL1_ASYS_VBAT     0x10U
 
 #define PCA9420_CHG_CNTL0_CHG_EN       (1U << 0)
 #define PCA9420_CHG_CNTL0_CHG_TIMER_EN (1U << 1)

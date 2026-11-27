@@ -76,6 +76,8 @@ struct pbl_charger_ops {
   int (*enable)(const struct pbl_charger *charger, bool enable);
   /** Optional. Let the battery supply a high current or not. */
   int (*set_high_load)(const struct pbl_charger *charger, bool high_load);
+  /** Optional. Run the system from the battery alone, external power left connected, or not. */
+  int (*set_input_suspend)(const struct pbl_charger *charger, bool suspend);
 };
 
 /** @brief Charger runtime state. */
@@ -193,6 +195,18 @@ int pbl_charger_high_load_request(const struct pbl_charger *charger);
  * @return 0, @c -EALREADY if no request is held, or a negative errno.
  */
 int pbl_charger_high_load_release(const struct pbl_charger *charger);
+
+/**
+ * @brief Run the system from the battery alone while external power stays connected, or not.
+ *
+ * For measuring what the system draws, with a fuel gauge, without unplugging: nothing charges
+ * meanwhile. Reverted by a reset of the system, the driver's init restoring the input.
+ *
+ * @param charger Charger.
+ * @param suspend True to take the system off the input, false to put it back.
+ * @return 0, @c -ENOTSUP if the charger cannot, or a negative errno.
+ */
+int pbl_charger_input_suspend(const struct pbl_charger *charger, bool suspend);
 
 /**
  * @brief Set the listener of a charger.
