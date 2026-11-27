@@ -336,6 +336,18 @@ counter agree with it.
 | The same, GPS alone (`gnss pair PAIR066,1,0,0,0,0,0`), its sleep locked | | 7.9 to 8.9 mA, 97% in Stop 2 |
 | The same, every constellation on L1 and L5 (PAIR104,1), its sleep locked | | 15.6 to 17.5 mA, 96% in Stop 2 |
 | TicToc, the GNSS receiver off again | | 0.8 mA |
+| The watchface, Bluetooth on the fake controller (`CONFIG_NIMBLE_HCI_FAKE=y`), the GNSS off | | 0.8 mA (AvgCurrent; Current 1.4 mA) |
+| The same, Bluetooth on the BlueNRG-2, advertising connectable every 20 ms (the first 5 minutes after a boot) | | 2.1 mA (Current 1.9 mA) |
+| The same, advertising every 1022 ms (after those 5 minutes) | | 1.0 mA (Current 1.2 mA) |
+
+The Bluetooth figures are of 5-minute windows after 30 s, the gauge's
+AvgCurrent first: its Current, sampled every 2 s, had a spread of about
+5 mA, which the 20 ms advertising pulses add to. Advertising at 20 ms costs
+about 1.2 mA, at 1022 ms about 0.15 mA, which is at the limit of what the
+gauge resolves; the chip transmits at its default 8 dBm, as the stock
+firmware sets it. Connected idle could not be measured: no connection
+lasts past the central's service discovery, as no data passes yet
+([](#unawatch-bluetooth)).
 
 The GNSS figures are of 3 to 4 minute windows (8 minutes for the default),
 the gauge's Current and AvgCurrent, which differ by up to 2 mA there: the
