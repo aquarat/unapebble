@@ -14,13 +14,14 @@ if BOARD_UNAWATCH
 
 config BOARD_UNAWATCH_CONSOLE_DAM
     bool "Console on the USB-C connector"
-    default y if !RELEASE
+    default y if !RELEASE && !DEV_USB
     help
       Drive USB_DAM (PB15) high at boot, which routes the USART3 console
       to the USB-C connector, for a Type-C debug accessory adapter. The
       stock firmware only does so once the STUSB4500 reports a debug
       accessory; without one attached, the console line stays wired to
-      the connector.
+      the connector. Not with the USB developer access (DEV_USB), whose
+      console is on USB, which the tether stub runs with USB_DAM low.
 
 config BOARD_UNAWATCH_TETHER_SLOT
     bool "Link for the slot of the tether stub"

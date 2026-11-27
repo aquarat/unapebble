@@ -9,6 +9,7 @@
 
 #include <pbl/drivers/mcu.h>
 #include <pbl/drivers/udc.h>
+#include <pbl/kernel/irq.h>
 #include <pbl/logging/logging.h>
 #include <pbl/usb/usbd.h>
 #include <pbl/util/bits.h>
@@ -923,4 +924,32 @@ int pbl_usbd_enable(void) {
   }
 
   return ret;
+}
+
+int pbl_usbd_disable(void) {
+  int ret;
+
+  if (!atomic_exchange(&s_enabled, false)) {
+    return 0;
+  }
+
+  // As a bus reset would: the functions leave the configuration while the controller is still up
+  pbl_irq_lock();
+  if (s_ctrl.config != 0U) {
+    s_ctrl.config = 0U;
+    (void)prv_set_configured(false);
+  }
+  s_ctrl.stage = STAGE_IDLE;
+  ret = pbl_udc_disable(UDC);
+  pbl_irq_unlock();
+
+  return ret;
+}
+
+bool pbl_usbd_is_enabled(void) {
+  return atomic_load(&s_enabled);
+}
+
+bool pbl_usbd_is_configured(void) {
+  return s_ctrl.config != 0U;
 }

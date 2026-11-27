@@ -1,7 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
-compatible: st,stm32f7-hsotg
+compatible:
+  - st,stm32f7-hsotg
+  - st,stm32u5-hsotg
 config: UDC_DWC2
 class: udc
 define: PBL_UDC_DWC2_DEFINE
@@ -12,11 +14,27 @@ args:
   - compatible: true
     values:
       st,stm32f7-hsotg: DWC2_STM32
+      st,stm32u5-hsotg: DWC2_STM32 | DWC2_STM32U5_HSPHY
   - clock: otg
   - clock: main_clk
     of: phys
     default: "{}"
   - flag: phys
+  # The internal high-speed PHY of the STM32U5: its reference, the core's reset, and the SYSCFG and
+  # PWR blocks it is controlled and supplied from
+  - clock: utmi
+    default: "{}"
+  - reset: 0
+    default: "{}"
+  - reg: 0
+    of: st,syscfg
+    default: 0
+  - clock: 0
+    of: st,syscfg
+    default: "{}"
+  - reg: 0
+    of: st,pwr
+    default: 0
   - supply: usb33d
     default: nullptr
   - pinctrl: default

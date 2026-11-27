@@ -139,3 +139,51 @@ void test_usbd_cdc_acm__queue_fails(void) {
   cl_assert_equal_i(s_queued[1][3], 3);
   cl_assert_equal_m(s_queued_data[1][3], "abc", 3U);
 }
+
+// What does not fit stays with the caller, who learns how much was taken
+void test_usbd_cdc_acm__write(void) {
+  static const uint8_t data[1500] = {1, 2, 3};
+  uint8_t type = PBL_USB_TYPE_CLASS | PBL_USB_RECIP_INTERFACE;
+
+  memset(s_queued, 0xff, sizeof(s_queued));
+  cl_assert_equal_i(prv_request(PBL_USB_TYPE_STANDARD, PBL_USB_REQ_SET_CONFIGURATION, 1U, 0U, 0U),
+                    0);
+  cl_assert(pbl_usb_cdc_acm_tx_idle(USB_CDC_ACM_UART(1)));
+
+  // The ring holds one byte less than its size
+  cl_assert_equal_i(pbl_usb_cdc_acm_write(USB_CDC_ACM_UART(1), data, sizeof(data)), 1023);
+  cl_assert_equal_i(pbl_usb_cdc_acm_write(USB_CDC_ACM_UART(1), data, sizeof(data)), 0);
+  cl_assert(!pbl_usb_cdc_acm_tx_idle(USB_CDC_ACM_UART(1)));
+  cl_assert_equal_i(s_queued[1][6], -1);
+
+  // Opened, a transfer takes a buffer's worth out of the ring, and the next the rest
+  cl_assert_equal_i(prv_request(type, 0x22, 0x0001U, 2U, 0U), 0);
+  cl_assert_equal_i(s_queued[1][6], 512);
+  cl_assert_equal_i(pbl_usb_cdc_acm_write(USB_CDC_ACM_UART(1), data, sizeof(data)), 512);
+  s_cb->xfer_done(UDC, 0x86, 512, nullptr);
+  cl_assert_equal_i(s_queued[1][6], 512);
+  cl_assert_equal_i(pbl_usb_cdc_acm_write(USB_CDC_ACM_UART(1), data, sizeof(data)), 512);
+}
+
+// Disconnected, the device leaves its configuration; connected again, it enumerates anew
+void test_usbd_cdc_acm__disable(void) {
+  uint8_t type = PBL_USB_TYPE_CLASS | PBL_USB_RECIP_INTERFACE;
+
+  cl_assert(pbl_usbd_is_enabled());
+  cl_assert_equal_i(prv_request(PBL_USB_TYPE_STANDARD, PBL_USB_REQ_SET_CONFIGURATION, 1U, 0U, 0U),
+                    0);
+  cl_assert_equal_i(prv_request(type, 0x22, 0x0001U, 0U, 0U), 0);
+  cl_assert(pbl_usbd_is_configured());
+  cl_assert(pbl_usb_cdc_acm_dtr(USB_CDC_ACM_UART(0)));
+
+  cl_assert_equal_i(pbl_usbd_disable(), 0);
+  cl_assert(!s_connected);
+  cl_assert(!pbl_usbd_is_enabled());
+  cl_assert(!pbl_usbd_is_configured());
+  cl_assert(!pbl_usb_cdc_acm_dtr(USB_CDC_ACM_UART(0)));
+  cl_assert_equal_i(pbl_usbd_disable(), 0);
+
+  cl_assert_equal_i(pbl_usbd_enable(), 0);
+  cl_assert(s_connected);
+  cl_assert(pbl_usbd_is_enabled());
+}

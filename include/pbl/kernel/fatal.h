@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <pbl/kernel/compiler.h>
@@ -69,6 +70,23 @@ struct pbl_fault_info {
   /** Data address the fault happened on; 0 if unknown. */
   uintptr_t addr;
 };
+
+/**
+ * @brief Let code that expects an access to fault, as a probe of an address that may not answer,
+ * survive it.
+ *
+ * The kernel calls it first in each CPU fault exception, unless the fault came from stacking or
+ * unstacking a frame. The default returns false. An override returns true only for a fault it
+ * expects, once it has made the faulting code resumable through @p frame, e.g. by moving its PC
+ * past the access; the kernel then clears the fault status and returns to that code. It must not
+ * log.
+ *
+ * @param info Fault.
+ * @param frame The exception frame the CPU stacked: on Arm r0-r3, r12, lr, pc and xPSR.
+ * @param status The CPU's fault status: on Arm the CFSR.
+ * @return true if the fault was handled.
+ */
+bool pbl_fault_fixup(const struct pbl_fault_info *info, uint32_t *frame, uint32_t status);
 
 /**
  * @brief Record a CPU fault the system can't recover from.

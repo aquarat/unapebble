@@ -81,8 +81,10 @@ The stub is a USB CDC-ACM device, `1209:0001` (the pid.codes test ID), named
 "UNA Watch tether" with the chip's unique ID as serial number: on Linux
 `/dev/ttyACM*` (and `/dev/serial/by-id/usb-unapebble_UNA_Watch_tether_*`), on
 macOS `/dev/cu.usbmodem*`. No driver is needed. `tether.py` finds it by its
-USB IDs on Linux and by name on macOS; `--port` or `$TETHER_PORT` names it
-otherwise.
+USB IDs on Linux (sysfs) and macOS (`ioreg`), by name otherwise; `--port` or
+`$TETHER_PORT` names it. PebbleOS's two ports (see
+[](#unawatch-dev-usb)) are `1209:0002`: `tether.py` takes whichever of the
+stub's port and PebbleOS's tether port is there.
 
 ```shell
 python3 tools/una/tether/tether.py info
@@ -92,7 +94,9 @@ python3 tools/una/tether/tether.py info
 
 When the watch is plugged into a Mac and the experiments run elsewhere, the
 Mac serves the port on TCP with `bridge.py` (Python 3, standard library only;
-copy `bridge.py` and `tether.py` together):
+copy `bridge.py`, `tether.py` and `console.py` together). Port 4500 carries
+the tether protocol, of the stub or of PebbleOS, whichever runs; port 4501
+PebbleOS's console:
 
 ```shell
 # on the Mac: only reachable through an SSH tunnel
@@ -105,14 +109,59 @@ and the other machine connects with `--tcp` (or `$TETHER_TCP`), through the
 tunnel or directly:
 
 ```shell
-ssh -N -L 4500:127.0.0.1:4500 mac.local &      # with the default bridge
+ssh -N -L 4500:127.0.0.1:4500 -L 4501:127.0.0.1:4501 mac.local &
 python3 tools/una/tether/tether.py --tcp 127.0.0.1:4500 info
+python3 tools/una/tether/console.py --tcp 127.0.0.1:4501 'battery status'
 ```
 
 The bridge serves one client at a time, a new one replacing the last, and
 opens the port again when the watch comes back after a reset, so a client
 stays connected across `tether.py reset`. `socat` does the same job:
 `socat TCP-LISTEN:4500,reuseaddr,fork FILE:/dev/cu.usbmodemXXXX,raw,echo=0`.
+
+(unawatch-dev-usb)=
+
+### PebbleOS's USB developer access
+
+With **Settings > System > Debugging > USB Developer** on (always on in a
+slot build), PebbleOS is a USB device too, `1209:0002`, "UNA Watch
+PebbleOS", with two serial ports: the console, logs and shell, on interface
+0 ("UNA Watch PebbleOS 0", on Linux `/dev/serial/by-id/*UNA_Watch_PebbleOS*-if00`,
+on macOS the `cu.usbmodem…1`), the tether protocol on interface 2 (`…-if02`,
+`cu.usbmodem…3`). It is built in debug and slot builds
+(`CONFIG_DEV_USB`), not in release `.ota` builds, and powered only while the
+watch is plugged in (`CONFIG_DEV_USB_FOLLOW_VBUS`), but in slot builds. While
+it is on, anyone with a cable can read and write the memory: decision
+261127-134824-01.
+
+The tether protocol is the stub's, from the stub's own `proto.c`, but for
+`run`, `call`, `flash`, `boot`, which PebbleOS refuses as unsupported:
+`tether.py flash` against PebbleOS resets it first and flashes through the
+stub, which a slot build's reset returns to. `info` says `firmware
+PebbleOS …`. Writes to the system control block and the MPU
+(`0xe000ed00`–`0xe000edff`) are refused on top of the stub's refusals; a
+fault on a bad address is caught and reported as the stub reports it.
+`reset` restarts PebbleOS, `poweroff` powers it off. I2C runs at the bus
+driver's speed whatever `--fast` says.
+
+`console.py` runs one shell command and prints what it printed until the
+prompt comes back, or follows the logs:
+
+```shell
+python3 tools/una/tether/console.py 'battery status'        # the port found by its IDs
+python3 tools/una/tether/console.py --tcp 127.0.0.1:4501 gauge
+python3 tools/una/tether/console.py --tcp 127.0.0.1:4501 reboot
+python3 tools/una/tether/console.py --tcp 127.0.0.1:4501 --follow --for 60
+```
+
+The shell's commands for it:
+
+| Command | |
+| --- | --- |
+| `reboot` | restart: through the bootloader to the stub in a slot build, to PebbleOS otherwise |
+| `reboot off` | power off through the bootloader |
+| `reboot menu` | power off: hold the power button 4 s at power-on for the menu, which nothing else can ask for ({doc}`hardware`, section 9.6) |
+| `usb`, `usb on`, `usb off` | the setting, the charger input and the USB's state; turn the setting on or off |
 
 ## tether.py
 
@@ -336,6 +385,7 @@ it connects at high speed. Everything after that is polled.
 
 | | |
 | --- | --- |
+| **PebbleOS's developer access** | built for debug, release slot and debug slot images and the host's tests (the tether tools against the simulator answering as PebbleOS, `console.py` against a fake shell, the USB stack's unit tests); not yet run on a watch |
 | **Tested on a host** | the protocol code as the stub runs it, against `tether.py`, over pipes, a pty and TCP through `bridge.py` (`make test`, with AddressSanitizer); the image's vectors (`pack_ota.py`); a PebbleOS build linked for the slot |
 | **Not yet run on a watch** | all of the stub |
 

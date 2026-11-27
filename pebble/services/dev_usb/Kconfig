@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 The unapebble authors
+# SPDX-License-Identifier: Apache-2.0
+
+config DEV_USB
+    bool "USB developer access"
+    default y if BOARD_UNAWATCH && !BOARD_UNAWATCH_LAB && (!RELEASE || BOARD_UNAWATCH_TETHER_SLOT)
+    depends on BOARD_UNAWATCH
+    select USB_DEVICE
+    select USB_CDC_ACM
+    select KERNEL_SYS_WORKQ
+    help
+      Two serial ports on the USB-C connector, behind the "USB developer"
+      toggle of Settings > System > Debugging (off by default): the
+      console, with the logs and the shell, and the tether protocol of
+      tools/una/tether, which tether.py speaks to the stub too. Whoever
+      plugs a cable in while it is on can read and write memory: see the
+      decision log (docs/boards/unawatch/decisions). The USB is powered
+      up only while the toggle is on and, unless DEV_USB_FOLLOW_VBUS is
+      off, the watch is plugged in.
+
+if DEV_USB
+
+config DEV_USB_FORCE
+    bool "Always on"
+    default y if BOARD_UNAWATCH_TETHER_SLOT
+    help
+      The developer access stays on whatever the toggle says, plugged in
+      or not. For images linked for the tether stub's slot, flashed and
+      started through the stub, which grants the same access: the host
+      that flashed one keeps its console and its tether port across
+      settings that would turn them off.
+
+config DEV_USB_FOLLOW_VBUS
+    bool "Only while plugged in"
+    default y
+    depends on !DEV_USB_FORCE
+    help
+      Power the USB up only while the charger sees an input, as the
+      PMIC reports it, and down at the unplug: the PHY and the 16 MHz
+      crystal draw nothing on battery.
+
+config DEV_USB_TETHER
+    bool "Tether protocol"
+    default y
+    depends on SOC_STM32U5
+    help
+      The tether stub's protocol (tools/una/tether/stub/proto.c, built
+      from there) on the second port: info, memory reads and writes,
+      fill and CRC, I2C and GPIO, with the stub's refusals, notes, and
+      reset and power-off. Calls of code and flashing are left to the
+      stub: tether.py goes through a reset to it to flash.
+
+config DEV_USB_THREAD_PRIO
+    int "Tether thread priority"
+    default 2
+    depends on DEV_USB_TETHER
+
+module = DEV_USB
+module-str = USB developer access
+source "subsys/logging/Kconfig.template.log_level"
+
+endif # DEV_USB

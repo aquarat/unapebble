@@ -82,7 +82,6 @@ static inline void modb(uintptr_t a, uint32_t clear, uint32_t set) {
 #define RCC_APB1ENR1_I2C1          (1U << 21)
 #define RCC_APB1ENR1_I2C2          (1U << 22)
 #define RCC_APB1ENR2_I2C4          (1U << 1)
-#define RCC_CCIPR2_USBPHYCSEL_MASK (3U << 30)
 
 #define PWR_VOSR_USBPWREN   (1U << 19)
 #define PWR_VOSR_USBBOOSTEN (1U << 20)

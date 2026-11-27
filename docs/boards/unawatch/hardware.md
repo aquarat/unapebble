@@ -1124,6 +1124,76 @@ Calling the existing `encrypt_firmware.pack()` directly is equivalent.
 - **Never change the option bytes.** The bootloader manages `FLASH_OPTR`
   bit 21 itself.
 
+### 9.6 Boot path, menu entry and PMIC writes (bootloader 0.1.4, traced)
+
+Traced in the disassembly of `UnaBootloader_0.1.4.hex`; confirmed unless
+marked inferred.
+
+**What a running firmware can leave for the bootloader.** Only TAMP BKP3R
+(base `0x46007000`, offset `0xD0C`), the power-off flag: written to 1 at
+BL@0x08001616 (its own power-off), read at BL@0x080017AC and cleared at
+BL@0x080017EC. No other backup register, RTC register or secure alias is
+referenced. No RAM word is compared against a magic in the reset handler
+(BL@0x08001C44), `main` (BL@0x08001970) or the boot thread (BL@0x08001760);
+nothing refers to the kernel's `.boot_flags` at `0x2025E000` or to SRAM4.
+The option bytes are only rewritten for the DUALBANK bit (BL@0x08001E34,
+BL@0x08001E86). RCC_CSR is read (BL@0x08006338) and its cause stored at
+`0x20073F14`, which nothing reads.
+
+**Menu entry, BL@0x08002ECC(this, force).** 64 samples of the buttons at
+1 ms, then BL@0x080029F8 asks for the menu only while PD15 (power) is pressed
+and PD4, PA5 and PD8 released, continuously for more than 4000 ms
+(`cmp #4000` at BL@0x08002A3A, polled every 10 ms). Releasing early or
+pressing another button means no menu. The other way in is `force`, set
+(BL@0x08001926) when the image's stack pointer at `0x08060000` is outside
+`0x20000000`-`0x20270000` (BL@0x08001C98). **There is no flag a firmware can
+set to get the menu, or USB mass storage, on the next boot.** Menu results:
+0 start (battery check BL@0x08001630, update search BL@0x08002310, jump),
+1 power off, 2 factory reset (BL@0x08002390). USB MSC ("UNA Bootloader MSD")
+runs only inside the menu loop (BL@0x08002F90-0x08002FE0, start BL@0x08004354,
+stop BL@0x08004390) while USB is in. The power-off check (BL@0x080017A6 to
+BL@0x080017E0) runs only when BKP3R is set and no charger input: it polls the
+button every 10 ms until 500 ms of uptime, and powers off again if it is
+released first.
+
+**PMIC writes, every boot.** `Pmic::init`, BL@0x08003D6C, called once at
+BL@0x08001786, before the power-off check and the menu, with or without USB.
+Register accesses: read BL@0x0800722C, write BL@0x0800727C (4 retries); the
+charger registers are unlocked and locked again around each write
+(BL@0x080074D4: CHG_CNTL0 bits 7:3 = 10101b, then 0). Each write is a
+read-modify-write:
+
+| BL@ | Register | Bits written |
+|---|---|---|
+| 0x08003D94 | CHG_CNTL0 (`0x10`) | bit 2 NTC_EN = 0 |
+| 0x08003D9C (fn 0x08007562) | CHG_CNTL6 (`0x16`) | bit 7 NTC_RES_SEL = 0, bits 6:0 kept |
+| 0x08003DA4 (fn 0x0800746A) | TOP_CNTL3 (`0x0C`) | bits 1:0 = 3 (long glitch filter) |
+| 0x08003DAC (fn 0x0800750C) | CHG_CNTL1 (`0x11`) | bits 5:0 = 0x14, 100 mA |
+| 0x08003DB6 (fn 0x080075AA) | CHG_CNTL5 (`0x15`) | bits 5:0 = (4400 − 3590) / 20 = 0x28, 4.40 V; bit 6 kept |
+| then | mode and rail registers | fns 0x08007368, 0x0800739E, 0x080073D4, 0x080076A2 |
+
+CHG_CNTL2 to 4, CHG_CNTL5 bit 6 and CHG_CNTL6 bits 6:0 are never written.
+This is what turns PebbleOS's CHG_CNTL5 `0x66` (4.36 V) into `0x68` and its
+CHG_CNTL6 `0x95` into `0x15` across a reset
+(decision 261127-133657-01). Per the stock driver (`PCA9420.hpp` ~208-280,
+`PCA9420.cpp`), CHG_CNTL5 bit 6 is VBAT_RESTART (0: 140 mV, 1: 240 mV
+below VBAT_REG), so `0x68` is 4.40 V with PebbleOS's 240 mV threshold kept;
+CHG_CNTL6 bits 1:0 top-off timer, 3:2 pre-charge timer, 5:4 fast charge
+timer, 6 timers doubled, 7 NTC_RES_SEL (0: 100 kOhm, 1: 10 kOhm), so `0x15`
+and `0x95` differ only in the thermistor bias, unused with NTC off.
+
+**Ship mode at boot (BL@0x08003D1E, called at BL@0x08003D7C, before those
+writes).** With no charger input (CHG_STATUS_0 `0x18` bit 5 clear, fn
+BL@0x0800749A), CHG_CNTL6 bit 7 set, and none of the reset causes latched in
+RESET_MON (`0x71`) bits 4:0 (long press, watchdog, software reset, ship
+exit, thermal), it enters ship mode (fn BL@0x080072D4: MODECFG_0_0 `0x22`
+bit 7) and stops: the watch looks dead until USB is plugged in or the power
+button pressed. The bootloader takes NTC_RES_SEL = 1 for a PMIC at its
+power-on defaults, since it clears the bit on every boot. PebbleOS's driver
+writes CHG_CNTL6 = `0x95`, bit 7 set, so (inferred, not tried) a reset on
+battery that the PMIC does not latch, such as an MCU reset from PebbleOS,
+may end in ship mode; writing bit 7 as 0 (`0x15`) would avoid it.
+
 ---
 
 ## 10. Minimum viable bring-up
@@ -1243,10 +1313,11 @@ adaptation:**
 5. **Whether PD15 is really the PCA9420 ON pin,** and the exact Mode 2 wake
    path.
 6. **Debug-accessory pinout:** which USB-C pins carry USART3 TX in DAM mode.
-7. **Bootloader menu entry and timings** (BL@0x08002ECC). Not traced in
-   detail.
+7. ~~**Bootloader menu entry and timings** (BL@0x08002ECC).~~ Traced: see
+   section 9.6. No software flag; the power button alone for more than 4 s.
 8. **The cell.** Its capacity (200 or 280 mAh), its maximum charge voltage
    and current and its charge temperatures, from its data sheet or its label.
-9. **Charging while off.** Whether the bootloader writes the PCA9420's
-   charger, and whether a watch powered off charges as PebbleOS left it.
+9. **Charging while off.** The bootloader sets the charge voltage to
+   4.40 V and the current to 100 mA at every boot (section 9.6); whether a
+   watch powered off charges as PebbleOS or the bootloader left it.
 10. **The TS pin** of the PCA9420: whether a thermistor could be read there.

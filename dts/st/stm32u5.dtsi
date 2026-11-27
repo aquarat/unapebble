@@ -404,6 +404,18 @@
 			clocks = <&rcc STM32U5_CLK_OTG>, <&rcc STM32U5_CLK_USBPHY>;
 			clock-names = "otg", "utmi";
 			resets = <&rcc STM32U5_AHB2_RESET(14)>;
+			/* The internal high-speed PHY: its controls, and its transceiver's supply */
+			st,syscfg = <&syscfg>;
+			st,pwr = <&pwr>;
+			/* 1024 words of FIFO RAM. Receive: 13 for setup packets,
+			 * 2 x (512 / 4 + 1) for two packets, 2 x 9 OUT endpoints for
+			 * their status, 1 for the global OUT NAK. Transmit: a 64-byte
+			 * packet on endpoint 0, 512 bytes on endpoints 1 to 4, 128 bytes
+			 * on the rest. 946 words in all.
+			 */
+			g-rx-fifo-size = <290>;
+			g-np-tx-fifo-size = <16>;
+			g-tx-fifo-size = <128 128 128 128 32 32 32 32>;
 			status = "disabled";
 		};
 

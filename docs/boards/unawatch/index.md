@@ -133,9 +133,11 @@ PLL1 on MSIS at 48 MHz, with 4 flash wait states. The system timer is LPTIM4
 on the 32.768 kHz clock; LPTIM1 and LPTIM3 are left to the display.
 
 At boot the board drives the enables of the buzzer, the barometer, the GNSS,
-the reset of the BLE module and, without its driver, the eMMC low, and, outside release builds,
-USB_DAM (PB15) high to route the console to the USB-C connector
-(`CONFIG_BOARD_UNAWATCH_CONSOLE_DAM`).
+the reset of the BLE module and, without its driver, the eMMC low. Debug
+builds without the USB developer access drive USB_DAM (PB15) high to route
+the USART3 console to the USB-C connector
+(`CONFIG_BOARD_UNAWATCH_CONSOLE_DAM`); with it, the console is on USB and
+USB_DAM stays low, as the stub has it (decision 261127-134824-03).
 
 The firmware leaves the rails of the PCA9420 PMIC alone: the ones the display
 and the haptics need are on in its power-on mode, as the bootloader, which
@@ -275,7 +277,9 @@ panel driver, takes its VCOM from LPTIM1 (FRP) and its inverse from LPTIM3
 | Top right, power | PD15 | Select |
 | Bottom left | PA5 | Down |
 
-Back and Select held for 5 s reset the watch. With Up held as well, PebbleOS
+Back and Select held for 5 s reset the watch at once, whatever runs as long
+as PebbleOS's timers do (`pebble/system/reset_keys.c`, decision
+261127-134824-08); a slot build then starts the tether stub. With Up held as well, PebbleOS
 asks for its recovery firmware, which the UNA bootloader does not have: the
 watch just resets. Holding Back quits the app, as on every
 Pebble. The DRV2625 on I2C1 drives the ERM in real-time playback, open loop,
@@ -329,14 +333,16 @@ button for 4 s as the watch turns on, and install UNA's own `.ota` the same
 way. PebbleOS only writes to the GUI region of the eMMC, which the stock
 firmware does not use; its update drive and files are left alone.
 
-## Tethered stub
+## Tethered stub and USB developer access
 
 {doc}`tether` describes a small firmware, installed like any image, that
 stands in for a debug probe: over the USB-C connector, `tools/una/tether/tether.py`
 reads and writes memory and registers, drives the I2C buses and the GPIO,
 runs experiments loaded into SRAM, and flashes a PebbleOS image linked for
 the slot after it (`CONFIG_BOARD_UNAWATCH_TETHER_SLOT`) and starts it,
-without the bootloader menu.
+without the bootloader menu. PebbleOS's debug and slot builds have the
+console, the shell with `reboot`, and the same protocol on USB, behind a
+setting (`CONFIG_DEV_USB`): {doc}`tether` too.
 
 (unawatch-status)=
 
@@ -348,7 +354,8 @@ without the bootloader menu.
 | **Runs on a watch, from the tether slot** | The storage and the system resources on the eMMC, with the write timeout (decision 261127-123202-01) and the display thread (261127-130125-01): 11 minutes, the watchface ticking, no reset |
 | **Built, not yet run on a watch** | The storage on the eMMC with the resources back in the image, one `.ota` (261127-131711-01); the eMMC driver on its own, the PCA9420 charger and MAX17262 fuel gauge, the boot trace (TAMP 30 and 31; the stock firmware uses 0 to 23, PebbleOS 24 to 29), the Lab |
 | **Stand-ins, which nothing feeds** | Accelerometer, ambient light, microphone and die temperature are simulators: no steps |
-| **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS, buzzer or USB |
+| **Built, not yet run on a watch: USB** | The USB developer access, debug and slot builds: the console and the tether protocol on two USB serial ports, behind Settings > System > Debugging > USB Developer ({doc}`tether`, decisions from 261127-134824-01) |
+| **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS or buzzer; USB only for development |
 | **Unknown** | Whether the panel is round (its round mask is a computed circle); whether the panel and haptics rails are on at power-on as expected |
 
 Things to watch on a first boot:

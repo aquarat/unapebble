@@ -45,15 +45,18 @@ config UDC_MUSB_IRQ_PRIO
 config UDC_DWC2
     bool "Synopsys DesignWare USB 2.0 OTG (DWC2)"
     default y
-    depends on DT_HAS_ST_STM32F7_HSOTG_ENABLED
+    depends on DT_HAS_ST_STM32F7_HSOTG_ENABLED || DT_HAS_ST_STM32U5_HSOTG_ENABLED
     select CLK
     select PINCTRL
     select REGULATOR
+    select RESET
     help
       Device mode of the DesignWare USB 2.0 OTG controller, as the USB OTG
       HS of the STM32F7 and STM32H7, by DMA, or through its FIFOs on cores
       without it, with an external ULPI PHY at high speed or its internal PHY
-      at full speed.
+      at full speed; and as the USB OTG HS of the STM32U5, through its FIFOs,
+      on its internal high-speed PHY, powered only while the device is
+      connected.
 
 config UDC_DWC2_IRQ_PRIO
     int "Interrupt priority"

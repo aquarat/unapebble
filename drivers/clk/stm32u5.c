@@ -88,6 +88,7 @@ enum {
   MUX_RNG,
   MUX_SDMMC,
   MUX_ICLK,
+  MUX_USBPHY,
   NUM_MUXES,
 };
 
@@ -122,6 +123,8 @@ static const struct mux s_muxes[NUM_MUXES] = {
        .mask = RCC_CCIPR2_SDMMCSEL,
        .parents = {C(ICLK), C(PLL1_P)}},
   [MUX_ICLK] = MUX(CCIPR1, ICLKSEL, C(HSI48), NONE, C(PLL1_Q), C(MSIK)),
+  // The USB HS PHY's reference; HSE / 2 and PLL1 P / 2 are not supported
+  [MUX_USBPHY] = MUX(CCIPR2, USBPHYCSEL, C(HSE), NONE, C(PLL1_P), NONE),
 };
 
 #define GATE(_reg, _bit, _parent) \
@@ -146,7 +149,7 @@ static const struct gate s_gates[PBL_CLK_STM32U5_NUM_CLKS] = {
   [C(CRC)] = GATE(AHB1ENR, 12, HCLK),
   [C(RNG)] = GATE_MUX(AHB2ENR1, 18, RNG),
   [C(OTG)] = GATE(AHB2ENR1, 14, HCLK),
-  [C(USBPHY)] = GATE(AHB2ENR1, 15, HSE),
+  [C(USBPHY)] = GATE_MUX(AHB2ENR1, 15, USBPHY),
   [C(SDMMC1)] = GATE_MUX(AHB2ENR1, 27, SDMMC),
   [C(PWR)] = GATE(AHB3ENR, 2, HCLK),
   [C(USART1)] = GATE_MUX(APB2ENR, 14, USART1),
@@ -378,6 +381,9 @@ static int prv_disable(const struct pbl_clk_controller *ctrl, uint32_t id) {
   const struct pbl_clk_stm32u5 *rcc = prv_rcc(ctrl);
 
   switch (id) {
+    case C(HSE):
+      pbl_modifyl(RCC_CR_HSEON, 0U, rcc->base + STM32U5_RCC_CR_OFFSET);
+      return 0;
     case C(HSI16):
       pbl_modifyl(RCC_CR_HSION, 0U, rcc->base + STM32U5_RCC_CR_OFFSET);
       return 0;

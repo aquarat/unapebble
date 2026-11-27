@@ -21,6 +21,7 @@
 #include <pbl/services/activity/activity.h>
 #include <pbl/services/blob_db/api.h>
 #include <pbl/services/bluetooth/local_id.h>
+#include <pbl/services/dev_usb.h>
 #include <pbl/services/light.h>
 #include <pbl/services/stationary.h>
 #include <pbl/services/time.h>
@@ -65,7 +66,10 @@ enum {
 };
 
 enum {
-  DebuggingItemCoreDumpNow = 0,
+#ifdef CONFIG_DEV_USB
+  DebuggingItemDevUsb,
+#endif
+  DebuggingItemCoreDumpNow,
   DebuggingItemCoreDumpShortcut,
   DebuggingItemALSThreshold,
 #ifdef CONFIG_ACCEL_SENSITIVITY
@@ -519,6 +523,9 @@ static void prv_compact_settings_dbs(void) {
 ///////////////////////
 
 static const char *s_debugging_titles[DebuggingItem_Count] = {
+#ifdef CONFIG_DEV_USB
+  [DebuggingItemDevUsb] = pbl_i18n_noop("USB Developer"),
+#endif
   [DebuggingItemCoreDumpNow] = pbl_i18n_noop("CoreDump now"),
   [DebuggingItemCoreDumpShortcut] = pbl_i18n_noop("CoreDump shortcut"),
   [DebuggingItemALSThreshold] = pbl_i18n_noop("ALS Threshold"),
@@ -549,6 +556,14 @@ static void prv_debugging_draw_row_callback(GContext *ctx, const Layer *cell_lay
 
   const char *title = pbl_i18n_get(s_debugging_titles[cell_index->row], data);
   const char *subtitle_text = nullptr;
+#ifdef CONFIG_DEV_USB
+  // Console and memory access over USB, for whoever plugs a cable in
+  if (cell_index->row == DebuggingItemDevUsb) {
+    subtitle_text = dev_usb_is_forced()     ? pbl_i18n_get("Always on", data)
+                    : dev_usb_get_enabled() ? pbl_i18n_get("Enabled", data)
+                                            : pbl_i18n_get("Disabled", data);
+  } else
+#endif
   if (cell_index->row == DebuggingItemCoreDumpShortcut) {
     subtitle_text = shell_prefs_can_coredump_on_request()
                         ? pbl_i18n_get("10 back-button presses", data)
@@ -597,6 +612,11 @@ static void prv_debugging_select_callback(MenuLayer *menu_layer, MenuIndex *cell
   SettingsSystemData *data = (SettingsSystemData *)context;
 
   switch (cell_index->row) {
+#ifdef CONFIG_DEV_USB
+    case DebuggingItemDevUsb:
+      dev_usb_set_enabled(!dev_usb_get_enabled());
+      break;
+#endif
     case DebuggingItemCoreDumpNow:
       prv_maybe_trigger_core_dump();
       break;
