@@ -46,7 +46,11 @@ static int prv_configure_pin(const struct pbl_pinctrl_stm32 *ctrl, uint32_t pin)
     moder = GPIO_MODER_INPUT;
   }
 
-  ret = pbl_clk_enable(&ctrl->clks[port]);
+  // The clock stays on once taken: the port keeps the pin configured. A pin configured again, as
+  // a state selected at each use of a peripheral, takes it no further.
+  pbl_irq_lock();
+  ret = pbl_clk_is_enabled(&ctrl->clks[port]) ? 0 : pbl_clk_enable(&ctrl->clks[port]);
+  pbl_irq_unlock();
   if (ret != 0) {
     return ret;
   }
@@ -66,7 +70,6 @@ static int prv_configure_pin(const struct pbl_pinctrl_stm32 *ctrl, uint32_t pin)
   prv_field(base + STM32_GPIO_MODER_OFFSET, GPIO_MODER_MASK(line), moder);
   pbl_irq_unlock();
 
-  // The clock stays on: the port keeps the pin configured
   return 0;
 }
 
