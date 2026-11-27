@@ -36,6 +36,30 @@ config MODDABLE_XS
 config BATTERY_TEST
     default y if BOARD_UNAWATCH && !BOARD_UNAWATCH_LAB
 
+# The UNA Watch's USB developer access (pebble/services/dev_usb): the console
+# and the tether protocol on two serial ports, connected by the service, not
+# at boot, under IDs and names the host tools tell from the tether stub's.
+config USB_CDC_ACM_COUNT
+    default 2 if DEV_USB
+
+config USB_CDC_ACM_CONNECT
+    default n if DEV_USB
+
+config USB_CDC_ACM_NAME
+    default "UNA Watch PebbleOS" if DEV_USB
+
+config USB_CDC_ACM_TX_BUF_SIZE
+    default 4096 if DEV_USB
+
+config USB_DEVICE_PID
+    default 0x0002 if DEV_USB
+
+config USB_DEVICE_MANUFACTURER
+    default "unapebble" if DEV_USB
+
+config USB_DEVICE_PRODUCT
+    default "UNA Watch PebbleOS" if DEV_USB
+
 config CONSOLE_IMAGING
     default y
     depends on CONSOLE

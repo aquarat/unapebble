@@ -320,6 +320,14 @@
 	status = "okay";
 };
 
+// The USB OTG HS on its internal high-speed PHY, on the 16 MHz crystal; VBUS is not wired to it.
+// Only the developer access (CONFIG_DEV_USB) drives it, which powers it up when it connects.
+&usbotg_hs {
+	pinctrl-0 = <&usbotg_hs_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
 // The 4 GB eMMC, powered by EMMC_EN (PD10), which the stock firmware gives 35 ms. UNA's firmware
 // splits it at fixed offsets (docs/boards/unawatch/hardware.md, section 3.3): the update drive the
 // bootloader reads from 0, SYS from 100 MiB, GUI from 200 MiB, the user drive from 300 MiB.

@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
-console_uart: usart3
+# USART3, or the first USB serial port with the developer access (console.h)
+console_uart:
+  symbol: UNAWATCH_CONSOLE_UART
+  include: unawatch/console.h
+udc: usbotg_hs
 rtc: rtc
 flash: emmc_storage
 mmc: sdmmc1

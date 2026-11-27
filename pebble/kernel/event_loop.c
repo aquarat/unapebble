@@ -24,6 +24,7 @@
 #include <pbl/services/clock.h>
 #include <pbl/services/compositor/compositor.h>
 #include <pbl/services/debounced_connection_service.h>
+#include <pbl/services/dev_usb.h>
 #include <pbl/services/ecompass.h>
 #include <pbl/services/event_service.h>
 #include <pbl/services/evented_timer.h>
@@ -608,6 +609,10 @@ static PBL_NOINLINE void prv_launcher_main_loop_init(void) {
   modal_manager_init();
 
   shell_event_loop_init();
+
+#ifdef CONFIG_DEV_USB
+  dev_usb_init();
+#endif
 
 #ifdef CONFIG_SERVICE_STATIONARY_MODE
   stationary_init();
