@@ -23,6 +23,12 @@
 > - **Build:** in Docker, see [`docker/README.md`](docker/README.md).
 
 <p align="center">
+  <img src="docs/boards/unawatch/images/watchface-tictoc.webp" alt="PebbleOS's TicToc watchface on a UNA Watch" width="45%">
+  &nbsp;
+  <img src="docs/boards/unawatch/images/launcher-battery-test.webp" alt="The PebbleOS launcher on a UNA Watch, on the Battery test app" width="45%">
+</p>
+
+<p align="center">
   <img src="docs/_static/images/logo.svg" alt="PebbleOS" width="320">
 </p>
 

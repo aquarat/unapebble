@@ -8,10 +8,15 @@ memory and registers, runs I2C transfers and GPIO, loads experiments into SRAM
 and runs them, and flashes and starts a PebbleOS image without going through
 the bootloader menu each time.
 
+```{thumbnail} images/tether-stub-angle.webp
+:title: The stub on the watch: version, USB at high speed, the commands run, the last one, no fault, 160 MHz, nothing in the slot.
+```
+
 It lives in `tools/una/tether`: the stub in `stub/`, example experiments in
 `experiments/`, the host tool `tether.py`, the TCP bridge `bridge.py`, and a
 host build of the stub's protocol code in `sim/` that the tests run against.
-None of it has run on a watch yet. The reasons behind it are in the
+The stub and PebbleOS's developer access both run on the watch. The reasons
+behind them are in the
 [decision log](decisions/index.md), from 261126-232318-01.
 
 ## Building
@@ -385,11 +390,12 @@ it connects at high speed. Everything after that is polled.
 
 | | |
 | --- | --- |
-| **PebbleOS's developer access** | built for debug, release slot and debug slot images and the host's tests (the tether tools against the simulator answering as PebbleOS, `console.py` against a fake shell, the USB stack's unit tests); not yet run on a watch |
-| **Tested on a host** | the protocol code as the stub runs it, against `tether.py`, over pipes, a pty and TCP through `bridge.py` (`make test`, with AddressSanitizer); the image's vectors (`pack_ota.py`); a PebbleOS build linked for the slot |
-| **Not yet run on a watch** | all of the stub |
+| **Runs on a watch: the stub** | USB at high speed through the bootloader's hand-over, the display, every command of the protocol, experiments loaded and run in SRAM (the eMMC ones read and write the card), flashing and starting PebbleOS in the slot, and a PebbleOS reset coming back to it |
+| **Runs on a watch: PebbleOS's developer access** | From a debug slot image: the device enumerates as `1209:0002` at high speed with its two ports; the console answers (`usb`, `battery status`); the tether port answers `info`, reads, I2C and refuses a protected write; `reboot` returns to the stub; `bridge.py` on macOS follows the watch from the stub to PebbleOS and back |
+| **Tested on a host** | the protocol code as the stub runs it, against `tether.py`, over pipes, a pty and TCP through `bridge.py` (`make test`, with AddressSanitizer); the macOS port discovery against a captured `ioreg` tree; the image's vectors (`pack_ota.py`) |
+| **Not yet tried on a watch** | The Settings toggle in a normal `.ota` install, where USB is off by default; Back and Select held 5 s; a read of unmapped memory caught by the fault hook (a read at `0x60000000` returned 0, no fault) |
 
-Things to watch on its first start:
+Things that were watched for on its first start:
 
 - **USB**: the PHY bring-up runs for the first time outside ST's HAL. A port
   that does not appear with **USB HS...** on screen may enumerate at full

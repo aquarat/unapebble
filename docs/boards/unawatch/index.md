@@ -4,6 +4,9 @@
 
 :::{div} board-card
 
+```{thumbnail} images/watchface-tictoc.webp
+```
+
 :Board: `unawatch`
 :SoC: ST STM32U5A5
 :::
@@ -24,6 +27,46 @@ started from the tether slot: it ran 11 minutes without a reset.
 
 {doc}`hardware` describes the hardware as the stock kernel drives it, with
 the sources of each detail.
+
+## Photos
+
+PebbleOS on a UNA Watch, started from the tethered stub's slot. The buttons
+are Up and Down on the left, Select (also the power button) and Back on the
+right; the bezel's START and STOP labels are the stock firmware's.
+
+```{thumbnail} images/watchface-tictoc.webp
+:title: The TicToc watchface.
+```
+
+```{thumbnail} images/launcher-settings.webp
+:title: The launcher, charging on USB.
+```
+
+```{thumbnail} images/launcher-music.webp
+:title: The launcher, scrolled.
+```
+
+```{thumbnail} images/launcher-watchfaces.webp
+:title: The launcher, scrolled further.
+```
+
+```{thumbnail} images/launcher-battery-test.webp
+:title: The launcher on the Battery test app.
+```
+
+```{thumbnail} images/fully-charged.webp
+:title: Fully charged, plugged in.
+```
+
+```{thumbnail} images/health-prompt.webp
+:title: The Health app, which asks for the phone app.
+```
+
+The tethered stub, which stands in for a debug probe (see {doc}`tether`):
+
+```{thumbnail} images/tether-stub.webp
+:title: The stub, connected over USB at high speed.
+```
 
 ## Hardware
 
@@ -350,13 +393,12 @@ setting (`CONFIG_DEV_USB`): {doc}`tether` too.
 
 | | |
 | --- | --- |
-| **Runs on a watch** | The first port (`b697864b4`): clocks, display and frontlight, buttons, haptics, storage and resources in the embedded flash; the watch has the 4 MiB STM32U5A5 |
-| **Runs on a watch, from the tether slot** | The storage and the system resources on the eMMC, with the write timeout (decision 261127-123202-01) and the display thread (261127-130125-01): 11 minutes, the watchface ticking, no reset |
-| **Built, not yet run on a watch** | The storage on the eMMC with the resources back in the image, one `.ota` (261127-131711-01); the eMMC driver on its own, the PCA9420 charger and MAX17262 fuel gauge, the boot trace (TAMP 30 and 31; the stock firmware uses 0 to 23, PebbleOS 24 to 29), the Lab |
+| **Runs on a watch** | The first port (`b697864b4`): clocks, display and frontlight, buttons, storage and resources in the embedded flash; the watch has the 4 MiB STM32U5A5 |
+| **Runs on a watch, from the tether slot** | The current firmware, linked for the slot: storage on the eMMC (with the write timeout, decision 261127-123202-01, and the display thread, 261127-130125-01), the system resources read in place from the embedded flash, the PCA9420 charger and MAX17262 fuel gauge (charge registers read back at 4.36 V while it runs), the boot trace, and the USB developer access ({doc}`tether`); 11 minutes and 5 minutes without a reset, the watchface ticking |
+| **Built, not yet run on a watch** | The same firmware installed as one `.ota` through the bootloader (it differs only in its address); the Lab; the Battery test app (it is in the launcher, but no test has run); the USB Developer setting in a normal install |
 | **Stand-ins, which nothing feeds** | Accelerometer, ambient light, microphone and die temperature are simulators: no steps |
-| **Built, not yet run on a watch: USB** | The USB developer access, debug and slot builds: the console and the tether protocol on two USB serial ports, behind Settings > System > Debugging > USB Developer ({doc}`tether`, decisions from 261127-134824-01) |
 | **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS or buzzer; USB only for development |
-| **Unknown** | Whether the panel is round (its round mask is a computed circle); whether the panel and haptics rails are on at power-on as expected |
+| **Unknown** | Whether the haptics work: their rail and driver have not been checked on the watch. The panel is round, and the computed round mask fits it (see the photos) |
 
 Things to watch on a first boot:
 

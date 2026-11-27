@@ -29,7 +29,8 @@
     ```
 * - [`unawatch`](unawatch/index.md)
   - UNA Watch
-  -
+  - ```{thumbnail} unawatch/images/watchface-tictoc.webp
+    ```
 * - [`nrf52840dk`](nrf52840dk/index.md)
   - Nordic nRF52840 DK development kit
   - ```{thumbnail} nrf52840dk/images/nrf52840dk.webp
