@@ -17,3 +17,4 @@ charger: pmic
 gauge: fuel_gauge
 accel: bmi270
 mag: bmm350
+pressure: ms5837

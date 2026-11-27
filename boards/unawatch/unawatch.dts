@@ -64,6 +64,16 @@
 		regulator-always-on;
 	};
 
+	// The barometer's LDO, an AP7350 on ALTIMETER_EN, which must always be driven: its driver
+	// switches it, off for 20 ms, then on, 10 ms to come up (BaroMs5837.cpp:554-558)
+	baro_ldo: regulator-baro {
+		compatible = "regulator-fixed";
+		regulator-name = "baro";
+		gpios = <&gpiog 0 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		startup-delay-us = <10000>;
+	};
+
 	// The link2 module's supply, on whenever the watch is
 	vdd_link2: regulator-vdd-link2 {
 		compatible = "regulator-fixed";
@@ -259,11 +269,19 @@
 	};
 };
 
+// The body module: the heart rate sensor, the barometer and the module's EEPROM
 &i2c2 {
 	pinctrl-0 = <&i2c2_default>;
 	pinctrl-names = "default";
 	clock-frequency = <400000>;
 	status = "okay";
+
+	// The MS5837-02BA01, on the barometer's LDO
+	ms5837: pressure@76 {
+		compatible = "meas,ms5837";
+		reg = <0x76>;
+		vdd-supply = <&baro_ldo>;
+	};
 };
 
 &i2c3 {

@@ -13,19 +13,18 @@
 #include <devicetree/devices.h>
 
 // The enables of the loads the board switches, off at boot as the stock firmware leaves them:
-// eMMC, buzzer, barometer LDO (which must not float), BLE reset and GNSS. The haptics' is its
-// driver's, and so is the eMMC's with its driver: the board comes up after the devices, by when
-// the card may be in use.
+// eMMC, buzzer, BLE reset and GNSS. The haptics' is its driver's, so is the eMMC's with its
+// driver, and the barometer LDO's is its regulator's: the board comes up after the devices, by
+// when they may be in use.
 static const struct pbl_gpio s_off_at_boot[] = {
 #ifndef CONFIG_MMC_STM32_SDMMC
   PBL_GPIO(&dt_gpiod, 10, 0), /* EMMC_EN */
 #endif
-  PBL_GPIO(&dt_gpiob, 8, 0),  /* BUZZER_PWM */
-  PBL_GPIO(&dt_gpiob, 9, 0),  /* BUZZER_EN1 */
-  PBL_GPIO(&dt_gpiod, 5, 0),  /* BUZZER_EN2 */
-  PBL_GPIO(&dt_gpiog, 0, 0),  /* ALTIMETER_EN */
-  PBL_GPIO(&dt_gpioa, 8, 0),  /* SENSOR1_RST_L, BLE in reset */
-  PBL_GPIO(&dt_gpiog, 5, 0),  /* GNSS_EN */
+  PBL_GPIO(&dt_gpiob, 8, 0), /* BUZZER_PWM */
+  PBL_GPIO(&dt_gpiob, 9, 0), /* BUZZER_EN1 */
+  PBL_GPIO(&dt_gpiod, 5, 0), /* BUZZER_EN2 */
+  PBL_GPIO(&dt_gpioa, 8, 0), /* SENSOR1_RST_L, BLE in reset */
+  PBL_GPIO(&dt_gpiog, 5, 0), /* GNSS_EN */
 };
 
 #ifdef CONFIG_BOARD_UNAWATCH_CONSOLE_DAM
