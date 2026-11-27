@@ -51,8 +51,8 @@ enum pbl_gnss_fix_quality {
   PBL_GNSS_FIX_DGNSS,
 };
 
-/** @brief One navigation epoch. Fields other than the quality and satellites are only valid with
- * a fix. */
+/** @brief One navigation epoch. Fields other than the quality, satellites and time are only valid
+ * with a fix. */
 struct pbl_gnss_fix {
   /** UTC time of the epoch in milliseconds since the epoch, or 0 when unknown. */
   uint64_t utc_ms;
@@ -74,6 +74,51 @@ struct pbl_gnss_fix {
   uint8_t sats_used;
   /** Quality, an enum pbl_gnss_fix_quality. */
   uint8_t quality;
+  /** Satellites the receiver lists in view, over all constellations; 0 when unknown. */
+  uint8_t sats_in_view;
+};
+
+/** @brief NMEA sentence types, for the statistics of a receiver that speaks NMEA. */
+enum pbl_gnss_sentence {
+  /** Fix data. */
+  PBL_GNSS_SENTENCE_GGA,
+  /** Recommended minimum data. */
+  PBL_GNSS_SENTENCE_RMC,
+  /** Dilution of precision and active satellites. */
+  PBL_GNSS_SENTENCE_GSA,
+  /** Satellites in view. */
+  PBL_GNSS_SENTENCE_GSV,
+  /** Proprietary sentences of the receiver. */
+  PBL_GNSS_SENTENCE_PROPRIETARY,
+  /** Any other. */
+  PBL_GNSS_SENTENCE_OTHER,
+  /** @cond INTERNAL_HIDDEN */
+  PBL_GNSS_SENTENCE_COUNT,
+  /** @endcond */
+};
+
+/** @brief Receiver statistics, for diagnostics, counted since the board started. */
+struct pbl_gnss_stats {
+  /** What the driver is doing, as "off", "starting" or "tracking". */
+  const char *state;
+  /** The receiver's firmware, if it said, or NULL. */
+  const char *version;
+  /** Bytes received. */
+  uint32_t rx_bytes;
+  /** Well-formed sentences received, by type. */
+  uint32_t sentences[PBL_GNSS_SENTENCE_COUNT];
+  /** Lines dropped: a bad checksum, too long, or not a sentence. */
+  uint32_t bad;
+  /** Bytes lost because the driver could not keep up. */
+  uint32_t overruns;
+  /** Epochs reported. */
+  uint32_t epochs;
+  /** Satellites with a signal in the last epoch. */
+  uint8_t sats_tracked;
+  /** Strongest signal in the last epoch, in dB-Hz, 0 for none. */
+  uint8_t best_cn0;
+  /** Milliseconds from the start of the receiver to its first fix, 0 until then. */
+  uint32_t time_to_fix_ms;
 };
 
 struct pbl_gnss;
@@ -94,6 +139,8 @@ struct pbl_gnss_ops {
   int (*start)(const struct pbl_gnss *gnss, uint32_t interval_ms);
   /** Stop reporting and power the receiver down, keeping what speeds up the next fix. */
   int (*stop)(const struct pbl_gnss *gnss);
+  /** Optional. Read the statistics. */
+  void (*get_stats)(const struct pbl_gnss *gnss, struct pbl_gnss_stats *stats);
 };
 
 /** @brief GNSS runtime state. */
@@ -203,6 +250,14 @@ bool pbl_gnss_is_running(const struct pbl_gnss *gnss);
  * @return 0, -ENODEV if the receiver is not ready, or -ENODATA if nothing was reported yet.
  */
 int pbl_gnss_peek(const struct pbl_gnss *gnss, struct pbl_gnss_fix *fix);
+
+/**
+ * @brief Read the receiver's statistics.
+ * @param gnss Receiver.
+ * @param[out] stats Statistics.
+ * @return 0, -ENODEV if the receiver is not ready, or -ENOTSUP if the driver keeps none.
+ */
+int pbl_gnss_get_stats(const struct pbl_gnss *gnss, struct pbl_gnss_stats *stats);
 
 /**
  * @brief Report an epoch to the listener.

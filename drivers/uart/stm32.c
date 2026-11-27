@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Core Devices LLC */
+/* SPDX-FileCopyrightText: 2026 The unapebble authors */
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include <errno.h>
@@ -34,6 +35,29 @@ static inline void prv_putreg(const struct pbl_uart_stm32 *usart, uint32_t offse
   pbl_writel(value, prv_reg(usart, offset));
 }
 
+// An LPUART is clocked and has its pins only while in use: receiving, sending or being set up
+static void prv_lp_hold(const struct pbl_uart_stm32 *usart) {
+  if (!usart->lpuart) {
+    return;
+  }
+
+  if (!pbl_clk_is_enabled(&usart->clk)) {
+    (void)pbl_pinctrl_select_state(&usart->pinctrl, PBL_PINCTRL_STATE_DEFAULT);
+  }
+  (void)pbl_clk_enable(&usart->clk);
+}
+
+static void prv_lp_release(const struct pbl_uart_stm32 *usart) {
+  if (!usart->lpuart) {
+    return;
+  }
+
+  (void)pbl_clk_disable(&usart->clk);
+  if (!pbl_clk_is_enabled(&usart->clk)) {
+    (void)pbl_pinctrl_select_state(&usart->pinctrl, PBL_PINCTRL_STATE_SLEEP);
+  }
+}
+
 // A character going out keeps the CPU out of Stop, where the USART clock stops, until the line is
 // idle: the transmission complete interrupt, or a flush, ends it
 static void prv_tx_done(const struct pbl_uart_stm32 *usart) {
@@ -43,6 +67,7 @@ static void prv_tx_done(const struct pbl_uart_stm32 *usart) {
     pbl_modifyl(USART_CR1_TCIE, 0U, prv_reg(usart, STM32H7_USART_CR1_OFFSET));
     usart->state->tx_pending = false;
     pbl_idle_state_release(SOC_STM32_IDLE_STOP);
+    prv_lp_release(usart);
   }
   pbl_irq_unlock();
 }
@@ -120,6 +145,12 @@ static int prv_init(const struct pbl_uart *uart) {
 
   pbl_irq_enable(usart->irq);
 
+  // Until it is used, an LPUART only keeps its settings: the clock taken above is let go, and the
+  // pins put to sleep
+  if (usart->lpuart) {
+    prv_lp_release(usart);
+  }
+
   return 0;
 }
 
@@ -139,9 +170,18 @@ static int prv_configure(const struct pbl_uart *uart, const struct pbl_uart_conf
   }
 
   clk_hz = (uint32_t)(rate_mhz / 1000U);
-  brr = (clk_hz + cfg->baudrate / 2U) / cfg->baudrate;
-  if (brr < USART_BRR_MIN || brr > USART_BRR_MAX) {
-    return -ENOTSUP;
+  if (usart->lpuart) {
+    brr = (uint32_t)(((uint64_t)clk_hz * 256U + cfg->baudrate / 2U) / cfg->baudrate);
+    if (brr < LPUART_BRR_MIN || brr > LPUART_BRR_MAX) {
+      return -ENOTSUP;
+    }
+    // The FIFO holds the characters that come in while the CPU leaves Stop
+    cr1 |= USART_CR1_FIFOEN;
+  } else {
+    brr = (clk_hz + cfg->baudrate / 2U) / cfg->baudrate;
+    if (brr < USART_BRR_MIN || brr > USART_BRR_MAX) {
+      return -ENOTSUP;
+    }
   }
 
   // Parity takes the ninth bit of the word
@@ -169,26 +209,34 @@ static int prv_configure(const struct pbl_uart *uart, const struct pbl_uart_conf
   }
 
   prv_flush(uart);
+  prv_lp_hold(usart);
 
   pbl_modifyl(USART_CR1_UE, 0U, prv_reg(usart, STM32H7_USART_CR1_OFFSET));
-  pbl_modifyl(USART_CR1_M0 | USART_CR1_PCE | USART_CR1_PS, cr1,
+  pbl_modifyl(USART_CR1_M0 | USART_CR1_PCE | USART_CR1_PS | USART_CR1_FIFOEN, cr1,
               prv_reg(usart, STM32H7_USART_CR1_OFFSET));
   pbl_modifyl(USART_CR3_RTSE | USART_CR3_CTSE, cr3, prv_reg(usart, STM32H7_USART_CR3_OFFSET));
   prv_putreg(usart, STM32H7_USART_BRR_OFFSET, brr);
   pbl_modifyl(0U, USART_CR1_TE | USART_CR1_RE | USART_CR1_UE,
               prv_reg(usart, STM32H7_USART_CR1_OFFSET));
 
+  prv_lp_release(usart);
+
   return 0;
 }
 
+// An LPUART taken here stays in use while the character is pending
 static void prv_poll_out(const struct pbl_uart *uart, uint8_t c) {
   const struct pbl_uart_stm32 *usart = prv_stm32(uart);
+
+  pbl_irq_lock();
+  if (!usart->state->tx_pending) {
+    prv_lp_hold(usart);
+  }
 
   while ((prv_getreg(usart, STM32H7_USART_ISR_OFFSET) & USART_ISR_TXE) == 0U) {
   }
   prv_putreg(usart, STM32H7_USART_TDR_OFFSET, c);
 
-  pbl_irq_lock();
   if (!usart->state->tx_pending) {
     usart->state->tx_pending = true;
     pbl_idle_state_block(SOC_STM32_IDLE_STOP);
@@ -200,6 +248,7 @@ static void prv_poll_out(const struct pbl_uart *uart, uint8_t c) {
 // Hands over what the DMA wrote since the last drain
 static void prv_dma_drain(const struct pbl_uart_stm32 *usart) {
   struct pbl_uart_stm32_state *state = usart->state;
+  uint32_t size = usart->rx_buf_size;
   size_t residue;
   uint32_t head;
 
@@ -210,13 +259,13 @@ static void prv_dma_drain(const struct pbl_uart_stm32 *usart) {
     return;
   }
 
-  head = (PBL_UART_STM32_RX_BUF_SIZE - residue) % PBL_UART_STM32_RX_BUF_SIZE;
-  pbl_dcache_invalidate_range(usart->rx_buf, PBL_UART_STM32_RX_BUF_SIZE);
+  head = (size - residue) % size;
+  pbl_dcache_invalidate_range(usart->rx_buf, size);
 
   while (state->rx_pos != head) {
     uint8_t c = usart->rx_buf[state->rx_pos];
 
-    state->rx_pos = (state->rx_pos + 1U) % PBL_UART_STM32_RX_BUF_SIZE;
+    state->rx_pos = (state->rx_pos + 1U) % size;
     if (!pbl_uart_receive(&usart->uart, c)) {
       break;
     }
@@ -229,28 +278,56 @@ static void prv_dma_callback(void *arg, int status) {
   prv_dma_drain(arg);
 }
 
+// An LPUART receiving through its DMA channel in Stop: the receive interrupt only wakes the CPU,
+// for the first character after an idle line
+static bool prv_rx_in_stop(const struct pbl_uart_stm32 *usart) {
+  return usart->lpuart && usart->rx_dma != nullptr;
+}
+
+// A character came in, which the DMA may have taken already
+static bool prv_rx_activity(const struct pbl_uart_stm32 *usart, uint32_t isr) {
+  size_t residue;
+
+  if ((isr & (USART_ISR_RXNE | USART_ISR_IDLE | USART_ISR_BUSY | ISR_ERRORS)) != 0U) {
+    return true;
+  }
+
+  return pbl_dma_tx_status(usart->rx_dma, &residue) == 0 &&
+         (usart->rx_buf_size - residue) % usart->rx_buf_size != usart->state->rx_pos;
+}
+
 static int prv_rx_enable(const struct pbl_uart *uart) {
   const struct pbl_uart_stm32 *usart = prv_stm32(uart);
   uint32_t cr1 = USART_CR1_RXNEIE;
   int ret;
+
+  prv_lp_hold(usart);
 
   prv_putreg(usart, STM32H7_USART_RQR_OFFSET, USART_RQR_RXFRQ);
   prv_putreg(usart, STM32H7_USART_ICR_OFFSET, ICR_ERRORS | USART_ICR_IDLECF);
 
   if (usart->rx_dma != nullptr) {
     // The buffer is invalidated whole, so it must not share cache lines with anything else
-    pbl_dcache_flush_invalidate_range(usart->rx_buf, PBL_UART_STM32_RX_BUF_SIZE);
+    pbl_dcache_flush_invalidate_range(usart->rx_buf, usart->rx_buf_size);
     usart->state->rx_pos = 0U;
 
-    ret = pbl_dma_prep_dma_cyclic(usart->rx_dma, usart->rx_buf, PBL_UART_STM32_RX_BUF_SIZE,
-                                  PBL_UART_STM32_RX_BUF_SIZE / 2U, PBL_DMA_DEV_TO_MEM,
-                                  prv_dma_callback, (void *)usart);
+    ret = pbl_dma_prep_dma_cyclic(usart->rx_dma, usart->rx_buf, usart->rx_buf_size,
+                                  usart->rx_buf_size / 2U, PBL_DMA_DEV_TO_MEM, prv_dma_callback,
+                                  (void *)usart);
     if (ret != 0) {
+      prv_lp_release(usart);
       return ret;
     }
 
     pbl_modifyl(0U, USART_CR3_DMAR, prv_reg(usart, STM32H7_USART_CR3_OFFSET));
     cr1 = USART_CR1_IDLEIE;
+  }
+
+  if (prv_rx_in_stop(usart)) {
+    usart->state->rx_busy = false;
+    pbl_modifyl(0U, USART_CR1_UESM | USART_CR1_IDLEIE | USART_CR1_RXNEIE,
+                prv_reg(usart, STM32H7_USART_CR1_OFFSET));
+    return 0;
   }
 
   pbl_modifyl(0U, cr1, prv_reg(usart, STM32H7_USART_CR1_OFFSET));
@@ -264,30 +341,52 @@ static int prv_rx_enable(const struct pbl_uart *uart) {
 static void prv_rx_disable(const struct pbl_uart *uart) {
   const struct pbl_uart_stm32 *usart = prv_stm32(uart);
 
-  pbl_modifyl(USART_CR1_RXNEIE | USART_CR1_IDLEIE, 0U, prv_reg(usart, STM32H7_USART_CR1_OFFSET));
+  pbl_modifyl(USART_CR1_RXNEIE | USART_CR1_IDLEIE | USART_CR1_UESM, 0U,
+              prv_reg(usart, STM32H7_USART_CR1_OFFSET));
 
   if (usart->rx_dma != nullptr) {
     (void)pbl_dma_terminate(usart->rx_dma);
     pbl_modifyl(USART_CR3_DMAR, 0U, prv_reg(usart, STM32H7_USART_CR3_OFFSET));
   }
 
-  pbl_idle_state_release(SOC_STM32_IDLE_STOP);
+  if (!prv_rx_in_stop(usart) || usart->state->rx_busy) {
+    usart->state->rx_busy = false;
+    pbl_idle_state_release(SOC_STM32_IDLE_STOP);
+  }
+
+  prv_lp_release(usart);
 }
 
 void pbl_uart_stm32_irq_handler(const struct pbl_uart_stm32 *usart) {
   uint32_t isr = prv_getreg(usart, STM32H7_USART_ISR_OFFSET);
   uint32_t cr1 = prv_getreg(usart, STM32H7_USART_CR1_OFFSET);
 
+  // Woken up for a character: out of Stop, which stops the DMA controller, until the line is idle
+  if (prv_rx_in_stop(usart) && (cr1 & USART_CR1_RXNEIE) != 0U && prv_rx_activity(usart, isr)) {
+    pbl_modifyl(USART_CR1_RXNEIE, 0U, prv_reg(usart, STM32H7_USART_CR1_OFFSET));
+    if (!usart->state->rx_busy) {
+      usart->state->rx_busy = true;
+      pbl_idle_state_block(SOC_STM32_IDLE_STOP);
+    }
+  }
+
   if ((cr1 & USART_CR1_IDLEIE) != 0U && (isr & USART_ISR_IDLE) != 0U) {
     prv_putreg(usart, STM32H7_USART_ICR_OFFSET, ICR_ERRORS | USART_ICR_IDLECF);
     prv_dma_drain(usart);
+
+    // Back to Stop, until the next character wakes the CPU up
+    if (prv_rx_in_stop(usart) && usart->state->rx_busy) {
+      usart->state->rx_busy = false;
+      pbl_idle_state_release(SOC_STM32_IDLE_STOP);
+      pbl_modifyl(0U, USART_CR1_RXNEIE, prv_reg(usart, STM32H7_USART_CR1_OFFSET));
+    }
   }
 
   if ((cr1 & USART_CR1_TCIE) != 0U && (isr & USART_ISR_TC) != 0U) {
     prv_tx_done(usart);
   }
 
-  if ((cr1 & USART_CR1_RXNEIE) == 0U) {
+  if ((cr1 & USART_CR1_RXNEIE) == 0U || usart->rx_dma != nullptr) {
     return;
   }
 
@@ -312,3 +411,4 @@ const struct pbl_uart_ops pbl_uart_stm32_ops = {
 };
 
 #include PBL_DT_INSTANCES(st_stm32h7_uart)
+#include PBL_DT_INSTANCES(st_stm32u5_lpuart)

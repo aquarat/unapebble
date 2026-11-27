@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 The unapebble authors
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: st,stm32u5-lpuart
+config: UART_STM32
+class: uart
+define: PBL_UART_STM32_LPUART_DEFINE
+args:
+  - name: true
+  - reg: 0
+  - irq: 0
+  - clock: 0
+  - prop: current-speed
+    default: 115200
+  - pinctrl: default
+  - pinctrl: sleep
+    default: nullptr
+  - dma: rx
+    optional: true

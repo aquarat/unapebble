@@ -24,7 +24,8 @@ kernel drives it: its source (https://github.com/UNAWatch/una-kernel-public,
 MIT licence, below) and the bootloader image published with it. Taken from
 it are register values, timings and sequences, among them those of the
 display (LS012B7DD06A), the haptics (DRV2625), the fuel gauge's cell model
-(MAX17262), the charger (PCA9420), the eMMC (SDMMC) and the USB PHY; the
+(MAX17262), the charger (PCA9420), the eMMC (SDMMC), the USB PHY and the
+GNSS receiver (AG3335M: its UART settings and its start-up commands); the
 format of its .ota update files (tools/una/pack_ota.py makes the same files);
 the analysis in docs/boards/unawatch/hardware.md, which cites its sources
 file by file; and tools/una/SecurityKeys.pem, the update key every UNA
