@@ -363,8 +363,8 @@
 			read-only;
 		};
 
-		// The rest of the flash: an image up to 0x1a0000 bytes also fits the 2 MiB STM32U595 of
-		// early watches, which tools/una/pack_ota.py checks by default
+		// The rest of the flash, which the bootloader installs an image to: the firmware may
+		// split it (pebble/boards/unawatch.overlay)
 		partition@60000 {
 			label = "code";
 			reg = <0x60000 0x3a0000>;

@@ -3,11 +3,13 @@
 
 // The firmware's storage, on the eMMC, in the 32 MiB window of its GUI region the board gives it
 // (unawatch.dts): offsets are from the start of the window, 200 MiB into the eMMC. The bootloader
-// leaves the region alone, so the filesystem, the logs and the resources survive an update.
+// leaves the region alone, so the filesystem and the logs survive an update. The system resources
+// come with the image, in the embedded flash (CONFIG_RESOURCES_IN_CODE_FLASH).
 //
 // The window is read and written in 512-byte blocks, as NOR flash in 4 KiB subsectors and 64 KiB
 // sectors: every partition is a whole number of subsectors, the filesystem of sectors. What the
-// partitions leave of the window is free.
+// partitions leave of the window is free, among it the first 8 MiB, where earlier builds kept
+// the resources: the partitions after it stay where they were, and so does what they hold.
 
 // The gabbro platform's 260 x 260 framebuffer, of which the 240 x 240 panel shows the centre
 &display {
@@ -20,19 +22,6 @@
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
 		#size-cells = <1>;
-
-		// Two banks: the resources of the firmware that runs, which it copies from the update
-		// drive when neither holds them (pebble/resource/resource_storage_volume.c), and those of
-		// the one before
-		partition@0 {
-			label = "system-resources-bank-0";
-			reg = <0x0 0x400000>;
-		};
-
-		partition@400000 {
-			label = "system-resources-bank-1";
-			reg = <0x400000 0x400000>;
-		};
 
 		// Only protected: there is no recovery firmware to keep
 		partition@800000 {
@@ -70,6 +59,24 @@
 		partition@1000000 {
 			label = "filesystem";
 			reg = <0x1000000 0x1000000>;
+		};
+	};
+};
+
+// The embedded flash: the code, then the system resources installed with it at a fixed place
+// (pebbleos_resources.bin), up to the end of the 4 MiB, which the bootloader erases and writes
+// from 0x08060000 on every install. Both in 8 KiB pages.
+&internal_flash {
+	partitions {
+		// 2176 KiB
+		partition@60000 {
+			reg = <0x60000 0x220000>;
+		};
+
+		// 1536 KiB, for about 0.9 MiB of resources, read in place
+		image_resources: partition@280000 {
+			label = "system-resources";
+			reg = <0x280000 0x180000>;
 		};
 	};
 };
