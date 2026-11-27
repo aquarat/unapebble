@@ -22,6 +22,10 @@
 #define PWR_CR1_LPMS_STOP1 1U
 #define PWR_CR1_LPMS_STOP2 2U
 
+/* Write 1 to clear the Stop and Standby flags */
+#define PWR_SR_CSSF  PBL_BIT(0)
+#define PWR_SR_STOPF PBL_BIT(1)
+
 /* The core supply: the LDO at reset, or the SMPS */
 #define PWR_CR3_REGSEL PBL_BIT(1)
 
