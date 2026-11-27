@@ -19,8 +19,9 @@ can be put back.
 The port runs the full firmware, on the gabbro platform of the Pebble Round
 2: the SoC with its clocks, console, system timer, RTC, watchdog, RNG and CRC
 unit, the buttons, the display, the haptics, storage on the eMMC and the
-battery: its charger and its fuel gauge. Bluetooth, USB and the sensors come
-next; see
+battery: its charger and its fuel gauge, and the motion and environment
+sensors: the accelerometer, the magnetometer and the barometer. Bluetooth,
+the GNSS, the heart rate sensor and USB come next; see
 [](#unawatch-status). The first port, with its storage in the embedded flash,
 boots on a watch, and so does the firmware with the storage on the eMMC,
 started from the tether slot: it ran 11 minutes without a reset.
@@ -176,8 +177,9 @@ PLL1 on MSIS at 48 MHz, with 4 flash wait states. The system timer is LPTIM4
 on the 32.768 kHz clock; LPTIM1 and LPTIM3 are left to the display. Idle, the
 CPU waits in Stop 2 (see [](#unawatch-power)).
 
-At boot the board drives the enables of the buzzer, the barometer, the GNSS,
-the reset of the BLE module and, without its driver, the eMMC low. Debug
+At boot the board drives the enables of the buzzer, the GNSS, the reset of
+the BLE module and, without its driver, the eMMC low; the barometer's LDO is a
+regulator, which drives its enable low until the barometer's driver powers it. Debug
 builds without the USB developer access drive USB_DAM (PB15) high to route
 the USART3 console to the USB-C connector
 (`CONFIG_BOARD_UNAWATCH_CONSOLE_DAM`); with it, the console is on USB and
@@ -478,8 +480,9 @@ setting (`CONFIG_DEV_USB`): {doc}`tether` too.
 | **Runs on a watch** | The first port (`b697864b4`): clocks, display and frontlight, buttons, storage and resources in the embedded flash; the watch has the 4 MiB STM32U5A5 |
 | **Runs on a watch, from the tether slot** | The current firmware, linked for the slot: storage on the eMMC (with the write timeout, decision 261127-123202-01, and the display thread, 261127-130125-01), the system resources read in place from the embedded flash, the PCA9420 charger and MAX17262 fuel gauge (charge registers read back at 4.36 V while it runs), the boot trace, and the USB developer access ({doc}`tether`); 11 minutes and 5 minutes without a reset, the watchface ticking |
 | **Built, not yet run on a watch** | The same firmware installed as one `.ota` through the bootloader (it differs only in its address); the Lab; the Battery test app (it is in the launcher, but no test has run); the USB Developer setting in a normal install |
-| **Stand-ins, which nothing feeds** | Accelerometer, ambient light, microphone and die temperature are simulators: no steps |
-| **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS or buzzer; USB only for development |
+| **Runs on a watch, from the tether slot: the sensors** | The BMI270 accelerometer (FIFO and interrupt, shakes), the BMM350 magnetometer and the MS5837 barometer, read on the watch lying still (see [](#unawatch-sensors)); not yet moved: steps, shakes, the compass's calibration and the X and Y signs need someone to move the watch |
+| **Stand-ins, which nothing feeds** | Ambient light, microphone and die temperature are simulators |
+| **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No heart rate, GNSS or buzzer; USB only for development |
 | **Unknown** | Whether the haptics work: their rail and driver have not been checked on the watch. The panel is round, and the computed round mask fits it (see the photos) |
 
 Things to watch on a first boot:
@@ -512,6 +515,41 @@ Things to watch on a first boot:
 - **Code space**: code of 1617 KiB in release and 1649 KiB in debug builds,
   of the 2176 KiB before the resources. The battery test takes about 6 KiB
   (`CONFIG_BATTERY_TEST`).
+
+(unawatch-sensors)=
+
+## Sensors
+
+The motion and environment sensors have PebbleOS drivers, which its own
+services use: the accelerometer service for apps, shakes, health's step
+counting and activity, the compass and the pressure service. The reasons are
+in the decision log, from 261127-194845-01, the measurements in
+{doc}`hardware`, sections 2.6.1 and 2.7.1.
+
+| Sensor | Bus | Driver | How it runs |
+| --- | --- | --- | --- |
+| BMI270 accelerometer | I2C4 `0x68`, INT2 on PA1 | `drivers/imu/bmi270` | Low power mode, 4 samples averaged, ±4 g, advanced power save; samples through the FIFO at its watermark interrupt, 12.5 to 100 Hz in batches of up to 128 (the accelerometer service's 125 at 25 Hz: an interrupt every 5 s); shakes from the feature engine's any-motion, which runs the part at 50 Hz; no double tap. Bosch's configuration file is loaded at boot |
+| BMM350 magnetometer | I2C4 `0x14` | `drivers/imu/bmm350` | Suspended unless sampled; sampled in its normal mode, read at its output data rate and compensated with the calibration in its OTP. The interrupt, on PC2, is not used |
+| MS5837-02BA01 barometer | I2C2 `0x76` | `drivers/pressure/ms5837.c` | Powered at boot through its LDO (ALTIMETER_EN, PG0, a `regulator-fixed`): 20 ms off, 10 ms on; a read converts the pressure and the temperature at OSR 4096, 9 ms each |
+
+The axes are PebbleOS's: X to 3 o'clock, Y to 12 o'clock, Z out of the face;
+the accelerometer gives the gravity vector, z = -1000 mg face up. The heart
+rate sensor and the GNSS are not covered here.
+
+In the shell (debug builds):
+
+| Command | |
+| --- | --- |
+| `imu accel read`, `imu accel info` | One sample; the rate, batch and detections in use |
+| `imu accel stream SECONDS [INTERVAL_US [BATCH]]` | Takes the samples from the accelerometer service for a while; alone, shows the batches, rate, shakes and per axis the mean, noise and range; `stop` ends it |
+| `bmi270` | The part's mode and the driver's counts: interrupts, FIFO reads, samples, overruns, shakes, watchdog services, bus errors |
+| `imu mag read`, `imu mag info` | One sample, in milligauss, sampling briefly if nothing samples |
+| `pressure` | One conversion, in pascals |
+
+Checks that need someone to move the watch: steps counted while walking with
+it, shakes (a flick of the wrist, `bmi270` counts them), the X and Y signs
+(3 o'clock down reads x = +1000 mg, 12 o'clock down y = +1000 mg), and the
+compass, its calibration (turning the watch round every axis) and its bearing.
 
 (unawatch-boot-trace)=
 

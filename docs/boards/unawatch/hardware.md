@@ -461,6 +461,30 @@ to find out whether the module is fitted.
 | PB12 | GPIO | SENSOR2_CS | Unused |
 | PD12 / PD13 | I2C4 SCL / SDA, AF4 | SENSOR2_SCL / SDA | EEPROM, BMI270, BMM350 |
 
+#### 2.6.1 The BMI270 and the BMM350 (measured)
+
+Read on a watch, with PebbleOS's drivers (decisions 261127-194845-01 to -03):
+
+- I2C4 answers at `0x14` (BMM350), `0x50` and `0x58` (the module's EEPROM)
+  and `0x68` (BMI270), not at `0x69`.
+- BMI270: chip ID `0x24`. Until Bosch's 8 KiB configuration file is loaded,
+  INTERNAL_STATUS reads 0 and the accelerometer reads zeros, its power on or
+  not; loaded, the status reads 1 (init OK) within the first 10 ms poll.
+- In advanced power save, FIFO reads of about 40 frames (240 bytes) and
+  more return filler bytes (`0x90`, `0x8b`) and frames out of step, whether
+  or not the 450 us Bosch's SensorAPI waits after every access in it are
+  kept; 25 frames read clean. With the power save off for the read, reads of
+  125 frames (750 bytes) and 128 at 1 MHz are clean.
+- Lying still, apparently face up: the part's Z reads +1 g, PebbleOS's
+  x = -24, y = 44, z = -1009 mg; noise 1.5 to 2.1 mg rms per axis at 25 Hz,
+  low power mode averaging 4 samples. Batches of 25 at 25 Hz interrupt once a
+  second, of 125 once every 5 s.
+- BMM350: chip ID `0x33`, after the two dummy bytes every read of it starts
+  with. Its raw data reads `0x7f` until the OTP has been read and powered off
+  and the part reset magnetically. Compensated, still on the desk: about
+  x = 96, y = 28, z = -28 uT on the watch's axes (100 uT in all, twice the
+  Earth's field: the watch's own hard iron, for the compass's calibration).
+
 ### 2.7 Body module (PPG PAH8316LS, MS5837 barometer)
 
 | Pin | Function / AF | Label | Use |
@@ -471,6 +495,14 @@ to find out whether the module is fitted.
 | PF13 | GPIO out PP, active high | SENSORBODY_RST_L | Really **PPG_EN** (NCP110 LDO), with a board pull-down |
 | PG10 | GPIO out PP, active high (SPI3_MISO in the `.ioc`) | SENSORBODY_MISO | Really **VLED_EN** (NCP705 LDO), with a board pull-down |
 | PG9 / PD6 / PG12 | SPI3 SCK (AF6) / MOSI (AF5) / CS | SENSORBODY_SCK / MOSI / CS | Unused |
+
+#### 2.7.1 The MS5837 (measured)
+
+With ALTIMETER_EN (PG0) high, the barometer answers at `0x76` on I2C2 (the
+PPG at `0x40` stays off, its supply off). Its PROM: C0 `0x7001` (CRC 7, which
+checks; version 0, the 02BA01), C1 to C6 `0xa550 0x9ce9 0x6324 0x63c0 0x7d0c
+0x672b`; the eighth word, `0xAE`, gets no answer (a bus error). Indoors, at
+OSR 4096, three reads gave 102056, 102060 and 102058 Pa.
 
 ---
 
