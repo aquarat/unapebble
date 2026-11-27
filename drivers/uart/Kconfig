@@ -43,12 +43,13 @@ config UART_SF32LB_IRQ_PRIO
 config UART_STM32
     bool "ST STM32 UART Controller"
     default y
-    depends on DT_HAS_ST_STM32H7_UART_ENABLED
+    depends on DT_HAS_ST_STM32H7_UART_ENABLED || DT_HAS_ST_STM32U5_LPUART_ENABLED
     select CLK
     select DMA
     select PINCTRL
     help
-      Support for the ST STM32H7 and STM32U5 USART and UART controllers.
+      Support for the ST STM32H7 and STM32U5 USART and UART controllers,
+      and the STM32U5 LPUART.
 
 config UART_STM32_IRQ_PRIO
     int "Interrupt priority"
