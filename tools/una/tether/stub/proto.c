@@ -94,19 +94,22 @@ bool proto_read_allowed(uint32_t addr, uint32_t len) {
   return true;
 }
 
+bool proto_overlaps(uint32_t addr, uint32_t len, uint32_t start, uint32_t end) {
+  return prv_overlaps(addr, len, start, end);
+}
+
 /*
  * Never the flash or the system memory (code region), the flash controller
- * (option bytes), the stub's own RAM or the USB controller.
+ * (option bytes) or the USB controller, nor what the port protects of its
+ * own: the stub's RAM, or the system control block under PebbleOS.
  */
 bool proto_write_allowed(uint32_t addr, uint32_t len) {
   static const uint32_t s_ranges[][2] = {
-    {0x00000000U, 0x10000000U},
-    {TETHER_STUB_RAM, TETHER_STUB_RAM + TETHER_STUB_RAM_SIZE},
-    {0x30000000U, 0x30000000U + TETHER_STUB_RAM_SIZE},
-    {0x40022000U, 0x40022400U},
-    {0x50022000U, 0x50022400U},
-    {0x42040000U, 0x42080000U},
-    {0x52040000U, 0x52080000U},
+    {0x00000000U, 0x10000000U}, /* code: flash, its secure alias, system memory */
+    {0x40022000U, 0x40022400U}, /* flash controller */
+    {0x50022000U, 0x50022400U}, /* its secure alias */
+    {0x42040000U, 0x42080000U}, /* USB OTG HS */
+    {0x52040000U, 0x52080000U}, /* its secure alias */
   };
   if ((uint64_t)addr + len > 0x100000000ULL) {
     return false;
@@ -116,7 +119,7 @@ bool proto_write_allowed(uint32_t addr, uint32_t len) {
       return false;
     }
   }
-  return true;
+  return !port_write_protected(addr, len);
 }
 
 static bool prv_width_ok(unsigned width, uint32_t addr, uint32_t len) {

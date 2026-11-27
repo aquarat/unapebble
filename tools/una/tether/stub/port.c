@@ -311,6 +311,12 @@ int port_flash_write(uint32_t addr, const uint8_t *data, uint32_t len) {
   return flash_program(addr, data, len);
 }
 
+/* The stub's own RAM, and its alias */
+bool port_write_protected(uint32_t addr, uint32_t len) {
+  return proto_overlaps(addr, len, TETHER_STUB_RAM, TETHER_STUB_RAM + TETHER_STUB_RAM_SIZE) ||
+         proto_overlaps(addr, len, 0x30000000U, 0x30000000U + TETHER_STUB_RAM_SIZE);
+}
+
 int port_boot_check(uint32_t addr) {
   const uint32_t end = 0x08000000U + flash_size_kb() * 1024U;
   struct tether_fault fault;

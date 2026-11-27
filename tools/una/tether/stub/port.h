@@ -3,7 +3,8 @@
 
 /*
  * What proto.c needs from where it runs: port.c on the watch, sim_port.c on a
- * host for the tests. Memory accesses return TETHER_ERR_FAULT with *fault
+ * host for the tests, and PebbleOS's tether port
+ * (pebble/services/dev_usb/tether.c). Memory accesses return TETHER_ERR_FAULT with *fault
  * filled in when they fault.
  */
 
@@ -43,6 +44,8 @@ int port_gpio(unsigned port, unsigned pin, unsigned op, unsigned arg, uint32_t r
               uint8_t *level);
 int port_flash_erase(uint32_t addr, uint32_t len);
 int port_flash_write(uint32_t addr, const uint8_t *data, uint32_t len);
+/* Memory of the port's own that no write may touch, beyond proto.c's */
+bool port_write_protected(uint32_t addr, uint32_t len);
 /* TETHER_OK if a vector table at addr looks bootable */
 int port_boot_check(uint32_t addr);
 void port_note(const char *text);
@@ -57,3 +60,4 @@ void proto_input(const uint8_t *data, size_t len);
 void proto_poll(void);
 bool proto_read_allowed(uint32_t addr, uint32_t len);
 bool proto_write_allowed(uint32_t addr, uint32_t len);
+bool proto_overlaps(uint32_t addr, uint32_t len, uint32_t start, uint32_t end);

@@ -2,8 +2,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 /*
- * The tether protocol, shared by the stub, its host-side simulator and, through
- * test_tether.py, which checks these values against tether.py.
+ * The tether protocol, shared by the stub, its host-side simulator, PebbleOS's
+ * USB developer access (pebble/services/dev_usb) and, through test_tether.py,
+ * which checks these values against tether.py.
  *
  * A frame, both ways: A5 5A, cmd, seq, payload length (u16), payload, then the
  * CRC-32 (zlib's) of cmd to the end of the payload. All values little-endian.
@@ -150,6 +151,8 @@ enum tether_usb_state {
 #define TETHER_INFO_SLOT_VALID    (1U << 5)
 #define TETHER_INFO_USB_FS_FORCED (1U << 6)
 #define TETHER_INFO_FLASH_OK      (1U << 7)
+/* PebbleOS answers, not the stub: no calls, no flashing (a reset goes back to the stub for those) */
+#define TETHER_INFO_PEBBLEOS (1U << 8)
 
 struct tether_info {
   char magic[4]; /* "UTS1" */

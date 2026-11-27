@@ -7,7 +7,9 @@
  * gauge and a PMIC on I2C1, GPIO ports. Anything else faults as a bus error.
  * Blobs cannot run here; a blob whose header names one of these behaviours
  * gets it: sim_echo prints its arguments and returns their sum, sim_big
- * prints 10000 bytes, sim_fault faults, sim_hang times out.
+ * prints 10000 bytes, sim_fault faults, sim_hang times out. With
+ * TETHER_SIM_PEBBLEOS set it answers as PebbleOS's USB developer access does,
+ * without calls or flashing, until a reset turns it into the stub.
  */
 
 #include "port.h"
@@ -15,6 +17,7 @@
 #include "tether_proto.h"
 
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +44,7 @@ static uint16_t s_gauge[256];
 static uint8_t s_gauge_ptr;
 static uint8_t s_pmic[256];
 static uint8_t s_pmic_ptr;
+static bool s_pebbleos;
 
 uint32_t port_millis(void) {
   struct timespec ts;
@@ -88,7 +92,7 @@ void port_info(struct tether_info *info) {
   memcpy(info->magic, "UTS1", 4);
   info->proto_version = TETHER_PROTO_VERSION;
   info->info_size = sizeof(*info);
-  strcpy(info->version, "sim");
+  strcpy(info->version, s_pebbleos ? "PebbleOS sim" : "sim");
   info->reset_csr = 0x0c000000U;
   info->sysclk_hz = info->hclk_hz = 160000000U;
   info->uid[0] = 0x11111111U;
@@ -103,6 +107,9 @@ void port_info(struct tether_info *info) {
   info->flags = TETHER_INFO_PLL | TETHER_INFO_HSE | TETHER_INFO_LSE | TETHER_INFO_DISPLAY |
                 TETHER_INFO_FLASH_OK |
                 (port_boot_check(TETHER_SLOT_BASE) == TETHER_OK ? TETHER_INFO_SLOT_VALID : 0U);
+  if (s_pebbleos) {
+    info->flags = TETHER_INFO_PEBBLEOS;
+  }
   info->load_base = TETHER_LOAD_BASE;
   info->load_end = TETHER_LOAD_END;
   info->blob_stack_top = TETHER_BLOB_STACK_TOP;
@@ -173,6 +180,9 @@ int port_call(uint32_t addr, uint32_t flags, uint32_t timeout_ms, const uint32_t
       (const struct tether_blob_header *)&s_ram[TETHER_LOAD_BASE - RAM_BASE];
   char line[128];
 
+  if (s_pebbleos) {
+    return TETHER_ERR_UNSUPPORTED;
+  }
   if ((flags & TETHER_CALL_KEEP_OUT) == 0U) {
     s_out_len = 0U;
   }
@@ -296,6 +306,9 @@ static bool prv_in_slot(uint32_t addr, uint32_t len) {
 }
 
 int port_flash_erase(uint32_t addr, uint32_t len) {
+  if (s_pebbleos) {
+    return TETHER_ERR_UNSUPPORTED;
+  }
   if (!prv_in_slot(addr, len) || addr % TETHER_FLASH_PAGE || len % TETHER_FLASH_PAGE) {
     return TETHER_ERR_PROTECTED;
   }
@@ -304,6 +317,9 @@ int port_flash_erase(uint32_t addr, uint32_t len) {
 }
 
 int port_flash_write(uint32_t addr, const uint8_t *data, uint32_t len) {
+  if (s_pebbleos) {
+    return TETHER_ERR_UNSUPPORTED;
+  }
   if (!prv_in_slot(addr, len) || addr % TETHER_FLASH_PROG_ALIGN || len % TETHER_FLASH_PROG_ALIGN) {
     return TETHER_ERR_PROTECTED;
   }
@@ -315,6 +331,12 @@ int port_flash_write(uint32_t addr, const uint8_t *data, uint32_t len) {
   }
   memcpy(m, data, len);
   return TETHER_OK;
+}
+
+/* The stub's own RAM, and its alias */
+bool port_write_protected(uint32_t addr, uint32_t len) {
+  return proto_overlaps(addr, len, TETHER_STUB_RAM, TETHER_STUB_RAM + TETHER_STUB_RAM_SIZE) ||
+         proto_overlaps(addr, len, 0x30000000U, 0x30000000U + TETHER_STUB_RAM_SIZE);
 }
 
 int port_boot_check(uint32_t addr) {
@@ -351,9 +373,14 @@ void port_activity(uint8_t cmd, int status, uint32_t addr, uint32_t len) {
 void port_action(enum port_action action, uint32_t arg) {
   static const char *const s_names[] = {"none", "reset", "power off", "boot"};
   fprintf(stderr, "sim: %s %08x\n", s_names[action], arg);
+  /* PebbleOS, a slot build, restarts into the stub */
+  if (action == PORT_ACTION_RESET) {
+    s_pebbleos = false;
+  }
 }
 
 int main(void) {
+  s_pebbleos = getenv("TETHER_SIM_PEBBLEOS") != NULL;
   s_ram = calloc(1U, RAM_SIZE);
   s_flash = malloc(FLASH_SIZE);
   if (s_ram == NULL || s_flash == NULL) {
