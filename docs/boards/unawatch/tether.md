@@ -245,6 +245,23 @@ takes its system resources from the eMMC, or from the `.pbpack` of its
 version on the update drive: copy it there once through the bootloader menu,
 without an `.ota`, then choose Continue.
 
+While PebbleOS runs, the stub and its port are gone, so a test run has to end
+for its results to be read. `-DCONFIG_BOARD_UNAWATCH_TETHER_REBOOT_S=600`
+makes the image restart, into the stub, once it has run 600 s, from the high
+priority work queue, so that a stuck background queue does not hold it up.
+The port coming back early means the run reset by itself; then, through the
+stub, the boot trace shows how the run ended (a `kernel 0x5` breadcrumb at
+the set time for the restart, task watchdog or fault records otherwise) and
+the flash log, in the `debug-db` partition on the eMMC, what it logged
+(decision 261127-130125-02):
+
+```shell
+until ssh mac 'ls /dev/cu.usbmodem*'; do sleep 5; done  # the port is back
+python3 tools/una/tether/tether.py dump 0x2025dc00 0x400 -o record.bin
+python3 tools/una/tether/tether.py run emmc_read_ram.bin 436224 1024 0x20100000
+python3 tools/una/tether/tether.py dump 0x20100000 0x80000 -o log.bin
+```
+
 ## Protocol
 
 Frames are the same both ways, little-endian:

@@ -19,8 +19,8 @@ unit, the buttons, the display, the haptics, storage on the eMMC and the
 battery: its charger and its fuel gauge. Bluetooth, USB and the sensors come
 next; see
 [](#unawatch-status). The first port, with its storage in the embedded flash,
-boots on a watch; the images with the storage on the eMMC loop at boot, which
-the experiments firmware, [the Lab](#unawatch-lab), is for finding out.
+boots on a watch, and so does the firmware with the storage on the eMMC,
+started from the tether slot: it ran 11 minutes without a reset.
 
 {doc}`hardware` describes the hardware as the stock kernel drives it, with
 the sources of each detail.
@@ -98,8 +98,10 @@ an install**, and a switch to the stock firmware and back.
 The eMMC (`drivers/mmc/stm32_sdmmc.c`) runs on four data lines, at 40 MHz in
 High Speed from the 80 MHz PLL1 Q, as the stock firmware does. Its supply,
 EMMC_EN, is switched off once it has been idle for 2 s
-(`CONFIG_MMC_IDLE_OFF_MS`) and on again, with 35 ms to come up, by the next
-access. The flash (`drivers/flash/mmc_nor.c` with `drivers/flash/blk_nor.c`)
+(`CONFIG_MMC_IDLE_OFF_MS`) and on again by the next access: about 100 ms to
+come up (36 ms for the supply, 42 ms of CMD1 busy), and the card's first
+write after a power-up takes 110-125 ms, later ones 2-4 ms
+(decision 261127-130125-03). The flash (`drivers/flash/mmc_nor.c` with `drivers/flash/blk_nor.c`)
 has NOR semantics on the 512-byte blocks: a write reads its blocks, clears the
 bits and writes them back before it returns, and an erase writes blocks of
 0xFF. Writes are reliable writes, which a power loss leaves either done or not.
@@ -255,8 +257,11 @@ unchanged, losing a 10 pixel ring at the edge; a platform of its own would
 need apps built for it. The display is `jdi-parallel-gpio`
 (`drivers/display/jdi_gpio.c`): the CPU clocks every frame out on the GPIO
 as the stock firmware does, the panel turned a quarter round, with the
-timings of the stock driver. A frame takes about 40 ms of CPU, every update
-the whole frame. The panel, `sharp,ls012b7dd06a` on the memory-in-pixel
+timings of the stock driver. A frame takes 63 ms of CPU, every update the
+whole frame, clocked out by a thread of the driver, `Display`, at the
+background work queue's priority, so that animations take only the CPU left
+over (decision 261127-130125-01): clocked on KernelMain, the charging
+animation starved SysWorkq until the task watchdog reset the watch. The panel, `sharp,ls012b7dd06a` on the memory-in-pixel
 panel driver, takes its VCOM from LPTIM1 (FRP) and its inverse from LPTIM3
 (XFRP), at 30.7 Hz on the LSE. The frontlight is on PF3, on or off.
 
@@ -344,7 +349,7 @@ without the bootloader menu.
 | | |
 | --- | --- |
 | **Runs on a watch** | The first port (`b697864b4`): clocks, display and frontlight, buttons, haptics, storage and resources in the embedded flash; the watch has the 4 MiB STM32U5A5 |
-| **Loops at boot on a watch** | The storage and the system resources on the eMMC (`4ff00ebca`), and so main; the cause is being looked for with the Lab (decision 261126-232719-15) |
+| **Runs on a watch, from the tether slot** | The storage and the system resources on the eMMC, with the write timeout (decision 261127-123202-01) and the display thread (261127-130125-01): 11 minutes, the watchface ticking, no reset |
 | **Built, not yet run on a watch** | The eMMC driver on its own, the PCA9420 charger and MAX17262 fuel gauge, the boot trace (TAMP 30 and 31; the stock firmware uses 0 to 23, PebbleOS 24 to 29), the Lab |
 | **Stand-ins, which nothing feeds** | Accelerometer, ambient light, microphone and die temperature are simulators: no steps |
 | **Off** | Bluetooth runs on the fake controller, as on boards without a radio: no phone connection, so apps and updates only come with the image. No magnetometer, heart rate, barometer, GNSS, buzzer or USB |
@@ -373,8 +378,9 @@ Things to watch on a first boot:
   plausible, that plugging in and out shows at once (the PMIC interrupt) and
   that the percentage follows the stock firmware's. A watch that shows 5% and
   does not charge cannot read its gauge.
-- **CPU time**: each display update takes about 40 ms of busy CPU,
-  preemptible.
+- **CPU time**: each display update takes 63 ms of busy CPU, on the
+  `Display` thread at priority 1; an animation runs at about 15 frames a
+  second and takes the CPU left over.
 - **Code space**: images of 1619 KiB in release and about 1651 KiB in debug
   builds, of the 1664 KiB a 2 MiB part takes. The battery test takes about
   6 KiB (`CONFIG_BATTERY_TEST`).

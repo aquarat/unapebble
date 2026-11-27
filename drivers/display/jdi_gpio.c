@@ -9,6 +9,8 @@
 #include <pbl/drivers/display/jdi_gpio.h>
 #include <pbl/drivers/gpio/stm32.h>
 #include <pbl/kernel/compiler.h>
+#include <pbl/kernel/sem.h>
+#include <pbl/kernel/thread.h>
 #include <pbl/kernel/time.h>
 #include <pbl/util/math.h>
 #include <pbl/util/misc.h>
@@ -205,6 +207,20 @@ static void prv_frame(const struct pbl_display_jdi_gpio *jdi, const uint8_t *fb,
   prv_off(&st->xrst);
 }
 
+// Sends the frames prv_update() hands it, preemptible by everything of higher priority: the
+// panel's timings are minimums, so a frame only takes longer when the CPU is wanted elsewhere
+static void prv_thread(void *arg) {
+  const struct pbl_display_jdi_gpio *jdi = arg;
+  struct pbl_display_jdi_gpio_state *st = jdi->state;
+
+  for (;;) {
+    (void)pbl_sem_take(&st->start, PBL_FOREVER);
+    // Each panel line takes a column of a framebuffer turned a quarter: send them all
+    prv_frame(jdi, st->fb, st->pitch);
+    pbl_display_complete(&jdi->disp, 0);
+  }
+}
+
 static int prv_pin_init(const struct pbl_gpio *gpio, struct pbl_display_jdi_gpio_pin *pin) {
   const struct pbl_gpio_stm32 *port = PBL_CONTAINER_OF(gpio->port, const struct pbl_gpio_stm32, port);
   const bool active_low = (gpio->flags & PBL_GPIO_ACTIVE_LOW) != 0U;
@@ -306,7 +322,23 @@ static int prv_init(const struct pbl_display *disp) {
   // The panel keeps what it showed powered off, or noise: start from black
   prv_frame(jdi, (const uint8_t[]){0U}, 0U);
 
-  return pbl_panel_enable(jdi->panel);
+  ret = pbl_panel_enable(jdi->panel);
+  if (ret != 0) {
+    return ret;
+  }
+
+  pbl_sem_init(&st->start, 0U, 1U);
+  const struct pbl_thread_attr attr = {
+    .name = "Display",
+    .entry = prv_thread,
+    .arg = (void *)jdi,
+    .prio = CONFIG_DISPLAY_JDI_GPIO_THREAD_PRIO,
+    .privileged = true,
+    .stack = jdi->stack,
+    .stack_size = jdi->stack_size,
+  };
+
+  return pbl_thread_create(&st->thread, &attr);
 }
 
 static int prv_enable(const struct pbl_display *disp) {
@@ -327,9 +359,11 @@ static int prv_set_rotated(const struct pbl_display *disp, bool rotated) {
 
 static int prv_update(const struct pbl_display *disp, const struct pbl_display_buffer *buf,
                       uint16_t y0, uint16_t y1) {
-  // Each panel line takes a column of a framebuffer turned a quarter: send them all
-  prv_frame(prv_jdi(disp), buf->data, buf->pitch);
-  pbl_display_complete(disp, 0);
+  struct pbl_display_jdi_gpio_state *st = prv_jdi(disp)->state;
+
+  st->fb = buf->data;
+  st->pitch = buf->pitch;
+  pbl_sem_give(&st->start);
 
   return 0;
 }
