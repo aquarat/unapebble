@@ -4,6 +4,7 @@
 if(CONFIG_ACCEL)
   pbl_library_named(driver_accel)
   pbl_library_sources(accel.c)
+  pbl_library_sources_ifdef(CONFIG_ACCEL_BMI270 bmi270/bmi270.c bmi270/bmi270_config.c)
   pbl_library_sources_ifdef(CONFIG_ACCEL_SIM accel_sim.c)
   pbl_library_sources_ifdef(CONFIG_ACCEL_LIS2DW12 lis2dw12/lis2dw12.c)
   pbl_library_sources_ifdef(CONFIG_ACCEL_LSM6DSO lsm6dso/lsm6dso.c)
