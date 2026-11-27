@@ -44,3 +44,20 @@ int pbl_gauge_read(const struct pbl_gauge *gauge, struct pbl_gauge_reading *read
 
   return ret;
 }
+
+int pbl_gauge_hold_full_rate(const struct pbl_gauge *gauge, bool hold) {
+  int ret;
+
+  if (!pbl_device_is_ready(&gauge->dev)) {
+    return -ENODEV;
+  }
+  if (gauge->ops->hold_full_rate == nullptr) {
+    return -ENOTSUP;
+  }
+
+  pbl_mutex_lock(&gauge->state->lock, PBL_FOREVER);
+  ret = gauge->ops->hold_full_rate(gauge, hold);
+  pbl_mutex_unlock(&gauge->state->lock);
+
+  return ret;
+}

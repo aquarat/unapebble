@@ -44,6 +44,9 @@
 // SOCHold: 99% hold on, so RepSOC reaches 100% only at end of charge; empty hold off
 #define MAX17262_SOCHOLD_VALUE 0x1000U
 
+// HibCFG at power-on: hibernate at low currents, measuring every 5.6 s (HibScalar 4)
+#define MAX17262_HIBCFG_DEFAULT 0x870CU
+
 // The registers read at once for a reading: Status to FullCapNom; QH apart
 #define MAX17262_READ_FIRST MAX17262_STATUS
 #define MAX17262_READ_COUNT (MAX17262_FULLCAPNOM - MAX17262_STATUS + 1U)
