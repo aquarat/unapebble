@@ -40,6 +40,10 @@
  * return pbl_spi_transfer(&s_lcd, &xfer, 1U);
  * @endcode
  *
+ * A device whose protocol waits on the device between transfers with its chip select asserted, as
+ * one that signals it is ready on another line, takes the bus with pbl_spi_hold() and gives it
+ * back with pbl_spi_release(): the chip select stays asserted, and the bus its, in between.
+ *
  * pbl_spi_transfer() blocks the calling task until the transfer is done. pbl_spi_transfer_async()
  * returns once it has started and reports the outcome to a callback run from the controller's
  * interrupt; the transfers and their buffers must stay valid until then. Transfers are serialized
@@ -107,6 +111,7 @@ struct pbl_spi_bus_state {
   size_t idx;
   pbl_spi_callback_t cb;
   void *arg;
+  const struct pbl_spi_dev *held;
 };
 /** @endcond */
 
@@ -299,5 +304,23 @@ static inline int pbl_spi_write_read(const struct pbl_spi_dev *dev, const void *
 
   return pbl_spi_transfer(dev, xfers, 2U);
 }
+
+/**
+ * @brief Take the bus for a device and assert its chip select, until pbl_spi_release().
+ *
+ * Transfers with the device in between keep the chip select asserted; other devices' transfers
+ * wait. Must not be nested.
+ *
+ * @param dev Device.
+ * @return 0 or a negative errno.
+ */
+int pbl_spi_hold(const struct pbl_spi_dev *dev);
+
+/**
+ * @brief Deassert the chip select of a device held by pbl_spi_hold(), and give the bus back.
+ *
+ * @param dev Device.
+ */
+void pbl_spi_release(const struct pbl_spi_dev *dev);
 
 /** @} */
