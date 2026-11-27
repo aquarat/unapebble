@@ -11,6 +11,7 @@
 #include <pbl/drivers/clk.h>
 #include <pbl/drivers/pinctrl.h>
 #include <pbl/drivers/regulator.h>
+#include <pbl/drivers/reset.h>
 #include <pbl/drivers/udc.h>
 #include <pbl/kernel/cache.h>
 #include <pbl/kernel/delay.h>
@@ -42,6 +43,14 @@
 
 // Variants
 #define DWC2_STM32 PBL_BIT(0)
+// The STM32U5's OTG HS, on its internal high-speed PHY, which it powers up only while enabled. It
+// runs through its FIFOs, as the tethered stub proved it on the UNA Watch, not by DMA.
+#define DWC2_STM32U5_HSPHY PBL_BIT(1)
+
+// The internal PHY's supply and PLL settle within milliseconds
+#define HSPHY_SUPPLY_TIMEOUT_US 10000U
+#define HSPHY_SUPPLY_SETTLE_US  2000U
+#define HSPHY_PLL_US            5000U
 
 struct prv_ep {
   uint8_t *buf;
@@ -64,6 +73,8 @@ struct pbl_udc_dwc2_state {
   struct prv_ep in[MAX_EPS];
   struct prv_ep out[MAX_EPS];
   bool dma;
+  // The core and its PHY are up: always once initialized, but for a PHY powered while enabled
+  bool powered;
 };
 
 struct pbl_udc_dwc2 {
@@ -75,6 +86,13 @@ struct pbl_udc_dwc2 {
   // The clock of an external ULPI PHY, which the controller then drives at high speed
   struct pbl_clk phy_clk;
   bool ulpi;
+  // The internal high-speed PHY of the STM32U5: its reference clock, the core's reset, and the
+  // SYSCFG and PWR blocks holding its controls and its supply
+  struct pbl_clk utmi_clk;
+  struct pbl_reset rst;
+  uintptr_t syscfg;
+  struct pbl_clk syscfg_clk;
+  uintptr_t pwr;
   const struct pbl_regulator *supply;
   const struct pbl_pinctrl *pinctrl;
   // FIFO sizes, in 32-bit words: the shared receive FIFO, then each IN endpoint's
@@ -85,6 +103,15 @@ struct pbl_udc_dwc2 {
 
 static const struct pbl_udc_dwc2 *prv_dwc2(const struct pbl_udc *udc) {
   return PBL_CONTAINER_OF(udc, const struct pbl_udc_dwc2, udc);
+}
+
+static bool prv_hsphy(const struct pbl_udc_dwc2 *d) {
+  return (d->quirks & DWC2_STM32U5_HSPHY) != 0U;
+}
+
+// A PHY at high speed: an external ULPI one, or the internal one of the STM32U5
+static bool prv_high_speed(const struct pbl_udc_dwc2 *d) {
+  return d->ulpi || prv_hsphy(d);
 }
 
 static inline uint32_t prv_getreg(const struct pbl_udc_dwc2 *d, uint32_t offset) {
@@ -664,14 +691,41 @@ static int prv_ep_queue(const struct pbl_udc *udc, uint8_t addr, void *buf, size
   return ret;
 }
 
+static int prv_bringup(const struct pbl_udc_dwc2 *d);
+static void prv_hsphy_off(const struct pbl_udc_dwc2 *d);
+
 static int prv_enable(const struct pbl_udc *udc) {
-  prv_modify(prv_dwc2(udc), DWC2_DCTL, DCTL_SDIS, 0U);
+  const struct pbl_udc_dwc2 *d = prv_dwc2(udc);
+  int ret;
+
+  if (!d->state->powered) {
+    ret = prv_bringup(d);
+    if (ret != 0) {
+      prv_hsphy_off(d);
+      return ret;
+    }
+  }
+
+  prv_modify(d, DWC2_DCTL, DCTL_SDIS, 0U);
 
   return 0;
 }
 
+// The internal PHY of the STM32U5 powers down with the core: the host sees the device go
 static int prv_disable(const struct pbl_udc *udc) {
-  prv_modify(prv_dwc2(udc), DWC2_DCTL, 0U, DCTL_SDIS);
+  const struct pbl_udc_dwc2 *d = prv_dwc2(udc);
+
+  if (!d->state->powered) {
+    return 0;
+  }
+
+  prv_modify(d, DWC2_DCTL, 0U, DCTL_SDIS);
+
+  if (prv_hsphy(d)) {
+    pbl_irq_disable(d->irq);
+    prv_modify(d, DWC2_GAHBCFG, GAHBCFG_GINTMSK, 0U);
+    prv_hsphy_off(d);
+  }
 
   return 0;
 }
@@ -681,8 +735,8 @@ static int prv_disable(const struct pbl_udc *udc) {
 static int prv_core_init(const struct pbl_udc_dwc2 *d) {
   int ret;
 
-  if (d->ulpi) {
-    if ((d->quirks & DWC2_STM32) != 0U) {
+  if (prv_high_speed(d)) {
+    if (d->ulpi && (d->quirks & DWC2_STM32) != 0U) {
       prv_modify(d, DWC2_GGPIO, STM32_GCCFG_PWRDWN, 0U);
     }
     prv_modify(
@@ -698,7 +752,7 @@ static int prv_core_init(const struct pbl_udc_dwc2 *d) {
     return ret;
   }
 
-  if (!d->ulpi && (d->quirks & DWC2_STM32) != 0U) {
+  if (!prv_high_speed(d) && (d->quirks & DWC2_STM32) != 0U) {
     prv_modify(d, DWC2_GGPIO, 0U, STM32_GCCFG_PWRDWN);
   }
 
@@ -710,6 +764,11 @@ static int prv_core_init(const struct pbl_udc_dwc2 *d) {
 
   if ((d->quirks & DWC2_STM32) != 0U) {
     prv_modify(d, DWC2_GGPIO, STM32_GCCFG_VBDEN, 0U);
+  }
+  // The U5 takes the session as valid from its own override, VBUS undetected too
+  if (prv_hsphy(d)) {
+    prv_modify(d, DWC2_GGPIO, STM32U5_GCCFG_PULLDOWNEN,
+               STM32U5_GCCFG_VBVALEXTOEN | STM32U5_GCCFG_VBVALOVAL);
   }
   prv_modify(d, DWC2_GOTGCTL, 0U, GOTGCTL_BVALOEN | GOTGCTL_BVALOVAL);
 
@@ -743,18 +802,105 @@ static int prv_fifo_init(const struct pbl_udc_dwc2 *d) {
   return 0;
 }
 
-static int prv_init(const struct pbl_udc *udc) {
-  const struct pbl_udc_dwc2 *d = prv_dwc2(udc);
+// The PHY's reference clock, as SYSCFG selects it
+static int prv_hsphy_clksel(const struct pbl_udc_dwc2 *d, uint32_t *sel) {
+  static const struct {
+    uint32_t hz;
+    uint8_t sel;
+  } s_refs[] = {
+    {16000000U, 0x3U}, {19200000U, 0x8U}, {20000000U, 0x9U},
+    {24000000U, 0xaU}, {26000000U, 0xeU}, {32000000U, 0xbU},
+  };
+  uint64_t rate_mhz;
   int ret;
 
-  if (udc->num_eps > MAX_EPS) {
-    return -EINVAL;
-  }
-
-  ret = pbl_device_init(&d->clk.ctrl->dev);
+  ret = pbl_clk_get_rate(&d->utmi_clk, &rate_mhz);
   if (ret != 0) {
     return ret;
   }
+
+  for (size_t i = 0U; i < PBL_ARRAY_SIZE(s_refs); i++) {
+    if (rate_mhz == (uint64_t)s_refs[i].hz * 1000U) {
+      *sel = s_refs[i].sel;
+      return 0;
+    }
+  }
+
+  return -ENOTSUP;
+}
+
+// The PHY and its transceiver supply off, the core in reset, its clocks stopped
+static void prv_hsphy_off(const struct pbl_udc_dwc2 *d) {
+  if (!prv_hsphy(d)) {
+    return;
+  }
+
+  pbl_modifyl(STM32U5_OTGHSPHYCR_EN, 0U, d->syscfg + STM32U5_SYSCFG_OTGHSPHYCR);
+  pbl_modifyl(STM32U5_PWR_VOSR_USBPWREN | STM32U5_PWR_VOSR_USBBOOSTEN, 0U,
+              d->pwr + STM32U5_PWR_VOSR);
+  pbl_modifyl(STM32U5_PWR_SVMCR_USV, 0U, d->pwr + STM32U5_PWR_SVMCR);
+  if (d->rst.ctrl != nullptr) {
+    (void)pbl_reset_reset(&d->rst);
+  }
+  if (d->state->powered) {
+    (void)pbl_clk_disable(&d->utmi_clk);
+    (void)pbl_clk_disable(&d->clk);
+    d->state->powered = false;
+  }
+}
+
+// The PHY of the STM32U5, as ST's HAL brings it up: the reference clock, the transceiver supply,
+// which needs voltage range 1 or 2, then the PHY itself
+static int prv_hsphy_on(const struct pbl_udc_dwc2 *d) {
+  uint32_t sel;
+  int ret;
+
+  ret = pbl_clk_enable(&d->utmi_clk);
+  if (ret != 0) {
+    return ret;
+  }
+
+  ret = prv_hsphy_clksel(d, &sel);
+  if (ret != 0) {
+    (void)pbl_clk_disable(&d->utmi_clk);
+    return ret;
+  }
+
+  pbl_modifyl(STM32U5_OTGHSPHYCR_CLKSEL_MASK, PBL_FIELD_PREP(STM32U5_OTGHSPHYCR_CLKSEL_MASK, sel),
+              d->syscfg + STM32U5_SYSCFG_OTGHSPHYCR);
+  pbl_modifyl(0U, STM32U5_PWR_SVMCR_USV, d->pwr + STM32U5_PWR_SVMCR);
+  pbl_modifyl(0U, STM32U5_PWR_VOSR_USBPWREN | STM32U5_PWR_VOSR_USBBOOSTEN,
+              d->pwr + STM32U5_PWR_VOSR);
+  (void)PBL_POLL_BUSY_US((pbl_readl(d->pwr + STM32U5_PWR_VOSR) & STM32U5_PWR_VOSR_USBBOOSTRDY) != 0U,
+                         10U, HSPHY_SUPPLY_TIMEOUT_US);
+  pbl_busy_wait_us(HSPHY_SUPPLY_SETTLE_US);
+  pbl_modifyl(0U, STM32U5_OTGHSPHYCR_EN, d->syscfg + STM32U5_SYSCFG_OTGHSPHYCR);
+  pbl_busy_wait_us(HSPHY_PLL_US);
+
+  return 0;
+}
+
+// What the bootloader or another firmware left of the PHY goes: it stays down until enabled
+static int prv_hsphy_init(const struct pbl_udc_dwc2 *d) {
+  int ret;
+
+  ret = pbl_device_init(&d->syscfg_clk.ctrl->dev);
+  if (ret == 0) {
+    ret = pbl_clk_enable(&d->syscfg_clk);
+  }
+  if (ret != 0) {
+    return ret;
+  }
+
+  prv_hsphy_off(d);
+
+  return 0;
+}
+
+// Clocks, PHY, core and FIFOs, the controller disconnected
+static int prv_bringup(const struct pbl_udc_dwc2 *d) {
+  const struct pbl_udc *udc = &d->udc;
+  int ret;
 
   if (d->supply != nullptr) {
     ret = pbl_regulator_enable(d->supply);
@@ -776,12 +922,22 @@ static int prv_init(const struct pbl_udc *udc) {
     return ret;
   }
 
+  if (prv_hsphy(d)) {
+    ret = prv_hsphy_on(d);
+    if (ret != 0) {
+      (void)pbl_clk_disable(&d->clk);
+      return ret;
+    }
+  }
+  d->state->powered = true;
+
   ret = prv_core_init(d);
   if (ret != 0) {
     return ret;
   }
 
   d->state->dma =
+      !prv_hsphy(d) &&
       PBL_FIELD_GET(GHWCFG2_OTGARCH_MASK, prv_getreg(d, DWC2_GHWCFG2)) == GHWCFG2_OTGARCH_DMA;
   if (d->state->dma) {
     prv_modify(d, DWC2_GAHBCFG, GAHBCFG_HBSTLEN_MASK,
@@ -792,7 +948,7 @@ static int prv_init(const struct pbl_udc *udc) {
   prv_putreg(d, DWC2_PCGCCTL, 0U);
   prv_modify(d, DWC2_DCTL, 0U, DCTL_SDIS);
   prv_modify(d, DWC2_DCFG, DCFG_DSPD_MASK,
-             PBL_FIELD_PREP(DCFG_DSPD_MASK, d->ulpi ? DCFG_DSPD_HS : DCFG_DSPD_FS));
+             PBL_FIELD_PREP(DCFG_DSPD_MASK, prv_high_speed(d) ? DCFG_DSPD_HS : DCFG_DSPD_FS));
 
   ret = prv_fifo_init(d);
   if (ret != 0) {
@@ -820,6 +976,26 @@ static int prv_init(const struct pbl_udc *udc) {
   return 0;
 }
 
+static int prv_init(const struct pbl_udc *udc) {
+  const struct pbl_udc_dwc2 *d = prv_dwc2(udc);
+  int ret;
+
+  if (udc->num_eps > MAX_EPS) {
+    return -EINVAL;
+  }
+
+  ret = pbl_device_init(&d->clk.ctrl->dev);
+  if (ret != 0) {
+    return ret;
+  }
+
+  if (prv_hsphy(d)) {
+    return prv_hsphy_init(d);
+  }
+
+  return prv_bringup(d);
+}
+
 static const struct pbl_udc_ops s_ops = {
   .init = prv_init,
   .enable = prv_enable,
@@ -832,21 +1008,30 @@ static const struct pbl_udc_ops s_ops = {
   .ep_queue = prv_ep_queue,
 };
 
-#define PBL_UDC_DWC2_DEFINE(sym, _name, _base, _irq, _quirks, _clk, _phy_clk, _ulpi, _supply, \
-                            _pinctrl, _rx_fifo, _tx0_fifo, ...)                               \
+#define PBL_UDC_DWC2_DEFINE(sym, _name, _base, _irq, _quirks, _clk, _phy_clk, _ulpi, _utmi_clk, \
+                            _rst, _syscfg, _syscfg_clk, _pwr, _supply, _pinctrl, _rx_fifo,     \
+                            _tx0_fifo, ...)                                                    \
   PBL_UDC_STATE_DEFINE(sym);                                                                  \
   static struct pbl_udc_dwc2_state sym##_dwc2_state;                                          \
   static const struct pbl_pinctrl sym##_dwc2_pins = PBL_PINCTRL(_pinctrl, nullptr, 0);        \
   PBL_DEVICE_INSTANCE(sym, struct pbl_udc_dwc2, struct pbl_udc, udc){                         \
     .udc = PBL_UDC_INIT(sym, _name, nullptr, &s_ops,                                          \
                         1U + PBL_ARRAY_SIZE(((const uint16_t[]){__VA_ARGS__})),               \
-                        (_ulpi) ? PBL_UDC_SPEED_HIGH : PBL_UDC_SPEED_FULL, 0U),               \
+                        ((_ulpi) || ((_quirks) & DWC2_STM32U5_HSPHY) != 0U)                   \
+                            ? PBL_UDC_SPEED_HIGH                                              \
+                            : PBL_UDC_SPEED_FULL,                                             \
+                        0U),                                                                  \
     .base = (_base),                                                                          \
     .irq = (_irq),                                                                            \
     .quirks = (_quirks),                                                                      \
     .clk = _clk,                                                                              \
     .phy_clk = _phy_clk,                                                                      \
     .ulpi = (_ulpi),                                                                          \
+    .utmi_clk = _utmi_clk,                                                                    \
+    .rst = _rst,                                                                              \
+    .syscfg = (_syscfg),                                                                      \
+    .syscfg_clk = _syscfg_clk,                                                                \
+    .pwr = (_pwr),                                                                            \
     .supply = (_supply),                                                                      \
     .pinctrl = &sym##_dwc2_pins,                                                              \
     .rx_fifo = (_rx_fifo),                                                                    \
@@ -855,4 +1040,4 @@ static const struct pbl_udc_ops s_ops = {
   };                                                                                          \
   PBL_IRQ_CONNECT_NUM(_irq, CONFIG_UDC_DWC2_IRQ_PRIO, prv_isr, &sym##_inst, 0)
 
-#include PBL_DT_INSTANCES(st_stm32f7_hsotg)
+#include PBL_DT_INSTANCES(dwc2)

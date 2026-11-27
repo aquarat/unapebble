@@ -70,6 +70,22 @@
 #define STM32_GCCFG_PWRDWN PBL_BIT(16)
 #define STM32_GCCFG_VBDEN  PBL_BIT(21)
 
+/* The same register of the STM32U5 OTG HS, with its internal high-speed PHY */
+#define STM32U5_GCCFG_VBVALOVAL   PBL_BIT(23)
+#define STM32U5_GCCFG_VBVALEXTOEN PBL_BIT(24)
+#define STM32U5_GCCFG_PULLDOWNEN  PBL_BIT(25)
+
+/* The PHY's controls in the STM32U5 SYSCFG, and the supply of its transceiver in PWR */
+#define STM32U5_SYSCFG_OTGHSPHYCR        0x0074
+#define STM32U5_OTGHSPHYCR_EN            PBL_BIT(0)
+#define STM32U5_OTGHSPHYCR_CLKSEL_MASK   PBL_GENMASK(5, 2)
+#define STM32U5_PWR_VOSR                 0x000c
+#define STM32U5_PWR_VOSR_USBBOOSTRDY     PBL_BIT(13)
+#define STM32U5_PWR_VOSR_USBPWREN        PBL_BIT(19)
+#define STM32U5_PWR_VOSR_USBBOOSTEN      PBL_BIT(20)
+#define STM32U5_PWR_SVMCR                0x0010
+#define STM32U5_PWR_SVMCR_USV            PBL_BIT(28)
+
 /* Device registers */
 
 #define DWC2_DCFG       0x0800
