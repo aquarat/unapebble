@@ -6,6 +6,8 @@
 #include <pbl/drivers/gpio.h>
 #include <pbl/kernel/delay.h>
 #include <pbl/kernel/reboot.h>
+#include <pbl/kernel/work.h>
+#include <pbl/logging/logging.h>
 #include <pbl/util/size.h>
 
 #include <devicetree/devices.h>
@@ -40,6 +42,21 @@ struct board {
   struct pbl_device dev;
 };
 
+#if defined(CONFIG_BOARD_UNAWATCH_TETHER_REBOOT_S) && CONFIG_BOARD_UNAWATCH_TETHER_REBOOT_S > 0
+#define TETHER_REBOOT_S CONFIG_BOARD_UNAWATCH_TETHER_REBOOT_S
+
+PBL_LOG_MODULE_DEFINE(board_unawatch, LOG_LEVEL_INFO);
+
+// Back to the tether stub once a test run is over, from the high priority work queue, which a
+// stuck background queue does not hold up
+static void prv_tether_reboot(struct pbl_work *work) {
+  PBL_LOG_INFO("Restarting into the tether stub after %d s", TETHER_REBOOT_S);
+  pbl_reboot();
+}
+
+static PBL_DELAYED_WORK_DEFINE(s_tether_reboot, prv_tether_reboot);
+#endif
+
 static int prv_init(const struct pbl_device *dev) {
   int ret;
 
@@ -61,6 +78,10 @@ static int prv_init(const struct pbl_device *dev) {
   if (ret != 0) {
     return ret;
   }
+#endif
+
+#ifdef TETHER_REBOOT_S
+  (void)pbl_delayed_work_schedule(&pbl_sys_workq_high, &s_tether_reboot, PBL_SEC(TETHER_REBOOT_S));
 #endif
 
   return 0;

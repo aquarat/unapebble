@@ -30,6 +30,15 @@ config BOARD_UNAWATCH_TETHER_SLOT
       the stub stays where the bootloader starts images. Such an image
       is flashed with `tether.py flash`, not packed as an .ota.
 
+config BOARD_UNAWATCH_TETHER_REBOOT_S
+    int "Restart into the tether stub after this many seconds"
+    default 0
+    depends on BOARD_UNAWATCH_TETHER_SLOT
+    help
+      For test runs on a tethered watch: restart, which returns to the
+      stub, once the image has run this long, so that its boot trace and
+      flash log can be read through the stub. 0 never.
+
 config BOARD_UNAWATCH_LAB
     bool
     default y if "$(BOARD_VARIANT)" = "lab"
