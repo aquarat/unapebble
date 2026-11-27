@@ -560,6 +560,18 @@ the bootloader also runs on).
     charging, but resets the system when it expires.
   - The stock firmware turns NTC_EN off, so the TS pin has no thermistor
     (inferred): the PMIC cannot check the battery temperature itself.
+  - TOP_CNTL1 (`0x0A`) bits 5:4, ASYS_INPUT_SEL (data sheet Rev. 4.2,
+    section 8.3 and table 18): 00 ASYS from VIN or VBAT, whichever is
+    higher (the default), 01 from VBAT only, 10 from VIN only, 11
+    disconnected (test only). ASYS feeds the bucks, LDO2, LDO1 (from the
+    higher of ASYS and VBAT_BKUP) and the linear charger, so 01 runs the
+    whole watch from the battery with VIN connected, and nothing charges.
+    Only a PMIC power cycle or reset restores 00; the bootloader does not
+    write it. Confirmed on a watch, where TOP_CNTL1 reads `0x82` (VIN UVLO
+    3.3 V, as the stock firmware sets it): `0x92` made the gauge read the
+    system's draw (15 mA with the USB connected and working) instead of a
+    charge, and `0x82` restored the charge. VIN_ILIM has no suspend setting
+    (85 mA at least).
 - **MAX17262** at `0x36`, internal sense resistor (0.5 mAh, 156.25 uA,
   78.125 uV and 1/256 degree C a bit), in EZ mode: DesignCap `0x0190`,
   IChgTerm `0x0059`, VEmpty `0xAA63`, FullSOCThr `0x5005`, SOCHold `0x1000`,
@@ -577,6 +589,19 @@ the bootloader also runs on).
 
 PebbleOS drives the charger and the gauge as {doc}`index` describes, and
 leaves the STUSB4500 alone.
+
+### 4.5 Measured draw
+
+From the battery, on the MAX17262, with ASYS from VBAT only (section 4.4),
+PebbleOS idle on a minute-tick face, the USB off: 6 mA with the CPU in Sleep
+on PLL1 at 160 MHz, 1.0 mA with it in Stop 2, which leaves about 1 mA to the
+board: the PMIC, the panel and its VCOM, the modules in reset or standby,
+the eMMC off. The USB OTG HS with its PHY and the HSE adds about 11 mA. The
+tethered stub, polling with the USB at high speed and the frontlight on,
+draws 31.5 mA. The figures and how they were taken are in {doc}`index`
+(Power). With the input normal and charging off, the battery current swings
+by several milliamps either way, so the gauge's offset could not be read
+on the watch plugged in.
 
 ---
 
