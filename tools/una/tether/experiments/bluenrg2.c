@@ -18,6 +18,10 @@
  *                RESET held low 2 s with the pins in args[1] put back as found
  *                (bit 0 SCK, 1 MISO, 2 MOSI, 3 CS, 4 IRQ), the SPI pins set
  *                up again and a 5 ms reset (which starts normally)
+ *   args[0] = 7  a normal start (2 s in reset, SCK, MOSI and CS analog), link-layer-only mode
+ *                written and read back, then a restart from args[1] ms in reset (5 by default)
+ *                with those lines analog again, CS high from 5 ms before the release: its
+ *                start reason, and the mode read back
  *   args[1] != 0 in modes 0 to 2, also advertise for args[1] seconds (at most
  *                10) with standard HCI commands, non-connectable, as
  *                "unapebble-test"
@@ -91,6 +95,12 @@ static void prv_in(uint32_t port, uint32_t pin) {
   const uint32_t b = GPIO_PORT(port);
   REG32(b + 0x0cU) &= ~(3U << (pin * 2U));
   REG32(b + 0x00U) &= ~(3U << (pin * 2U));
+}
+
+static void prv_analog(uint32_t port, uint32_t pin) {
+  const uint32_t b = GPIO_PORT(port);
+  REG32(b + 0x0cU) &= ~(3U << (pin * 2U));
+  REG32(b + 0x00U) |= 3U << (pin * 2U);
 }
 
 static inline void prv_set(uint32_t port, uint32_t pin, uint32_t level) {
@@ -472,6 +482,38 @@ uint32_t blob_main(const uint32_t *args, uint32_t nargs) {
     prv_in(MISO_PORT, MISO_PIN);
     prv_in(IRQ_PORT, IRQ_PIN);
     prv_reset();
+  } else if (mode == 7U) {
+    static const uint8_t s_ll_only[3] = {0x2cU, 0x01U, 0x01U};
+    static const uint8_t s_off = 0x2cU;
+    const uint32_t hold = nargs > 1U && args[1] != 0U ? (args[1] > 3000U ? 3000U : args[1]) : 5U;
+    uint8_t r[260];
+    uint32_t n;
+
+    for (int run = 0; run < 2 && s_errors == 0; run++) {
+      const uint32_t ms = run == 0 ? 2000U : hold;
+
+      tprintf("restart from %lu ms in reset, SCK MOSI CS analog:\n", (unsigned long)ms);
+      prv_set(RST_PORT, RST_PIN, 0U);
+      prv_analog(SCK_PORT, SCK_PIN);
+      prv_analog(MOSI_PORT, MOSI_PIN);
+      prv_analog(CS_PORT, CS_PIN);
+      tether_delay_ms(ms);
+      prv_out(CS_PORT, CS_PIN, false, 1U);
+      prv_out(SCK_PORT, SCK_PIN, false, 0U);
+      prv_out(MOSI_PORT, MOSI_PIN, false, 0U);
+      prv_reset();
+      if (s_errors != 0 || s_pkt[5] != 1U) {
+        break;
+      }
+      tprintf("  config 0x2c:\n");
+      (void)prv_cmd("aci_hal_read_config_data", 0xfc0dU, &s_off, 1U, r, &n);
+      if (run == 0) {
+        tprintf("  status %d\n",
+                prv_cmd("aci_hal_write_config_data (ll only)", 0xfc0cU, s_ll_only, 3U, r, &n));
+        (void)prv_cmd("aci_hal_read_config_data", 0xfc0dU, &s_off, 1U, r, &n);
+      }
+    }
+    prv_versions();
   } else if (mode == 4U) {
     REG32(GPIO_PORT(MISO_PORT) + 0x0cU) |= 2U << (MISO_PIN * 2U);
     for (int i = 0; i < 3; i++) {
