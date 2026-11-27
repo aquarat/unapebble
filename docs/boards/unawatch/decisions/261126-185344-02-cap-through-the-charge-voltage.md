@@ -1,6 +1,6 @@
 # Cap the charge through the battery's charge voltage, so the gauge takes 4.20 V as full
 
-- Status: Accepted
+- Status: Superseded by 261127-131711-05-gauge-model-for-4v36
 - Date: 2026-11-26 18:53 UTC
 - Decided by: agent
 
