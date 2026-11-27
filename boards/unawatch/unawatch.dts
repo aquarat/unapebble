@@ -64,6 +64,13 @@
 		regulator-always-on;
 	};
 
+	// The link2 module's supply, on whenever the watch is
+	vdd_link2: regulator-vdd-link2 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd-link2";
+		regulator-always-on;
+	};
+
 	// The reflective color memory-in-pixel panel, 240 x 240, mounted a quarter turn round: line 0
 	// is the right column of the image, top to bottom. FRP and XFRP are driven separately.
 	panel: panel {
@@ -266,11 +273,28 @@
 	status = "okay";
 };
 
+// The link2 module: the GNSS's EEPROM, the IMU and the magnetometer
 &i2c4 {
 	pinctrl-0 = <&i2c4_default>;
 	pinctrl-names = "default";
 	clock-frequency = <1000000>;
 	status = "okay";
+
+	// Its INT2 on SENSOR2_INT2, PA1, which the stock firmware sets push-pull, active high
+	// (ImuBosch.cpp:541-557). The mount matrix gives PebbleOS's axes: X to 3 o'clock, Y to 12,
+	// Z out of the face, as the gravity vector, z = -1000 mg face up.
+	bmi270: imu@68 {
+		compatible = "bosch,bmi270";
+		reg = <0x68>;
+		vdd-supply = <&vdd_link2>;
+		vddio-supply = <&vdd_link2>;
+		interrupt-parent = <&gpioa>;
+		interrupts = <1 IRQ_TYPE_EDGE_RISING>;
+		interrupt-names = "INT2";
+		mount-matrix = "0", "1", "0",
+			       "-1", "0", "0",
+			       "0", "0", "-1";
+	};
 };
 
 // The display's VCOM, FRP and XFRP, on the LSE, which keeps them running in Stop 2
