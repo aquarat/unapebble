@@ -180,6 +180,10 @@ void pbl_idle_state_release(pbl_idle_state_id_t state) {
   arch_irq_unlock(key);
 }
 
+uint8_t pbl_idle_state_blocks(pbl_idle_state_id_t state) {
+  return state < PBL_IDLE_STATES_MAX ? s_blocks[state] : 0U;
+}
+
 static void prv_latency_update(void) {
   s_latency_ticks = PBL_TICK_FOREVER;
   for (const struct pbl_idle_latency_request *req = s_requests; req != nullptr; req = req->next) {

@@ -5,8 +5,10 @@
 
 #include <pbl/devicetree.h>
 #include <pbl/drivers/i2c/stm32.h>
+#include <pbl/kernel/idle.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/mmio.h>
+#include <pbl/soc/st/idle.h>
 #include <pbl/util/bits.h>
 #include <pbl/util/math.h>
 #include <pbl/util/misc.h>
@@ -121,10 +123,12 @@ static int prv_init(const struct pbl_i2c_bus *bus) {
   return 0;
 }
 
-// TIMINGR only takes writes with the controller disabled
+// TIMINGR only takes writes with the controller disabled. Its clock stops in Stop: the CPU stays
+// out of it until the transfer ends.
 static void prv_enable(const struct pbl_i2c_bus *bus) {
   const struct pbl_i2c_stm32 *i2c = prv_i2c(bus);
 
+  pbl_idle_state_block(SOC_STM32_IDLE_STOP);
   (void)pbl_clk_enable(&i2c->clk);
   prv_putreg(i2c, STM32_I2C_CR1_OFFSET, 0U);
   prv_putreg(i2c, STM32_I2C_TIMINGR_OFFSET, i2c->state->timingr);
@@ -146,6 +150,7 @@ static void prv_disable(const struct pbl_i2c_bus *bus) {
 
   prv_reset(i2c);
   (void)pbl_clk_disable(&i2c->clk);
+  pbl_idle_state_release(SOC_STM32_IDLE_STOP);
 }
 
 static void prv_abort(const struct pbl_i2c_bus *bus) {

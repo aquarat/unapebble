@@ -173,7 +173,8 @@ the bus masters that could still write to RAM, moves the system clock to
 MSIS and turns the instruction cache on. The clock controller then selects
 the SMPS and voltage range 1, and runs the CPU and every bus at 160 MHz from
 PLL1 on MSIS at 48 MHz, with 4 flash wait states. The system timer is LPTIM4
-on the 32.768 kHz clock; LPTIM1 and LPTIM3 are left to the display.
+on the 32.768 kHz clock; LPTIM1 and LPTIM3 are left to the display. Idle, the
+CPU waits in Stop 2 (see [](#unawatch-power)).
 
 At boot the board drives the enables of the buzzer, the barometer, the GNSS,
 the reset of the BLE module and, without its driver, the eMMC low. Debug
@@ -294,6 +295,68 @@ full, 3 discharge, 4 recharge, 5 done), `loads` (seen in the discharge: 1
 normal, 2 heavy), and `out_uah` and `sum_uah`, the charge out of the battery
 since full by QH and by the integral. The reasons are in the decision log,
 from 261126-190847-01.
+
+(unawatch-power)=
+
+## Power
+
+PebbleOS's kernel is tickless: when nothing runs, the CPU waits in the
+deepest idle state no driver blocks that is worth entering before the next
+timeout. On the STM32U5 that is Stop 2 (`soc/st/stm32u5/idle.c`, decision
+261127-153346-01): every clock but the LSE and the LSI stops, the SRAMs are
+kept, and LPTIM4, the system timer, and the VCOM's LPTIM1 and LPTIM3 run on
+in the SmartRun domain; the timer, the buttons and the PMIC wake the CPU,
+which then relocks PLL1. The CPU stays in Sleep, on PLL1, while the USB is
+powered (with the developer access connected), during an I2C transfer and
+during an eMMC power-up or transfer. `sys cpustats` gives the time in each
+state since it was last asked, and what blocks each.
+
+### Measured draw
+
+Measured on a watch on its fuel gauge with `power measure` (decision
+261127-150636-01): plugged in, the charger's input suspended so that the
+system runs from the battery, the USB developer access held off but where
+said, a debug build from the tether slot, the battery at 4.38 to 4.40 V and
+30 degrees C, windows of 5 to 10 minutes. The gauge's Current, sampled every
+2 s, has a spread of about 4 mA whatever the load, so a 10 minute mean is
+good to about 0.25 mA; its AvgCurrent and, over long windows, its coulomb
+counter agree with it.
+
+| State | Sleep only (before) | Stop 2 |
+| --- | --- | --- |
+| TicToc, a minute-tick face, display static | 5.9 to 6.0 mA, 99% in Sleep | 0.9 to 1.0 mA, 98% in Stop 2 |
+| Launcher, static | 6.3 mA | |
+| TicToc, the eMMC kept powered and idle (`CONFIG_MMC_IDLE_OFF_MS=0`) | | 0.9 to 1.1 mA: the idle card is below what the gauge resolves |
+| An animation (Bouncing Box demo, about 15 frames a second) | | 10.5 mA, CPU 100% busy |
+| USB developer access connected, at high speed | 17.0 mA (launcher) | 19.1 mA (TicToc): Stop blocked by the USB |
+
+The tethered stub draws 31.5 mA: it polls, with the USB at high speed and
+the frontlight on. A frame costs about 0.6 mA s (63 ms of CPU), so a second-tick face would
+draw about 1.6 mA, estimated from the animation rather than measured: no
+built-in face ticks every second.
+
+### Battery life
+
+On the 200 mAh of UNA's `main.h` (280 mAh by a comment in `Pmic.cpp`),
+from the draws above:
+
+| | Draw | 200 mAh | 280 mAh |
+| --- | --- | --- | --- |
+| Minute-tick face, idle, before | 6 mA | 1.4 days | 1.9 days |
+| Minute-tick face, idle, Stop 2 | 1.0 mA | 8 days | 12 days |
+| Second-tick face (estimated) | 1.6 mA | 5 days | 7 days |
+| USB developer access connected | 17 to 19 mA | 11 hours | 15 hours |
+
+Use of the watch adds to it: an animation draws 10 mA, and the frontlight,
+not measured, more.
+A slot build forces the developer access on (`CONFIG_DEV_USB_FORCE`), so on
+battery it keeps the USB powered and stays out of Stop; an installed debug
+build follows VBUS, and a release build has no USB.
+
+Where the rest of the 1 mA goes is not known yet: the CPU in Stop 2 should
+take tens of microamps, so most of it is the board (the PMIC's regulators,
+the panel, the modules' standby). The next wins are there, and in the
+display, whose frames are clocked out on the CPU for 63 ms each.
 
 ## Display
 
@@ -444,7 +507,8 @@ Things to watch on a first boot:
   does not charge cannot read its gauge.
 - **CPU time**: each display update takes 63 ms of busy CPU, on the
   `Display` thread at priority 1; an animation runs at about 15 frames a
-  second and takes the CPU left over.
+  second and takes the CPU left over. Idle, the CPU is in Stop 2 about 98%
+  of the time, unless the USB is connected (`sys cpustats`).
 - **Code space**: code of 1617 KiB in release and 1649 KiB in debug builds,
   of the 2176 KiB before the resources. The battery test takes about 6 KiB
   (`CONFIG_BATTERY_TEST`).

@@ -20,7 +20,9 @@
  * The charge current, termination current and charge voltage come from the battery, the
  * voltage capped by CONFIG_CHARGER_PCA9420_CHARGE_LIMIT_MV. The charger starts disabled: its
  * user enables it once it has checked the battery may be charged. It measures nothing: the
- * battery's fuel gauge does. The driver leaves the regulators of the PMIC alone.
+ * battery's fuel gauge does. The driver leaves the regulators of the PMIC alone. The input can be
+ * suspended, for measuring the system's draw on the gauge without unplugging: ASYS then runs from
+ * the battery only and nothing charges; the driver's init puts the input back.
  * @{
  */
 
@@ -32,6 +34,8 @@ struct pbl_charger_pca9420_data {
   bool configured;
   // Charging is allowed
   bool enabled;
+  // The system runs from the battery alone, VIN connected
+  bool input_suspended;
 };
 
 struct pbl_charger_pca9420 {

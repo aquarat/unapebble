@@ -253,6 +253,21 @@ static inline void pbl_idle_state_release(pbl_idle_state_id_t state) {
 }
 #endif
 
+/**
+ * @brief Get the number of blocks held on an idle state, for statistics.
+ *
+ * @param state Index in @ref pbl_soc_idle_states.
+ * @return Blocks taken with pbl_idle_state_block() and not released; 0 without @c CONFIG_CPU_IDLE.
+ */
+#ifdef CONFIG_CPU_IDLE
+uint8_t pbl_idle_state_blocks(pbl_idle_state_id_t state);
+#else
+static inline uint8_t pbl_idle_state_blocks(pbl_idle_state_id_t state) {
+  (void)state;
+  return 0U;
+}
+#endif
+
 /** @brief Request on the time the CPU takes to wake up, see pbl_idle_latency_request_add(). */
 struct pbl_idle_latency_request {
   /** @cond INTERNAL_HIDDEN */

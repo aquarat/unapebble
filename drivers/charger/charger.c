@@ -137,6 +137,20 @@ int pbl_charger_high_load_release(const struct pbl_charger *charger) {
   return ret;
 }
 
+int pbl_charger_input_suspend(const struct pbl_charger *charger, bool suspend) {
+  int ret;
+
+  if (charger->ops->set_input_suspend == nullptr) {
+    return -ENOTSUP;
+  }
+
+  prv_lock(charger);
+  ret = charger->ops->set_input_suspend(charger, suspend);
+  prv_unlock(charger);
+
+  return ret;
+}
+
 void pbl_charger_set_listener(const struct pbl_charger *charger,
                               const struct pbl_charger_listener *listener) {
   prv_lock(charger);

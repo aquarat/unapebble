@@ -28,6 +28,9 @@ struct pbl_gauge_max17262_state {
   bool configured;
   // Power-on resets of the gauge handled
   uint8_t resets;
+  // Hibernate held off, and HibCFG as it was
+  bool full_rate;
+  uint16_t hibcfg;
 };
 
 struct pbl_gauge_max17262 {

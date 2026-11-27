@@ -156,6 +156,12 @@ static int prv_init(const struct pbl_gauge *gauge) {
   if (ret != 0) {
     PBL_LOG_ERR("Configuration failed (%d)", ret);
   }
+
+  // Hibernate held off by a run that reset meanwhile: the gauge's own setting again
+  uint16_t hibcfg;
+  if (ret == 0 && prv_read(fg, MAX17262_HIBCFG, &hibcfg) == 0 && hibcfg == 0U) {
+    (void)prv_write(fg, MAX17262_HIBCFG, MAX17262_HIBCFG_DEFAULT);
+  }
   PBL_BOOT_TRACE(PBL_BT_BATT, PBL_BT_BATT_GAUGE_READY);
 
   return 0;
@@ -193,9 +199,47 @@ static int prv_read_gauge(const struct pbl_gauge *gauge, struct pbl_gauge_readin
   return ret;
 }
 
+// Out of hibernate at once, as the EZ configuration leaves it (UG6595), then back as it was
+static int prv_hold_full_rate(const struct pbl_gauge *gauge, bool hold) {
+  const struct pbl_gauge_max17262 *fg = prv_fg(gauge);
+  int ret;
+
+  if (hold == fg->state->full_rate) {
+    return 0;
+  }
+
+  if (!hold) {
+    ret = prv_write(fg, MAX17262_HIBCFG, fg->state->hibcfg);
+    if (ret == 0) {
+      fg->state->full_rate = false;
+    }
+    return ret;
+  }
+
+  ret = prv_read(fg, MAX17262_HIBCFG, &fg->state->hibcfg);
+  if (ret != 0) {
+    return ret;
+  }
+  ret = prv_write(fg, MAX17262_COMMAND, MAX17262_COMMAND_SOFT_WAKEUP);
+  if (ret == 0) {
+    ret = prv_write(fg, MAX17262_HIBCFG, 0U);
+  }
+  if (ret == 0) {
+    ret = prv_write(fg, MAX17262_COMMAND, 0U);
+  }
+  if (ret != 0) {
+    (void)prv_write(fg, MAX17262_HIBCFG, fg->state->hibcfg);
+    return ret;
+  }
+  fg->state->full_rate = true;
+
+  return 0;
+}
+
 const struct pbl_gauge_ops pbl_gauge_max17262_ops = {
   .init = prv_init,
   .read = prv_read_gauge,
+  .hold_full_rate = prv_hold_full_rate,
 };
 
 #include PBL_DT_INSTANCES(maxim_max17262)

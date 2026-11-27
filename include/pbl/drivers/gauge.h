@@ -66,6 +66,8 @@ struct pbl_gauge_ops {
   int (*init)(const struct pbl_gauge *gauge);
   /** Read the gauge. */
   int (*read)(const struct pbl_gauge *gauge, struct pbl_gauge_reading *reading);
+  /** Optional. Keep the gauge measuring at its full rate at low currents, or not. */
+  int (*hold_full_rate)(const struct pbl_gauge *gauge, bool hold);
 };
 
 /** @brief Fuel gauge runtime state. */
@@ -124,5 +126,17 @@ extern const struct pbl_gauge *const GAUGE;
  * @return 0, @c -ENODEV if the gauge is not ready, or a negative errno.
  */
 int pbl_gauge_read(const struct pbl_gauge *gauge, struct pbl_gauge_reading *reading);
+
+/**
+ * @brief Keep the gauge measuring at its full rate at low currents, where it would sample less
+ * often to save power, or let it again.
+ *
+ * For measuring a low draw over a short window.
+ *
+ * @param gauge Fuel gauge.
+ * @param hold True to keep it at its full rate.
+ * @return 0, @c -ENOTSUP if the gauge has no such mode, or a negative errno.
+ */
+int pbl_gauge_hold_full_rate(const struct pbl_gauge *gauge, bool hold);
 
 /** @} */

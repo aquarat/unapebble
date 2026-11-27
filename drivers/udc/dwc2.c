@@ -16,8 +16,10 @@
 #include <pbl/drivers/udc.h>
 #include <pbl/kernel/cache.h>
 #include <pbl/kernel/delay.h>
+#include <pbl/kernel/idle.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/mmio.h>
+#include <pbl/soc/st/idle.h>
 #include <pbl/util/bits.h>
 #include <pbl/util/byteorder.h>
 #include <pbl/util/math.h>
@@ -847,6 +849,7 @@ static void prv_hsphy_off(const struct pbl_udc_dwc2 *d) {
     (void)pbl_clk_disable(&d->utmi_clk);
     (void)pbl_clk_disable(&d->clk);
     d->state->powered = false;
+    pbl_idle_state_release(SOC_STM32_IDLE_STOP);
   }
 }
 
@@ -929,6 +932,8 @@ static int prv_bringup(const struct pbl_udc_dwc2 *d) {
       (void)pbl_clk_disable(&d->clk);
       return ret;
     }
+    // Its clocks, the HSE among them, stop in Stop: the CPU stays out of it while powered
+    pbl_idle_state_block(SOC_STM32_IDLE_STOP);
   }
   d->state->powered = true;
 

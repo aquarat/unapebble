@@ -59,6 +59,10 @@
 #define RCC_CFGR1_SW_HSI16 1U
 #define RCC_CFGR1_SW_HSE   2U
 #define RCC_CFGR1_SW_PLL1  3U
+/* The clocks the system and the kernel clocks wake up from Stop on: MSIS when clear, HSI16 when
+   set */
+#define RCC_CFGR1_STOPWUCK    PBL_BIT(4)
+#define RCC_CFGR1_STOPKERWUCK PBL_BIT(5)
 
 /* HPRE: 0xxx divides by 1, 1000 to 1111 by 2 to 512 (no 32); PPRE: 0xx by 1, 100 to 111 by 2 to 16
  */
