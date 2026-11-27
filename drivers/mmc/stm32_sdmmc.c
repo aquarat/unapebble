@@ -83,7 +83,10 @@ PBL_LOG_MODULE_DECLARE(driver_mmc, CONFIG_DRIVER_MMC_LOG_LEVEL);
 #define OCR_TIMEOUT_MS    1000U
 #define BUSY_TIMEOUT_MS   3000U
 #define SWITCH_DEFAULT_MS 500U
-#define DATA_TIMEOUT_MS   250U
+// The data timer: between the blocks of a read, and for the card's busy after a block written.
+// The watch's card takes about 130 ms for the first write after it is powered up.
+#define READ_TIMEOUT_MS  250U
+#define WRITE_TIMEOUT_MS 1000U
 // How long a wait spins before it sleeps between polls
 #define SPIN_US 200U
 
@@ -249,7 +252,9 @@ static int prv_data(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t idx, uint32_t
                     uint32_t count, bool read) {
   const uint32_t errors = SDMMC_STA_DCRCFAIL | SDMMC_STA_DTIMEOUT | SDMMC_STA_RXOVERR |
                           SDMMC_STA_TXUNDERR | SDMMC_STA_IDMATE;
-  const uint32_t timeout_us = (100U + count * 2U) * 1000U;
+  const uint32_t data_ms = read ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS;
+  // Past the data timer, which reports the error itself, and the transfer of the blocks
+  const uint32_t timeout_us = (data_ms + 100U + count * 2U) * 1000U;
   const uint32_t div =
       PBL_FIELD_GET(SDMMC_CLKCR_CLKDIV_MASK, prv_getreg(sd, STM32_SDMMC_CLKCR_OFFSET));
   const uint32_t ck_hz = (div == 0U) ? sd->state->ker_hz : sd->state->ker_hz / (2U * div);
@@ -258,7 +263,7 @@ static int prv_data(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t idx, uint32_t
   int ret;
 
   prv_putreg(sd, STM32_SDMMC_ICR_OFFSET, SDMMC_STA_STATIC_FLAGS);
-  prv_putreg(sd, STM32_SDMMC_DTIMER_OFFSET, (ck_hz / 1000U) * DATA_TIMEOUT_MS);
+  prv_putreg(sd, STM32_SDMMC_DTIMER_OFFSET, (ck_hz / 1000U) * data_ms);
   prv_putreg(sd, STM32_SDMMC_DLEN_OFFSET, count * PBL_MMC_BLOCK_SIZE);
   prv_putreg(sd, STM32_SDMMC_IDMABASER_OFFSET, (uint32_t)(uintptr_t)buf);
   prv_putreg(sd, STM32_SDMMC_IDMACTRL_OFFSET, SDMMC_IDMACTRL_IDMAEN);

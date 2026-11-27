@@ -31,7 +31,7 @@ STUB_SRCS := stub/startup.S stub/main.c stub/clock.c stub/gpio.c stub/usb.c stub
 	stub/i2c.c stub/flash.c stub/fmt.c stub/port.c stub/proto.c
 STUB_HDRS := $(wildcard stub/*.h)
 
-EXPERIMENTS := rcc_clocks max17262 emmc_cid
+EXPERIMENTS := rcc_clocks max17262 emmc_cid emmc_read emmc_write_test emmc_write_ram
 EXP_COMMON := experiments/blob_crt0.c
 EXP_HDRS := experiments/tether_blob.h stub/tether_api.h stub/tether_proto.h
 
