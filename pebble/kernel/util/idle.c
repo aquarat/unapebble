@@ -88,9 +88,10 @@ static int prv_cmd_cpustats(const struct pbl_shell *sh, size_t argc, char **argv
                   (uint32_t)(running_us / 1000U),
                   (uint32_t)prv_pct100(running_us, delta.total_us) / 100U);
   for (size_t i = 0; i < pbl_soc_num_idle_states; i++) {
-    pbl_shell_print(sh, "%-10s %10" PRIu32 " ms (%" PRIu32 " %%)", pbl_soc_idle_states[i].name,
-                    (uint32_t)(delta.idle_us[i] / 1000U),
-                    (uint32_t)prv_pct100(delta.idle_us[i], delta.total_us) / 100U);
+    pbl_shell_print(sh, "%-10s %10" PRIu32 " ms (%" PRIu32 " %%), blocked %u",
+                    pbl_soc_idle_states[i].name, (uint32_t)(delta.idle_us[i] / 1000U),
+                    (uint32_t)prv_pct100(delta.idle_us[i], delta.total_us) / 100U,
+                    pbl_idle_state_blocks((pbl_idle_state_id_t)i));
   }
   pbl_shell_print(sh, "%-10s %10" PRIu32 " ms", "total", (uint32_t)(delta.total_us / 1000U));
 

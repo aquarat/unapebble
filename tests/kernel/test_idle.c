@@ -137,6 +137,17 @@ void test_idle__a_blocked_state_is_not_entered_until_every_block_is_released(voi
   cl_assert_equal_i(s_entered[STATE_DEEP], 1);
 }
 
+void test_idle__the_blocks_held_are_counted(void) {
+  cl_assert_equal_i(pbl_idle_state_blocks(STATE_DEEP), 0);
+  pbl_idle_state_block(STATE_DEEP);
+  pbl_idle_state_block(STATE_DEEP);
+  cl_assert_equal_i(pbl_idle_state_blocks(STATE_DEEP), 2);
+  cl_assert_equal_i(pbl_idle_state_blocks(STATE_SHALLOW), 0);
+  pbl_idle_state_release(STATE_DEEP);
+  pbl_idle_state_release(STATE_DEEP);
+  cl_assert_equal_i(pbl_idle_state_blocks(STATE_DEEP), 0);
+}
+
 void test_idle__blocking_a_state_blocks_the_deeper_ones(void) {
   pbl_idle_state_block(STATE_SHALLOW);
   idle_enter(PBL_TICK_FOREVER);
