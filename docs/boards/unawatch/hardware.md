@@ -459,6 +459,35 @@ and ST's answer is a DTM built with its `LL_ONLY` option (decision
 - The connection came at an interval of 36 (45 ms) from BlueZ, and the
   link was updated to 251-byte PDUs.
 
+**The DTM's ACL path and its updater, from ST's source.** Read in public
+mirrors of ST's BlueNRG-1_2 DK, 3.1.0 and 3.2.3 (DTM 3.4.0); the chip runs
+DTM 3.2, of SDK 3.2.1, whose source was not found. Not checked on the chip.
+
+- In DTM 3.1.0 `hci_parser.c` forwards ACL data, both ways, only under
+  `#if defined(LL_ONLY) || DTM_DEBUG==1`; in 3.4.0 the guard is gone. The
+  DTM 3.2 on the chip most likely still has it, which would explain why
+  config 0x2C alone passes no ACL (inferred). `LL_ONLY` is a preprocessor
+  define of the DTM's build, with the same prebuilt stack library; with it
+  the DTM writes 0x2C itself at each start. ST ships no `LL_ONLY` image in
+  the DK; stm32duino's X-NUCLEO-BNRG2A1 package has `DTM_LLOnly.bin`, not
+  checked to be the SPI build. SDK 3.2.0/3.2.1 had Atollic TrueSTUDIO
+  (GCC, free) projects, 3.2.2 and later WiSE-Studio GCC ones. The DK is
+  under ST's Production Limited License Agreement, which forbids combining
+  it with open-source code.
+- `HCI_Reset` answers, then `NVIC_SystemReset()`: the chip boots again
+  through the updater into the DTM, its RAM, config 0x2C included, lost.
+  `aci_hal_updater_start` (0xFC20) sets a RAM flag at 0x20000030 before the
+  same reset: reason 2. The updater (0x10040000, 8 KiB) starts the DTM at
+  0x10042000 unless that flag, a bad BLUE flag at 0x10042014 (reason 3) or
+  IO3 high (reason 4) says otherwise.
+- In the updater, 0xFC21 reboot, 0xFC22 version, 0xFC23 buffer size (64),
+  0xFC24/0xFC25 erase and set the BLUE flag, 0xFC26 erase a 2 KiB page,
+  0xFC27 program, **0xFC28 read a block**, 0xFC29 CRC-32 of 2 KiB pages,
+  0xFC2A hardware version. They check only `addr >= 0x10042000`: the
+  updater cannot be overwritten, nor read back; the DTM image, and the
+  stack's data page at 0x1007F000, can. So the image could be backed up,
+  64 bytes a read, before anything is written. Nothing of this was sent.
+
 **Replacing the firmware.** There are three ways:
 
 1. **The DTM's SPI updater.** It lives at 0x10040000 to 0x10042000 in the
