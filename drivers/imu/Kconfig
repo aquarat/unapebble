@@ -186,6 +186,24 @@ menuconfig MAG
 
 if MAG
 
+config MAG_BMM350
+    bool "Bosch BMM350"
+    default y
+    depends on DT_HAS_BOSCH_BMM350_ENABLED
+    select I2C
+    select KERNEL_SYS_WORKQ_HIGH
+    help
+      Support for the Bosch BMM350 magnetometer.
+
+config MAG_BMM350_AVG_LOG2
+    int "Samples averaged, as a power of 2"
+    depends on MAG_BMM350
+    range 0 3
+    default 2
+    help
+      Samples averaged in each measurement, from 1 (0) to 8 (3), reduced
+      to what the ODR allows: more samples, less noise and more current.
+
 config MAG_MMC5603NJ
     bool "MEMSIC MMC5603NJ"
     default y

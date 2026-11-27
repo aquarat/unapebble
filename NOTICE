@@ -69,8 +69,10 @@ Bosch Sensortec SensorAPI
 
 drivers/imu/bmi270/bmi270_config.c is the configuration file of the BMI270,
 "bmi270_config_file" of Bosch Sensortec's BMI270 SensorAPI (bmi270.c, v2.86.1),
-unchanged, which the driver loads into the part. It is under this
-licence:
+unchanged, which the driver loads into the part. The compensation of the
+BMM350's readings in drivers/imu/bmm350/bmm350_regs.h is ported from its
+BMM350 SensorAPI (bmm350.c, v1.4.0): the layout of the calibration in the
+part's OTP, its scaling and the formulas. Both are under this licence:
 
     Copyright (c) 2023 Bosch Sensortec GmbH. All rights reserved.
 

@@ -7,3 +7,8 @@ pbl_clar_test(test_bmi270
   INCLUDES
     drivers/imu/bmi270
 )
+
+pbl_clar_test(test_bmm350
+  INCLUDES
+    drivers/imu/bmm350
+)
