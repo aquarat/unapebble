@@ -273,6 +273,26 @@
 	status = "okay";
 };
 
+// The BlueNRG-2 of the BLE module (link1), running ST's DTM firmware, an HCI controller; the stock
+// firmware clocks it at 1.25 MHz (docs/boards/unawatch/hardware.md, sections 2.5 and 3.2). Its
+// chip select is a GPIO; RESETN has its pull-up on the module.
+&spi1 {
+	pinctrl-0 = <&spi1_default>;
+	pinctrl-1 = <&spi1_sleep>;
+	pinctrl-names = "default", "sleep";
+	cs-gpios = <&gpioa 15 GPIO_ACTIVE_LOW>;
+	status = "okay";
+
+	bluetooth: bluetooth@0 {
+		compatible = "st,bluenrg-2";
+		reg = <0>;
+		spi-max-frequency = <1250000>;
+		spi-cpha;
+		irq-gpios = <&gpioa 9 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpioa 8 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>;
+	};
+};
+
 // The display's VCOM, FRP and XFRP, on the LSE, which keeps them running in Stop 2
 &lptimer1 {
 	status = "okay";

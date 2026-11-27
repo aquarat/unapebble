@@ -80,6 +80,15 @@
 		};
 	};
 
+	// The BlueNRG-2's SPI lines undriven between transfers and while it is in reset
+	spi1_sleep: spi1-1 {
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 2, ANALOG)>, /* SPI1_SCK */
+				 <STM32_PINMUX('G', 3, ANALOG)>, /* SPI1_MISO */
+				 <STM32_PINMUX('B', 5, ANALOG)>; /* SPI1_MOSI */
+		};
+	};
+
 	// The AG3335M GNSS
 	lpuart1_default: lpuart1-0 {
 		pins1 {

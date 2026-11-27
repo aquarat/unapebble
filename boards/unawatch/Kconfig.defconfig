@@ -36,3 +36,13 @@ config FLASH_STM32U5
 # experiments firmware, which starts as the first port did.
 config GAUGE
     default y if !BOARD_UNAWATCH_LAB
+
+# Bluetooth on the BlueNRG-2, an HCI controller in link-layer-only mode under the NimBLE host, its
+# static random address the identity; the experiments firmware keeps the fake controller.
+choice NIMBLE_HCI
+    default NIMBLE_HCI_BLUENRG2 if !BOARD_UNAWATCH_LAB
+endchoice
+
+choice NIMBLE_ID_ADDR_SOURCE
+    default NIMBLE_ID_ADDR_BLUENRG2 if NIMBLE_HCI_BLUENRG2
+endchoice
