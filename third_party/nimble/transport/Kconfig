@@ -69,6 +69,12 @@ config NIMBLE_HCI_THREAD_PRIO
     depends on NIMBLE_HCI_SF32LB || NIMBLE_HCI_UART || NIMBLE_HCI_BLUENRG2
     default 3
 
+config BLUENRG2_SPI
+    bool
+    default y if NIMBLE_HCI_BLUENRG2
+    help
+      The BlueNRG-2's SPI protocol and start-up, for its transports.
+
 config NIMBLE_DRIVER_NRF5X
     bool
     select HAL_NORDIC
@@ -130,5 +136,11 @@ config NIMBLE_ID_ADDR
 if NIMBLE_HCI_BLUENRG2
 module = NIMBLE_HCI_BLUENRG2
 module-str = BlueNRG-2 HCI transport
+source "subsys/logging/Kconfig.template.log_level"
+endif
+
+if BLUENRG2_SPI
+module = BLUENRG2_SPI
+module-str = BlueNRG-2 SPI protocol
 source "subsys/logging/Kconfig.template.log_level"
 endif
