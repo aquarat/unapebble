@@ -51,6 +51,8 @@ static PBL_MUTEX_DEFINE(s_cmd_lock);
 // Its state, between its caller and the thread
 static PBL_MUTEX_DEFINE(s_state_lock);
 static PBL_SEM_DEFINE(s_cmd_done, 0, 1);
+// The chip has room again for what it sends over the air
+static PBL_SEM_DEFINE(s_tx_pool, 0, 1);
 static struct {
   bool pending;
   bool sent;
@@ -208,6 +210,9 @@ static void prv_rx_evt(const uint8_t *p, uint32_t n) {
   }
   if (code == ACI_EVT_NUM_COMP_PKTS) {
     return;
+  }
+  if (code == ACI_EVT_VS && plen >= 2U && aci_get_le16(par) == ACI_VS_GATT_TX_POOL_AVAIL) {
+    pbl_sem_give(&s_tx_pool);
   }
   if (code == ACI_EVT_VS && plen >= 2U && aci_get_le16(par) == ACI_VS_BLUE_INITIALIZED) {
     PBL_LOG_WRN("BlueNRG-2 restarted by itself (reason %u)", plen >= 3U ? par[2] : 0U);
@@ -408,6 +413,20 @@ int aci_cmd(uint16_t op, const void *par, uint8_t par_len, void *rsp, size_t *rs
   }
 
   return rc;
+}
+
+void aci_link_tx_pool_reset(void) {
+  (void)pbl_sem_take(&s_tx_pool, PBL_NO_WAIT);
+}
+
+bool aci_link_tx_pool_wait(uint32_t timeout_ms) {
+  // On the host's thread nothing else would see to the chip's events meanwhile; the link's own
+  // thread gives it, so any other thread may wait
+  if (pbl_thread_current() == nimble_port_pebble_host_thread()) {
+    return false;
+  }
+
+  return pbl_sem_take(&s_tx_pool, PBL_MSEC(timeout_ms)) == 0;
 }
 
 void aci_link_start(void) {

@@ -22,7 +22,7 @@ case ${1:-} in
 flash)
     img=$2 secs=${3:-20}
     locked bash -c '
-        timeout 300 python3 "$0/tether.py" --tcp "$1" flash "$3" --boot | tr "\r" "\n" | tail -1
+        timeout 300 python3 "$0/tether.py" --tcp "$1" flash "$3" --boot 2>&1 | tr "\r" "\n" | tail -1
         sleep 1
         timeout $(($4 + 30)) python3 "$0/console.py" --tcp "$2" -t 20 --follow --for "$4" || true
     ' "$tether" "$tcp" "$con" "$img" "$secs"

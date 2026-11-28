@@ -393,7 +393,18 @@ int ble_gattc_write_no_rsp_flat(uint16_t conn_handle, uint16_t attr_handle, cons
   memcpy(q, data, data_len);
   q += data_len;
 
-  return aci_hs_err(aci_cmd(ACI_OP_GATT_WRITE_NO_RSP, buf, (uint8_t)(q - buf), nullptr, nullptr));
+  // As notifications: the chip's transmit pool waited for, for a while
+  int rc;
+
+  for (uint32_t tries = 0U;; tries++) {
+    aci_link_tx_pool_reset();
+    rc = aci_cmd(ACI_OP_GATT_WRITE_NO_RSP, buf, (uint8_t)(q - buf), nullptr, nullptr);
+    if (rc != ACI_STATUS_INSUFFICIENT_RESOURCES || tries >= 3U || !aci_link_tx_pool_wait(100U)) {
+      break;
+    }
+  }
+
+  return aci_hs_err(rc);
 }
 
 int ble_gattc_write_no_rsp(uint16_t conn_handle, uint16_t attr_handle, struct os_mbuf *om) {

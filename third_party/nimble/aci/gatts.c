@@ -29,6 +29,10 @@ PBL_LOG_MODULE_DECLARE(nimble_aci, CONFIG_NIMBLE_ACI_BLUENRG2_LOG_LEVEL);
 #define UPDATE_HDR_LEN 12U
 #define UPDATE_CHUNK   (ACI_MAX_PARAMS - UPDATE_HDR_LEN)
 
+// How long and how often a notification waits for room in the chip
+#define TX_POOL_WAIT_MS 100U
+#define TX_POOL_TRIES   3U
+
 #define UPDATE_LOCAL    0x00U
 #define UPDATE_NOTIFY   0x01U
 #define UPDATE_INDICATE 0x02U
@@ -715,7 +719,16 @@ static int prv_send(uint16_t conn_handle, uint16_t val_handle, struct os_mbuf *o
   (void)os_mbuf_copydata(om, 0, len, value);
   os_mbuf_free_chain(om);
 
-  rc = prv_update(conn_handle, &c, type, value, len);
+  // The chip refuses what its transmit pool has no room for, and says when it has: waited for
+  // here, for a while, rather than by the caller's timers
+  for (uint32_t tries = 0U;; tries++) {
+    aci_link_tx_pool_reset();
+    rc = prv_update(conn_handle, &c, type, value, len);
+    if (rc != ACI_STATUS_INSUFFICIENT_RESOURCES || tries >= TX_POOL_TRIES ||
+        !aci_link_tx_pool_wait(TX_POOL_WAIT_MS)) {
+      break;
+    }
+  }
   if (rc == 0 && type == UPDATE_INDICATE) {
     s_ind_handle = val_handle;
   }

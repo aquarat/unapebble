@@ -161,6 +161,15 @@ static inline uint8_t *aci_put_le32(uint8_t *p, uint32_t v) {
  */
 int aci_cmd(uint16_t op, const void *par, uint8_t par_len, void *rsp, size_t *rsp_len);
 
+/** Forgets an earlier report of room in the chip's transmit pool. */
+void aci_link_tx_pool_reset(void);
+
+/**
+ * Waits up to timeout_ms for the chip to report room in its transmit pool, after a command it
+ * refused for want of it. False at once on the host's thread.
+ */
+bool aci_link_tx_pool_wait(uint32_t timeout_ms);
+
 /** Asks for the chip to be started; ACI_EVT_LINK follows on the host's queue. */
 void aci_link_start(void);
 
