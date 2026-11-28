@@ -11,6 +11,16 @@ config SERVICE_LOCATION
 
 if SERVICE_LOCATION
 
+config SERVICE_LOCATION_SET_CLOCK
+    bool "Set the clock from the GNSS"
+    default y
+    depends on SERVICE_ACTIVITY
+    help
+      Set the clock from the receiver's UTC when it is more than 2 s
+      off, from a time two epochs a second apart agree on or one of a
+      fix, at most once an hour, and never while a workout runs, which
+      times itself on the clock. For watches without a phone to set it.
+
 module = SERVICE_LOCATION
 module-str = Location
 source "subsys/logging/Kconfig.template.log_level"

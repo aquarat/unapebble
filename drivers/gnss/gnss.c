@@ -8,6 +8,10 @@
 #include <pbl/logging/logging.h>
 #include <pbl/util/misc.h>
 
+#ifdef CONFIG_GNSS_REPLAY
+#include "sim_track.h"
+#endif
+
 PBL_LOG_MODULE_DEFINE(driver_gnss, CONFIG_DRIVER_GNSS_LOG_LEVEL);
 PBL_DEVICE_CLASS_DEFINE(pbl_gnss_class, "gnss");
 
@@ -130,10 +134,41 @@ int pbl_gnss_get_stats(const struct pbl_gnss *gnss, struct pbl_gnss_stats *stats
   return 0;
 }
 
+#ifdef CONFIG_GNSS_REPLAY
+static bool s_replay;
+static struct gnss_sim_track s_replay_track;
+static struct pbl_gnss_fix s_replay_fix;
+
+void pbl_gnss_replay_set(bool on) {
+  if (on && !s_replay) {
+    gnss_sim_track_reset(&s_replay_track);
+  }
+  s_replay = on;
+  PBL_LOG_INFO("replay %s", on ? "on" : "off");
+}
+
+bool pbl_gnss_replay_get(void) {
+  return s_replay;
+}
+#endif
+
 void pbl_gnss_report_fix(const struct pbl_gnss *gnss, const struct pbl_gnss_fix *fix) {
   const struct pbl_gnss_listener *listener = gnss->state->listener;
 
   pbl_mutex_assert_held(&gnss->state->lock, true);
+
+#ifdef CONFIG_GNSS_REPLAY
+  if (s_replay) {
+    // The receiver's epoch, its time and timing, at the next second of the route.
+    s_replay_fix = *fix;
+    gnss_sim_track_step(&s_replay_track, &s_replay_fix);
+    s_replay_fix.quality = PBL_GNSS_FIX_3D;
+    if (s_replay_fix.sats_used < 7U) {
+      s_replay_fix.sats_used = 7U;
+    }
+    fix = &s_replay_fix;
+  }
+#endif
 
   gnss->state->last = *fix;
   gnss->state->has_last = true;

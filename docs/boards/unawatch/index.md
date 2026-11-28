@@ -21,7 +21,8 @@ The port runs the full firmware, on the gabbro platform of the Pebble Round
 unit, the buttons, the display, the haptics, storage on the eMMC and the
 battery: its charger and its fuel gauge, and the motion and environment
 sensors: the accelerometer, the magnetometer and the barometer, and the
-GNSS receiver. Bluetooth runs on the BlueNRG-2's own stack: GATT, pairing,
+GNSS receiver, with GPS workouts recorded on the watch and exported as FIT
+files. Bluetooth runs on the BlueNRG-2's own stack: GATT, pairing,
 bonds and the Pebble protocol over PPoGATT work with a BlueZ central, not
 yet tried with a phone (see [](#unawatch-bluetooth)); the heart rate sensor
 and USB come next; see
@@ -95,6 +96,8 @@ The tethered stub, which stands in for a debug probe (see {doc}`tether`):
   button) and Down (PA5)
 - **Debug**: SWD; the USART3 console (PC4, 921600 baud) on the USB-C
   connector, through a Type-C debug accessory
+
+(unawatch-memory)=
 
 ## Memory
 
@@ -348,6 +351,7 @@ counter agree with it.
 | Bluetooth on the chip's own stack (ACI), bonded, advertising to reconnect every 1022 ms, empty payload | | 0.81 mA (Current 1.24 mA), 97.9% in Stop 2 |
 | The same, connected to a BlueZ central, idle, at 60 ms with a latency of 4 (PebbleOS's request, granted) | | 0.79 mA (Current 1.21 mA), 98.3% in Stop 2 |
 | The same, airplane mode: the chip held in reset | | 1.01 mA (Current 1.32 mA), 97.2% in Stop 2 |
+| Run recording (Sport app): the receiver searching indoors, its epochs replayed as fixes on a route (`gnss replay`), the data screen redrawn each second, the journal written every 10 s (5 min) | | AvgCurrent 11.7 mA, coulomb counter 13.3 mA; Current 18.4 mA (sd 17.9 mA) |
 
 The Bluetooth figures are of 5-minute windows after 30 s, the gauge's
 AvgCurrent first: its Current, sampled every 2 s, had a spread of about
@@ -384,6 +388,7 @@ from the draws above:
 | Minute-tick face, idle, Stop 2 | 1.0 mA | 8 days | 12 days |
 | Second-tick face (estimated) | 1.6 mA | 5 days | 7 days |
 | USB developer access connected | 17 to 19 mA | 11 hours | 15 hours |
+| Recording a workout, the receiver searching (measured indoors) | 12 to 13 mA | 15 to 17 hours | 21 to 23 hours |
 
 Use of the watch adds to it: an animation draws 10 mA, and the frontlight,
 not measured, more.
@@ -540,8 +545,8 @@ at the stock firmware's voltages.
 ## GNSS
 
 The AG3335M (`drivers/gnss/ag3335.c`) is a GNSS class device, child of
-LPUART1, which the location service and the sport apps use when they are on
-(they are not yet, decision 261127-194525-03). Off, its supply is cut
+LPUART1, which the location service and the sport apps use (see
+[](#unawatch-workouts)). Off, its supply is cut
 (GNSS_EN low), the UART's clock gated and its pins analog. Started, the
 driver powers it, waits for its `$PAIR001,002,0`, and sets it up as UNA's
 firmware does: system sleep locked, L1 only, a hot start (decision
@@ -559,12 +564,82 @@ In the shell (builds with one):
 | `gnss on`, `gnss off` | Start the receiver at 1 Hz, stop it |
 | `gnss status` | The driver's state, the receiver's firmware, bytes and sentences received by type, bad lines, overruns, epochs, satellites with a signal and the strongest, time to first fix, the last epoch |
 | `gnss pair PAIRnnn,...` | Send the running receiver a PAIR command and print its result and answer, e.g. `gnss pair PAIR067` (constellations); only commands that set the running receiver or query it, none that writes its flash |
+| `gnss replay on`, `gnss replay off` | While on, report each epoch of the running receiver as a 3D fix one second further along the simulator's route, a 3.1 km loop, with the receiver's time: for testing the sport apps indoors (`CONFIG_GNSS_REPLAY`, not in release builds; off at every start) |
 | `gnss` | The last epoch, in short |
 
 `CONFIG_GNSS_AG3335_DUAL_BAND` adds L5, `CONFIG_GNSS_AG3335_SLEEP` unlocks
 the receiver's system sleep. The receiver's requests for time and location
 aiding are not answered yet; setting the RTC from its time is proposed
 (decision 261127-194525-04).
+
+(unawatch-workouts)=
+
+## Workouts
+
+**Run**, **Walk** and **Bike** in the launcher record GPS workouts on the
+watch, with no phone (`pebble/apps/system/sport`, decisions from
+261128-092921-01). Position, speed and distance come from the GNSS receiver,
+elevation from the barometer calibrated on the first good GNSS altitude
+(or from the GNSS without it), steps and cadence from the accelerometer
+through Health while its activity service runs. That service waits for the
+clock to be set, which without a phone only the GNSS does: the location
+service sets it from the receiver's time whenever no workout runs (decision
+261128-103913-01), on a sport's ready screen once the receiver has the time.
+Until then (the watch here read 2010) there are no steps or cadence, and
+workouts are named by the wrong clock, while their FIT files take the GNSS's
+time once the receiver gives one. There is no heart rate. Each workout
+is kept on the watch and can be downloaded as a FIT activity file,
+which Strava, Garmin Connect, intervals.icu and the like import.
+
+How to record a workout and download it is in {doc}`workouts`, with
+screenshots. In short: Select starts, pauses and saves, Back closes a lap, Up
+and Down change the screen; a workout cut short by a restart is kept, and
+offered for resuming within 30 minutes; `tools/una/workouts.py` lists the
+workouts and downloads them as FIT files over the USB developer access, for
+now (decision 261128-095312-01).
+
+### On the watch
+
+Each workout is a journal in the filesystem on the eMMC, `/wk<start>.<n>`
+(<start>, the watch's clock at the start in hex), in segments of 1024
+records of 32 bytes, about 115 KiB an hour, and a summary `/wk<start>.s`
+once closed (decision 261128-092921-02). Every record carries a CRC; a
+reader stops at the first one not written and skips a damaged one. Samples
+are written every 10 s (`CONFIG_APP_SPORT_FLUSH_S`), events at once, and
+what is buffered at any orderly restart or power-off, the low-battery one
+included. The 30 newest workouts are kept (`CONFIG_APP_SPORT_MAX_ACTIVITIES`),
+older ones deleted when a new one starts or when the filesystem runs short;
+a workout ends after 24 h. The FIT files are encoded from the journal when
+downloaded, by an encoder of this project's own (decision 261128-092921-03),
+checked against the public decoders fitdecode and fitparse in the unit tests
+(`test_sport_fit`, `test_sport_recorder`, `test_sport_fit_decode`). Their
+times are the GNSS's UTC when the receiver gave it, the watch's clock
+otherwise (decision 261128-092921-05).
+
+The receiver is on only while a sport's ready screen acquires and while a
+workout records (decision 261128-092921-04).
+
+In the shell (debug builds):
+
+| Command | |
+| --- | --- |
+| `workout list` | The workouts, oldest first: id, sport, state, UTC start, whether the GNSS gave it, elapsed and timer seconds, metres, laps |
+| `workout info ID` | Its journal: records by type, damaged, where it ends, times, distance, fixes, laps, restarts |
+| `workout fit ID [OFFSET [LEN]]` | Its FIT file, or a range of it, as base64 lines (`D offset data`) and an end line (`E id size offset bytes crc32`), what `workouts.py` reads |
+| `workout close ID`, `workout delete ID` | Close an unfinished workout from its journal; delete one |
+
+### Across firmware updates
+
+The journals are in PebbleOS's filesystem, in the eMMC's GUI region, which
+an `.ota` install, the bootloader and the stock firmware leave alone (see
+[](#unawatch-memory) and {doc}`hardware`, section 3.4), so workouts survive
+installs, downgrades and a round trip to the stock firmware. Each segment and
+summary carries a magic, a format version and its record size: a firmware
+reads only the versions it knows, and lists and leaves the others. A firmware
+without the sport apps ignores the files. What would lose them: PebbleOS
+formats its filesystem when it cannot mount it at boot; a future UNA
+bootloader or firmware that used the GUI region; deleting them, or the
+retention above.
 
 ## Power off
 
@@ -654,10 +729,11 @@ setting (`CONFIG_DEV_USB`): {doc}`tether` too.
 | **Runs on a watch, from the tether slot** | The current firmware, linked for the slot: storage on the eMMC (with the write timeout, decision 261127-123202-01, and the display thread, 261127-130125-01), the system resources read in place from the embedded flash, the PCA9420 charger and MAX17262 fuel gauge (charge registers read back at 4.36 V while it runs), the boot trace, and the USB developer access ({doc}`tether`); 11 minutes and 5 minutes without a reset, the watchface ticking |
 | **Built, not yet run on a watch** | The same firmware installed as one `.ota` through the bootloader (it differs only in its address); the Lab; the Battery test app (it is in the launcher, but no test has run); the USB Developer setting in a normal install |
 | **Runs on a watch, from the tether slot: the sensors** | The BMI270 accelerometer (FIFO and interrupt, shakes), the BMM350 magnetometer and the MS5837 barometer, read on the watch lying still (see [](#unawatch-sensors)); not yet moved: steps, shakes, the compass's calibration and the X and Y signs need someone to move the watch |
-| **Runs on a watch, from the tether slot: GNSS** | The AG3335M answers and starts, NMEA flows at 1 Hz and is parsed into epochs with the UART receiving in Stop 2 (no overrun nor bad sentence in 400 epochs); indoors, up to 4 satellites in view and 3 with a signal, the UTC time after about 4 minutes, no fix yet. Draw in [](#unawatch-power). The location service and the sport apps stay off (decision 261127-194525-03) |
+| **Runs on a watch, from the tether slot: GNSS** | The AG3335M answers and starts, NMEA flows at 1 Hz and is parsed into epochs with the UART receiving in Stop 2 (no overrun nor bad sentence in 400 epochs); indoors, up to 4 satellites in view and 3 with a signal, the UTC time after about 4 minutes, no fix yet. Draw in [](#unawatch-power). The location service and the sport apps run on it ([](#unawatch-workouts)) |
 | **Runs on a watch, from the tether slot: Bluetooth** | On the BlueNRG-2's own stack, through its ACI, under NimBLE's host API (see [](#unawatch-bluetooth)): advertising, PebbleOS's GATT services read, written and subscribed to from a BlueZ central, pairing by numeric comparison and bonds that survive a restart, and the Pebble protocol over reversed PPoGATT (version and ping answered). Not yet tried with a phone or the Pebble app |
+| **Runs on a watch, from the tether slot: workouts** | Run recorded indoors on the receiver with the replayed route (`gnss replay`): start, laps, pause and resume, a restart in the middle (nothing lost but what an orderly restart writes anyway), resuming it from the app, saving; the receiver off after; the FIT file downloaded with `workouts.py` and decoded by fitdecode and fitparse. A Run started without a fix records, without positions; the watch lying still, it auto-paused after 4 s, as it should. The clock set from the receiver's time on a ready screen, from 2010 to the right UTC. Power while recording in [](#unawatch-power). Not yet outdoors: a real fix, the GNSS's time in a workout, distance and pace against a known course, steps and cadence while moving, an upload to Strava or Garmin Connect |
 | **Stand-ins, which nothing feeds** | Ambient light, microphone and die temperature are simulators |
-| **Off** | No heart rate or buzzer; USB only for development. No GNSS fix seen yet: the watch has only been indoors |
+| **Off** | No heart rate or buzzer; USB only for development, so workouts come off only through the developer access. No GNSS fix seen yet: the watch has only been indoors |
 | **Unknown** | Whether the haptics work: their rail and driver have not been checked on the watch. The panel is round, and the computed round mask fits it (see the photos) |
 
 Things to watch on a first boot:
@@ -807,5 +883,6 @@ covers, and add a record for each new decision.
 phone.md
 hardware.md
 tether.md
+workouts.md
 decisions/index.md
 ```

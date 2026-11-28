@@ -1,6 +1,7 @@
 # The GNSS driver on in the watch's firmware, the location service and sport apps still off
 
-- Status: Accepted
+- Status: Superseded by 261128-092921-01-standalone-gps-workouts.md (for the location
+  service and the sport apps)
 - Date: 2026-11-27 19:45 UTC
 - Decided by: agent
 

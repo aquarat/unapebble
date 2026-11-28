@@ -46,6 +46,8 @@ typedef enum SportSampleFlag {
   SportSampleFlag_ExtSpeed = 1 << 7,
   //! Power.
   SportSampleFlag_Power = 1 << 8,
+  //! The barometric altitude's zero moved (calibrated on the GNSS): no climb from it.
+  SportSampleFlag_BaroRecal = 1 << 9,
 } SportSampleFlag;
 
 //! One second of sensor data.
@@ -182,6 +184,12 @@ void sport_engine_pause(SportEngine *engine, bool paused);
 
 //! Stop, closing the last lap.
 void sport_engine_stop(SportEngine *engine);
+
+//! Carry on an activity recorded before a restart, paused: @p total and the closed @p laps
+//! (@p num_laps in all, the first SPORT_ENGINE_MAX_LAPS of them given), the current lap started at
+//! @p lap_start_s, @p elapsed_s since the start.
+void sport_engine_restore(SportEngine *engine, uint32_t elapsed_s, const SportStats *total,
+                          const SportLap *laps, uint16_t num_laps, uint32_t lap_start_s);
 
 //! Feed one second. Returns the SportEvent bits that happened.
 uint32_t sport_engine_tick(SportEngine *engine, const SportSample *sample);

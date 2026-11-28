@@ -118,6 +118,32 @@ void sport_engine_pause(SportEngine *engine, bool paused) {
   }
 }
 
+void sport_engine_restore(SportEngine *engine, uint32_t elapsed_s, const SportStats *total,
+                          const SportLap *laps, uint16_t num_laps, uint32_t lap_start_s) {
+  const uint16_t stored = num_laps < SPORT_ENGINE_MAX_LAPS ? num_laps : SPORT_ENGINE_MAX_LAPS;
+  uint32_t lap_timer = total->timer_s;
+  uint32_t lap_distance = total->distance_mm;
+
+  engine->state = SportState_Paused;
+  engine->elapsed_s = elapsed_s;
+  engine->total = *total;
+  engine->num_laps = num_laps;
+  for (uint16_t i = 0; i < stored; i++) {
+    engine->laps[i] = laps[i];
+    lap_timer -= laps[i].stats.timer_s < lap_timer ? laps[i].stats.timer_s : lap_timer;
+    lap_distance -=
+        laps[i].stats.distance_mm < lap_distance ? laps[i].stats.distance_mm : lap_distance;
+  }
+  engine->lap = (SportLap){
+    .stats = {.timer_s = lap_timer, .distance_mm = lap_distance},
+    .start_elapsed_s = lap_start_s,
+    .number = (uint16_t)(num_laps + 1),
+  };
+  engine->anchor_valid = false;
+  engine->window_len = 0;
+  engine->alt_valid = false;
+}
+
 void sport_engine_stop(SportEngine *engine) {
   if (!sport_engine_is_active(engine)) {
     return;
@@ -297,7 +323,8 @@ static void prv_elevation(SportEngine *engine, const SportSample *s, bool fix_us
     return;
   }
 
-  if (!engine->alt_valid || engine->alt_baro != baro) {
+  if (!engine->alt_valid || engine->alt_baro != baro ||
+      (baro && (s->flags & SportSampleFlag_BaroRecal))) {
     engine->alt_valid = true;
     engine->alt_baro = baro;
     engine->alt_cm = raw;
