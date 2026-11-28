@@ -17,6 +17,7 @@
 #include <pbl/kernel/mutex.h>
 #include <pbl/kernel/sem.h>
 #include <pbl/kernel/thread.h>
+#include <pbl/kernel/time.h>
 #include <pbl/logging/logging.h>
 #include <pbl/util/math.h>
 
@@ -26,7 +27,9 @@
 
 PBL_LOG_MODULE_DECLARE(nimble_aci, CONFIG_NIMBLE_ACI_BLUENRG2_LOG_LEVEL);
 
-#define CMD_TIMEOUT_MS  2000U
+#define CMD_TIMEOUT_MS 2000U
+// A command answered later than this is logged
+#define SLOW_CMD_MS     100U
 #define STOP_TIMEOUT_MS 3000U
 
 #define RX_BUF_SIZE 512U
@@ -57,6 +60,9 @@ static struct {
   int status;
   uint8_t *rsp;
   size_t rsp_len;
+  // When it was asked, and written to the chip
+  uint64_t asked_ms;
+  uint64_t written_ms;
 } s_cmd;
 
 // Started or stopped by the host
@@ -271,12 +277,19 @@ static void prv_fail_cmd(void) {
 }
 
 static void prv_send(void) {
+  // Its own copy: a caller that gave up may be filling the next command meanwhile
+  static uint8_t s_pkt[4U + ACI_MAX_PARAMS];
+  uint16_t len = 0U;
+  uint16_t op = 0U;
   int rc;
 
   pbl_mutex_lock(&s_state_lock, PBL_FOREVER);
   bool go = s_cmd.pending && !s_cmd.sent;
   if (go) {
     s_cmd.sent = true;
+    len = s_cmd.len;
+    op = s_cmd.op;
+    memcpy(s_pkt, s_cmd.pkt, len);
   }
   pbl_mutex_unlock(&s_state_lock);
 
@@ -284,17 +297,20 @@ static void prv_send(void) {
     return;
   }
 
-  rc = bnrg_write(s_cmd.pkt, s_cmd.len, prv_rx);
+  rc = bnrg_write(s_pkt, len, prv_rx);
+  pbl_mutex_lock(&s_state_lock, PBL_FOREVER);
+  if (s_cmd.op == op) {
+    s_cmd.written_ms = pbl_uptime_ms();
+  }
   if (rc != 0) {
-    PBL_LOG_ERR("Command %04x not written (%d)", s_cmd.op, rc);
-    pbl_mutex_lock(&s_state_lock, PBL_FOREVER);
-    if (s_cmd.pending) {
+    PBL_LOG_ERR("Command %04x not written (%d)", op, rc);
+    if (s_cmd.pending && s_cmd.op == op) {
       s_cmd.status = rc;
       s_cmd.pending = false;
       pbl_sem_give(&s_cmd_done);
     }
-    pbl_mutex_unlock(&s_state_lock);
   }
+  pbl_mutex_unlock(&s_state_lock);
 }
 
 static bool prv_cmd_to_send(void) {
@@ -358,6 +374,8 @@ int aci_cmd(uint16_t op, const void *par, uint8_t par_len, void *rsp, size_t *rs
   s_cmd.rsp = rsp;
   s_cmd.rsp_len = rsp != nullptr ? *rsp_len : 0U;
   s_cmd.status = -ETIMEDOUT;
+  s_cmd.asked_ms = pbl_uptime_ms();
+  s_cmd.written_ms = 0U;
   s_cmd.sent = false;
   s_cmd.pending = true;
   (void)pbl_sem_take(&s_cmd_done, PBL_NO_WAIT);
@@ -367,9 +385,15 @@ int aci_cmd(uint16_t op, const void *par, uint8_t par_len, void *rsp, size_t *rs
   (void)pbl_sem_take(&s_cmd_done, PBL_MSEC(CMD_TIMEOUT_MS));
 
   pbl_mutex_lock(&s_state_lock, PBL_FOREVER);
+  uint64_t now = pbl_uptime_ms();
   if (s_cmd.pending) {
-    PBL_LOG_ERR("Command %04x not answered", op);
+    PBL_LOG_ERR("Command %04x not answered, written after %lu ms", op,
+                s_cmd.written_ms != 0U ? (unsigned long)(s_cmd.written_ms - s_cmd.asked_ms) : 0UL);
     s_cmd.pending = false;
+  } else if (now - s_cmd.asked_ms > SLOW_CMD_MS) {
+    PBL_LOG_WRN("Command %04x answered after %lu ms, written after %lu ms", op,
+                (unsigned long)(now - s_cmd.asked_ms),
+                s_cmd.written_ms != 0U ? (unsigned long)(s_cmd.written_ms - s_cmd.asked_ms) : 0UL);
   }
   rc = s_cmd.status;
   if (rsp_len != nullptr) {
