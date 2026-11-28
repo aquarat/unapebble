@@ -543,8 +543,8 @@ readable flash (decision 261128-004526-01).
 
 **The updater by its boot pin.** ST's updater source names the boot pin
 "IO3 -> SPI MOSI PIN", not MISO. With MOSI (PB5) driven high through the
-release of RESET, the updater starts (reason 4) whatever the DTM does: 9
-of 9, among them every time the patched DTM did not start. MISO pulled up
+release of RESET, the updater starts (reason 4) whatever the DTM does: 8
+of 8, among them every time the patched DTM did not start. MISO pulled up
 or driven high did nothing. That is the recovery for a DTM that does not
 start; each patched variant was restored this way and the chip started
 normally again. The flash read back as the original image at the end.
