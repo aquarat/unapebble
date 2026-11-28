@@ -49,6 +49,19 @@ config NIMBLE_HCI_BLUENRG2
       The host's HCI_Reset is answered by the transport, as it would
       start the chip's updater.
 
+config NIMBLE_ACI_BLUENRG2
+    bool "ST BlueNRG-2's own stack, over its ACI"
+    depends on DT_HAS_ST_BLUENRG_2_ENABLED
+    select BT_HCI
+    select BT_HCI_BLUENRG2
+    help
+      Run Bluetooth on the stack of the board's BlueNRG-2 (the bt_hci
+      role), host included, driven through ST's ACI over its SPI
+      protocol, rather than on NimBLE's host. NimBLE's host API is
+      provided over the ACI (third_party/nimble/aci), so the Bluetooth
+      subsystem runs unchanged; the chip holds the GATT database, the
+      pairing and the bonds.
+
 config NIMBLE_HCI_FAKE
     bool "Fake controller"
     help
@@ -60,20 +73,43 @@ endchoice
 
 config NIMBLE_HCI_THREAD_STACK_SIZE
     int "HCI transport thread stack size in bytes"
-    depends on NIMBLE_HCI_SF32LB || NIMBLE_HCI_UART || NIMBLE_HCI_BLUENRG2
-    default 1536 if NIMBLE_HCI_BLUENRG2
+    depends on NIMBLE_HCI_SF32LB || NIMBLE_HCI_UART || NIMBLE_HCI_BLUENRG2 || NIMBLE_ACI_BLUENRG2
+    default 1536 if NIMBLE_HCI_BLUENRG2 || NIMBLE_ACI_BLUENRG2
     default 1024
 
 config NIMBLE_HCI_THREAD_PRIO
     int "HCI transport thread priority"
-    depends on NIMBLE_HCI_SF32LB || NIMBLE_HCI_UART || NIMBLE_HCI_BLUENRG2
+    depends on NIMBLE_HCI_SF32LB || NIMBLE_HCI_UART || NIMBLE_HCI_BLUENRG2 || NIMBLE_ACI_BLUENRG2
     default 3
 
 config BLUENRG2_SPI
     bool
-    default y if NIMBLE_HCI_BLUENRG2
+    default y if NIMBLE_HCI_BLUENRG2 || NIMBLE_ACI_BLUENRG2
     help
       The BlueNRG-2's SPI protocol and start-up, for its transports.
+
+if NIMBLE_ACI_BLUENRG2
+
+config NIMBLE_ACI_MAX_SVC_DEFS
+    int "Service definition arrays"
+    default 12
+    help
+      How many arrays of services ble_gatts_add_svcs() takes.
+
+config NIMBLE_ACI_MAX_CHRS
+    int "Characteristics"
+    default 32
+    help
+      How many characteristics the services added to the chip have in
+      all, its own GAP and GATT services aside.
+
+config NIMBLE_ACI_MAX_DSCS
+    int "Descriptors"
+    default 8
+    help
+      How many descriptors, other than the CCCDs the chip adds itself.
+
+endif
 
 config NIMBLE_DRIVER_NRF5X
     bool
@@ -109,7 +145,7 @@ config NIMBLE_ID_ADDR_QEMU
 
 config NIMBLE_ID_ADDR_BLUENRG2
     bool "BlueNRG-2 static random address"
-    depends on NIMBLE_HCI_BLUENRG2
+    depends on NIMBLE_HCI_BLUENRG2 || NIMBLE_ACI_BLUENRG2
     select NIMBLE_ID_ADDR
     help
       The static random address in the BlueNRG-2's configuration data
@@ -136,6 +172,12 @@ config NIMBLE_ID_ADDR
 if NIMBLE_HCI_BLUENRG2
 module = NIMBLE_HCI_BLUENRG2
 module-str = BlueNRG-2 HCI transport
+source "subsys/logging/Kconfig.template.log_level"
+endif
+
+if NIMBLE_ACI_BLUENRG2
+module = NIMBLE_ACI_BLUENRG2
+module-str = NimBLE host API over the BlueNRG-2's ACI
 source "subsys/logging/Kconfig.template.log_level"
 endif
 

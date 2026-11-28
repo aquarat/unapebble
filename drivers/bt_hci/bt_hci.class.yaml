@@ -5,4 +5,4 @@ class: bt_hci
 type: struct pbl_bt_hci
 include: pbl/drivers/bt_hci.h
 roles:
-  bt_hci: NIMBLE_HCI_BLUENRG2
+  bt_hci: BT_HCI
