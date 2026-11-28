@@ -29,6 +29,22 @@ pbl_clar_test(test_sport_recorder
   OVERRIDES dummy_board
 )
 
+pbl_clar_test(test_sport_fit_stream
+  MODULES pfs
+  SOURCES
+    pebble/apps/system/sport/engine.c
+    pebble/apps/system/sport/fit.c
+    pebble/apps/system/sport/fit_stream.c
+    pebble/apps/system/sport/journal.c
+    pebble/apps/system/sport/recorder.c
+    pebble/apps/system/sport/store.c
+    tests/fakes/fake_rtc.c
+  PLATFORMS emery
+  DEFINES DUMA_DISABLED CONFIG_APP_SPORT_FLUSH_S=10 CONFIG_APP_SPORT_MAX_ACTIVITIES=30
+          CONFIG_APP_SPORT_FREE_RESERVE_KIB=1024
+  OVERRIDES dummy_board
+)
+
 # The encoder's files decoded by public FIT decoders, fitdecode and fitparse, with the Python that
 # has them: SPORT_FIT_PYTHON, by default the build's.
 set(SPORT_FIT_PYTHON ${PYTHON_EXECUTABLE} CACHE FILEPATH "Python with fitdecode and fitparse")

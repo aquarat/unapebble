@@ -37,6 +37,11 @@ typedef struct SportJournalReader {
 //! 0 if the activity has a first segment of a format this firmware reads; -ENOENT, -EINVAL.
 int sport_journal_reader_open(SportJournalReader *r, uint32_t start_utc);
 
+//! 0 with the reader at record @p index of segment @p segment, which may be the end of a full
+//! segment; -ENOENT, -EINVAL.
+int sport_journal_reader_seek(SportJournalReader *r, uint32_t start_utc, uint16_t segment,
+                              uint16_t index);
+
 //! 1 with the next record, 0 at the end.
 int sport_journal_reader_next(SportJournalReader *r, SportJournalRecord *rec);
 

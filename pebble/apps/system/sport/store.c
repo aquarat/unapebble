@@ -48,6 +48,30 @@ int sport_journal_reader_open(SportJournalReader *r, uint32_t start_utc) {
   return prv_open_segment(r, 0);
 }
 
+int sport_journal_reader_seek(SportJournalReader *r, uint32_t start_utc, uint16_t segment,
+                              uint16_t index) {
+  int ret;
+
+  *r = (SportJournalReader){.start_utc = start_utc};
+  if (index > SPORT_JOURNAL_PER_SEGMENT) {
+    return -EINVAL;
+  }
+  ret = prv_open_segment(r, segment);
+  if (ret != 0) {
+    return ret;
+  }
+  if (index != 0 &&
+      pbl_fs_seek(&r->file,
+                  (off_t)(sizeof(SportJournalHeader) + (size_t)index * sizeof(SportJournalRecord)),
+                  PBL_FS_SEEK_SET) < 0) {
+    sport_journal_reader_close(r);
+    return -EINVAL;
+  }
+  r->index = index;
+
+  return 0;
+}
+
 static bool prv_erased(const SportJournalRecord *rec) {
   const uint8_t *p = (const uint8_t *)rec;
 
