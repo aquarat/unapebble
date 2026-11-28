@@ -6,8 +6,13 @@
 #include <pbl/drivers/gnss.h>
 #include <pbl/kernel/mutex.h>
 #include <pbl/kernel/time.h>
+#include <pbl/kernel/work.h>
 #include <pbl/logging/logging.h>
 #include <pbl/services/location.h>
+#ifdef CONFIG_SERVICE_LOCATION_SET_CLOCK
+#include <pbl/services/activity/workout_service.h>
+#include <pbl/services/clock.h>
+#endif
 
 PBL_LOG_MODULE_DEFINE(service_location, CONFIG_SERVICE_LOCATION_LOG_LEVEL);
 
@@ -26,11 +31,69 @@ static uint32_t s_count;
 static uint64_t s_last_rx_ms;
 static bool s_running;
 
+#ifdef CONFIG_SERVICE_LOCATION_SET_CLOCK
+/* The clock is set from the receiver's time when it is off by more than this... */
+#define CLOCK_TOLERANCE_S 2
+/* ... at most this often. */
+#define CLOCK_INTERVAL_MS (60U * 60U * 1000U)
+
+static uint64_t s_prev_utc_ms;
+static uint64_t s_clock_set_ms;
+static bool s_clock_set;
+static void prv_clock_work(struct pbl_work *work);
+static PBL_WORK_DEFINE(s_clock_work, prv_clock_work);
+static uint32_t s_clock_utc;
+
+static void prv_clock_work(struct pbl_work *work) {
+  const time_t now = pbl_realtime();
+  const time_t utc = (time_t)s_clock_utc;
+
+  /* A workout times itself on the clock: never move it under one. */
+  if (workout_service_is_workout_ongoing()) {
+    return;
+  }
+  if (now - utc <= CLOCK_TOLERANCE_S && utc - now <= CLOCK_TOLERANCE_S) {
+    return;
+  }
+  PBL_LOG_INFO("clock set from the GNSS: %ld s off", (long)(utc - now));
+  clock_set_time(utc);
+  s_clock_set = true;
+  s_clock_set_ms = pbl_uptime_ms();
+}
+
+/* Called with s_lock held: a time two epochs agree on, a second apart, or of a fix. */
+static void prv_clock_check(const struct pbl_gnss_fix *fix) {
+  const uint64_t prev = s_prev_utc_ms;
+
+  s_prev_utc_ms = fix->utc_ms;
+  if (fix->utc_ms == 0U) {
+    return;
+  }
+  const bool agreed = prev != 0U && fix->utc_ms - prev >= 900U && fix->utc_ms - prev <= 1100U;
+  if (!agreed && fix->quality == PBL_GNSS_FIX_NONE) {
+    return;
+  }
+  if (s_clock_set && pbl_uptime_ms() - s_clock_set_ms < CLOCK_INTERVAL_MS) {
+    return;
+  }
+  const time_t now = pbl_realtime();
+  const time_t utc = (time_t)((fix->utc_ms + 500U) / 1000U);
+  if (now - utc <= CLOCK_TOLERANCE_S && utc - now <= CLOCK_TOLERANCE_S) {
+    return;
+  }
+  s_clock_utc = (uint32_t)utc;
+  (void)pbl_work_submit(&pbl_sys_workq, &s_clock_work);
+}
+#endif
+
 static void prv_fix(const struct pbl_gnss *gnss, const struct pbl_gnss_fix *fix, void *user_data) {
   pbl_mutex_lock(&s_lock, PBL_FOREVER);
   s_history[s_count % LOCATION_SERVICE_HISTORY] = *fix;
   s_count++;
   s_last_rx_ms = pbl_uptime_ms();
+#ifdef CONFIG_SERVICE_LOCATION_SET_CLOCK
+  prv_clock_check(fix);
+#endif
   pbl_mutex_unlock(&s_lock);
 }
 
