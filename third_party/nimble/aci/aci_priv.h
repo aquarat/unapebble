@@ -68,6 +68,7 @@
 #define ACI_OP_GATT_ALLOW_READ         0xfd27U
 #define ACI_OP_GATT_SET_DESC_VALUE     0xfd29U
 #define ACI_OP_GATT_UPDATE_CHAR_EXT    0xfd2cU
+#define ACI_OP_GATT_READ_HANDLE_VALUE  0xfd2aU
 #define ACI_OP_GATT_DENY_READ          0xfd2dU
 #define ACI_OP_GATT_SET_ACCESS_PERM    0xfd2eU
 #define ACI_OP_L2CAP_CONN_PARAM_UPDATE 0xfd81U
@@ -219,6 +220,8 @@ void aci_gatts_init(void);
 /** Adds the registered services to the chip. */
 int aci_gatts_setup(void);
 void aci_gatts_conn_closed(uint16_t conn_handle);
+/** A bonded peer's link encrypted: the CCCDs the chip restored, as subscribe events. */
+void aci_gatts_bond_restored(uint16_t conn_handle);
 bool aci_gatts_rx_vs(uint16_t code, const uint8_t *p, size_t len);
 
 // --- GATT client (gattc.c) ---------------------------------------------------------------------
