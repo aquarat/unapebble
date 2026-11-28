@@ -471,7 +471,7 @@ Python client on bleak):
   callers' 20 to 200 ms retries (1.5 kB/s before).
 
 With a phone: Gadgetbridge 2026.11.1 (F-Droid) on a Pixel 6a, Android 17
-(`tools/una/ble/phone.py`):
+(`tools/una/ble/phone.py`); {doc}`phone` is the user's guide:
 
 - Found in its discovery as `Pebble 45CE`, paired by numeric comparison,
   the code confirmed on both sides; the HCI snoop log shows the watch's
@@ -484,6 +484,15 @@ With a phone: Gadgetbridge 2026.11.1 (F-Droid) on a Pixel 6a, Android 17
   notification store, five of five one second apart.
 - After a restart of the watch, Gadgetbridge reconnects, encrypted with the
   bond, and the session opens again within 2 s.
+- Gadgetbridge's *Take Screenshot*: 66 kB from the watch in 5.4 s (12 kB/s).
+  Its test call shows the call screen, its test notification the
+  notification.
+- The chip's own restart (its reset pulsed under PebbleOS, through the
+  tether) and a host reset (`bt host_reset`) are recovered: the host resets,
+  the chip is set up again in about 4 s and the phone reconnects. A bonded
+  peer's subscriptions, which the chip keeps, are read back
+  (`aci_gatt_read_handle_value` on each CCCD) and given to PebbleOS as
+  restored, as NimBLE does.
 
 Not tested yet: ANCS and AMS against a real iPhone (their discovery,
 reads, writes and notifications are the paths the PPoGATT client takes),
@@ -795,6 +804,7 @@ covers, and add a record for each new decision.
 ```{toctree}
 :hidden:
 
+phone.md
 hardware.md
 tether.md
 decisions/index.md
