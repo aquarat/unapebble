@@ -351,6 +351,8 @@ counter agree with it.
 | Bluetooth on the chip's own stack (ACI), bonded, advertising to reconnect every 1022 ms, empty payload | | 0.81 mA (Current 1.24 mA), 97.9% in Stop 2 |
 | The same, connected to a BlueZ central, idle, at 60 ms with a latency of 4 (PebbleOS's request, granted) | | 0.79 mA (Current 1.21 mA), 98.3% in Stop 2 |
 | The same, airplane mode: the chip held in reset | | 1.01 mA (Current 1.32 mA), 97.2% in Stop 2 |
+| The same, discoverable, advertising every 20 ms with the discovery payload (`bt pairable`) | | 1.77 mA (Current 1.91 mA), 97.5% in Stop 2 |
+| The same, advertising to reconnect every 1022 ms, a 12-minute window | | 0.66 mA (Current 0.81 mA, 346 samples), 97.9% in Stop 2 |
 | Run recording (Sport app): the receiver searching indoors, its epochs replayed as fixes on a route (`gnss replay`), the data screen redrawn each second, the journal written every 10 s (5 min) | | AvgCurrent 11.7 mA, coulomb counter 13.3 mA; Current 18.4 mA (sd 17.9 mA) |
 
 The Bluetooth figures are of 5-minute windows after 30 s, the gauge's
@@ -362,8 +364,9 @@ firmware sets it. On the chip's own stack (decision 261128-081601-02),
 advertising every second, connected idle and Bluetooth off all read 0.8 to
 1.0 mA: the differences are below what the gauge resolves over 5 minutes,
 the airplane-mode window reading highest. The chip's stack costs nothing
-measurable over the HCI controller it replaced. Advertising every 20 ms on
-the ACI, the first 5 minutes of discovery, was not measured again.
+measurable over the HCI controller it replaced. Advertising every 20 ms
+for discovery costs about 1.1 mA over the 0.66 mA of the 12-minute window of
+advertising every second (2.1 mA with the HCI controller).
 
 The GNSS figures are of 3 to 4 minute windows (8 minutes for the default),
 the gauge's Current and AvgCurrent, which differ by up to 2 mA there: the
