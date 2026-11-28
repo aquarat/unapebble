@@ -52,12 +52,13 @@ config GNSS
 config GNSS_SHELL
     default y if SHELL
 
-# Bluetooth on the BlueNRG-2, an HCI controller in link-layer-only mode under the NimBLE host, its
-# static random address the identity; the experiments firmware keeps the fake controller.
+# Bluetooth on the BlueNRG-2's own stack, through its ACI, under NimBLE's host API (decision
+# 261128-081601-02), its static random address the identity; NIMBLE_HCI_BLUENRG2 has it an HCI
+# controller under NimBLE's host instead. The experiments firmware keeps the fake controller.
 choice NIMBLE_HCI
-    default NIMBLE_HCI_BLUENRG2 if !BOARD_UNAWATCH_LAB
+    default NIMBLE_ACI_BLUENRG2 if !BOARD_UNAWATCH_LAB
 endchoice
 
 choice NIMBLE_ID_ADDR_SOURCE
-    default NIMBLE_ID_ADDR_BLUENRG2 if NIMBLE_HCI_BLUENRG2
+    default NIMBLE_ID_ADDR_BLUENRG2 if NIMBLE_HCI_BLUENRG2 || NIMBLE_ACI_BLUENRG2
 endchoice
