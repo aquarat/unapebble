@@ -2,8 +2,47 @@
 # SPDX-License-Identifier: Apache-2.0
 
 config APP_SPORT
-    bool "Sport activity apps (Run, Bike)"
+    bool "Sport activity apps (Run, Walk, Bike)"
     help
-      Garmin-style Run and Bike apps on the watch's own sensors: GNSS
-      through the location service (CONFIG_SERVICE_LOCATION) when the
-      board has it, heart rate, barometer and steps.
+      Garmin-style Run, Walk and Bike apps on the watch's own sensors:
+      GNSS through the location service (CONFIG_SERVICE_LOCATION) when
+      the board has it, heart rate, barometer and steps. Activities are
+      recorded to the filesystem and exported as FIT files.
+
+if APP_SPORT
+
+config APP_SPORT_FLUSH_S
+    int "Seconds of samples buffered"
+    default 10
+    range 1 27
+    help
+      Samples are written to the filesystem this often; events at
+      once, and whatever is buffered at an orderly restart or
+      power-off. A fault, a watchdog reset or a sudden power loss
+      loses at most this much.
+
+config APP_SPORT_MAX_ACTIVITIES
+    int "Activities kept"
+    default 30
+    range 2 60
+    help
+      The oldest are deleted when a new one starts past this many, or
+      when the filesystem runs short.
+
+config APP_SPORT_FREE_RESERVE_KIB
+    int "Filesystem space left free (KiB)"
+    default 1024
+    help
+      Free space a new segment of an activity leaves in the
+      filesystem; older activities are deleted to keep it, and the
+      recording ends if that is not enough.
+
+config APP_SPORT_SHELL
+    bool "Shell commands"
+    default y
+    depends on SHELL
+    help
+      The workout shell command: list the activities, export them as
+      FIT files (tools/una/workouts.py), delete them.
+
+endif

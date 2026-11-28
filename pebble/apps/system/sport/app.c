@@ -6,7 +6,9 @@
 #include "profile.h"
 #include "recorder.h"
 #include "sensors.h"
+#include "store.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -29,7 +31,15 @@
 
 #define COUNTDOWN_S  3
 #define LAP_POPUP_MS 5000
-#define STATUS_H     22
+// The ready screen gives up acquiring after this long.
+#define READY_GNSS_TIMEOUT_S 600
+// An unfinished activity is offered for resuming this long after its last record.
+#define RESUME_WINDOW_S 1800
+// A time record from the GNSS this often.
+#define TIME_RECORD_INTERVAL_S 600
+// Unfinished activities looked at.
+#define MAX_LISTED 64
+#define STATUS_H   22
 // Round displays: keep everything inside a centred circle this wide.
 #define ROUND_SAFE_DIAMETER 220
 #define FIELD_LABEL_H       18
@@ -54,6 +64,15 @@ typedef struct SportApp {
   bool had_fix;
   bool workout;
   bool saved;
+  //! Seconds the ready screen has acquired; the GNSS off after READY_GNSS_TIMEOUT_S.
+  uint16_t ready_s;
+  bool gnss_off;
+  //! An unfinished activity of this sport to resume.
+  bool resume_offered;
+  uint32_t resume_start;
+  //! A time record was written, at this time of the activity.
+  bool time_recorded;
+  uint32_t time_recorded_s;
 
   Window *ready_window;
   Layer *ready_layer;
@@ -282,7 +301,13 @@ static void prv_ready_update_proc(Layer *layer, GContext *ctx) {
                      prv_band(safe, cy - 80, cy - 46), GTextOverflowModeFill, GTextAlignmentCenter,
                      NULL);
 
-  if (s_app->phase == SportPhase_Countdown) {
+  if (s_app->resume_offered && s_app->phase == SportPhase_Ready) {
+    graphics_context_set_text_color(ctx, GColorWhite);
+    graphics_draw_text(ctx, "Unfinished activity", fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
+                       prv_band(safe, cy - 30, cy), GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentCenter, NULL);
+    hint = "SELECT: resume\nDOWN: save it, new";
+  } else if (s_app->phase == SportPhase_Countdown) {
     snprintf(line, sizeof(line), "%u", s_app->countdown);
     graphics_context_set_text_color(ctx, GColorWhite);
     graphics_draw_text(ctx, line, fonts_get_system_font(FONT_KEY_LECO_60_NUMBERS_AM_PM),
@@ -291,7 +316,9 @@ static void prv_ready_update_proc(Layer *layer, GContext *ctx) {
     hint = "BACK to cancel";
   } else {
     GColor gps_color = GColorLightGray;
-    if (st.gnss == SportGnssStatus_Fix) {
+    if (s_app->gnss_off) {
+      snprintf(line, sizeof(line), "GPS off");
+    } else if (st.gnss == SportGnssStatus_Fix) {
       snprintf(line, sizeof(line), "GPS ready");
       gps_color = PBL_IF_COLOR_ELSE(GColorGreen, GColorWhite);
     } else if (st.gnss == SportGnssStatus_Searching) {
@@ -312,7 +339,9 @@ static void prv_ready_update_proc(Layer *layer, GContext *ctx) {
                        fonts_get_system_font(FONT_KEY_GOTHIC_18), prv_band(safe, cy + 2, cy + 26),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-    if (st.gnss == SportGnssStatus_Searching) {
+    if (s_app->gnss_off) {
+      hint = "SELECT: search again";
+    } else if (st.gnss == SportGnssStatus_Searching) {
       hint = s_app->start_anyway ? "SELECT again: start\nwithout GPS" : "SELECT: start anyway";
     } else {
       hint = "SELECT: start\nHold: no countdown";
@@ -343,7 +372,9 @@ static void prv_start_activity(void) {
     PBL_LOG_WRN("workout service busy: no heart rate or steps");
   }
   sport_sensors_set_workout(s_app->workout);
-  sport_recorder_start((uint8_t)p->type, pbl_realtime());
+  if (!sport_recorder_start((uint8_t)p->type, (uint32_t)pbl_realtime())) {
+    PBL_LOG_ERR("could not start recording");
+  }
 
   vibes_long_pulse();
   prv_push_active_window();
@@ -355,12 +386,19 @@ static void prv_finish(bool save) {
     return;
   }
 
+  const uint16_t laps = s_app->engine.num_laps;
+
   sport_engine_stop(&s_app->engine);
   if (save) {
-    sport_recorder_finish(&s_app->engine);
+    if (s_app->engine.num_laps != laps) {
+      sport_recorder_lap(sport_engine_last_lap(&s_app->engine), s_app->engine.elapsed_s);
+    }
+    sport_recorder_finish(&s_app->engine, s_app->engine.elapsed_s);
   } else {
     sport_recorder_discard();
   }
+  // Nothing needs a position any more.
+  sport_sensors_gnss_stop();
   if (s_app->workout) {
     workout_service_stop_workout();
     s_app->workout = false;
@@ -371,7 +409,13 @@ static void prv_finish(bool save) {
 }
 
 static void prv_set_paused(bool paused) {
+  const SportState before = s_app->engine.state;
+
   sport_engine_pause(&s_app->engine, paused);
+  if (s_app->engine.state != before) {
+    sport_recorder_event(paused ? SportJournalEvent_Pause : SportJournalEvent_Resume,
+                         s_app->engine.elapsed_s);
+  }
   if (s_app->workout) {
     workout_service_pause_workout(paused);
   }
@@ -425,6 +469,11 @@ static void prv_tick_handler(struct pbl_tm *tick_time, TimeUnits units_changed) 
   switch (s_app->phase) {
     case SportPhase_Ready: {
       const bool fix = sport_sensors_get_status().gnss == SportGnssStatus_Fix;
+      if (!s_app->gnss_off && ++s_app->ready_s >= READY_GNSS_TIMEOUT_S) {
+        PBL_LOG_INFO("no start in %u s: GNSS off", READY_GNSS_TIMEOUT_S);
+        sport_sensors_gnss_stop();
+        s_app->gnss_off = true;
+      }
       if (fix && !s_app->had_fix) {
         vibes_short_pulse();
       }
@@ -442,13 +491,28 @@ static void prv_tick_handler(struct pbl_tm *tick_time, TimeUnits units_changed) 
       break;
     case SportPhase_Active: {
       const uint32_t events = sport_engine_tick(&s_app->engine, &sample);
-      SportRecord record;
+      const uint32_t time_s = s_app->engine.elapsed_s;
+      uint32_t gnss_utc;
 
-      sport_record_pack(&s_app->engine, &sample, events & SportEvent_Lap, &record);
       if (s_app->workout) {
         workout_service_set_distance((int32_t)(s_app->engine.total.distance_mm / 1000));
       }
-      sport_recorder_add(&record, s_app->engine.elapsed_s);
+      sport_recorder_sample(&s_app->engine, &sample, time_s);
+      if (events & SportEvent_Lap) {
+        sport_recorder_lap(sport_engine_last_lap(&s_app->engine), time_s);
+      }
+      if (events & SportEvent_AutoPause) {
+        sport_recorder_event(SportJournalEvent_AutoPause, time_s);
+      }
+      if (events & SportEvent_AutoResume) {
+        sport_recorder_event(SportJournalEvent_AutoResume, time_s);
+      }
+      if (sport_sensors_gnss_utc(&gnss_utc) &&
+          (!s_app->time_recorded || time_s - s_app->time_recorded_s >= TIME_RECORD_INTERVAL_S)) {
+        sport_recorder_time(gnss_utc, (uint32_t)pbl_realtime(), time_s);
+        s_app->time_recorded = true;
+        s_app->time_recorded_s = time_s;
+      }
 
       if (events & SportEvent_Lap) {
         prv_show_lap();
@@ -493,13 +557,48 @@ static bool prv_may_start(void) {
   return false;
 }
 
+static void prv_resume_activity(void);
+
+// Select on the ready screen: resume, search again, or start.
+static bool prv_ready_select_special(void) {
+  if (s_app->phase != SportPhase_Ready) {
+    return false;
+  }
+  if (s_app->resume_offered) {
+    prv_resume_activity();
+    return true;
+  }
+  if (s_app->gnss_off) {
+    s_app->gnss_off = false;
+    s_app->ready_s = 0;
+    sport_sensors_gnss_start();
+    layer_mark_dirty(s_app->ready_layer);
+    return true;
+  }
+  return false;
+}
+
 static void prv_ready_select(ClickRecognizerRef recognizer, void *context) {
+  if (prv_ready_select_special()) {
+    return;
+  }
   if (s_app->phase == SportPhase_Ready && prv_may_start()) {
     prv_begin(true);
   }
 }
 
+static void prv_ready_down(ClickRecognizerRef recognizer, void *context) {
+  if (s_app->phase == SportPhase_Ready && s_app->resume_offered) {
+    sport_store_close(s_app->resume_start);
+    s_app->resume_offered = false;
+    layer_mark_dirty(s_app->ready_layer);
+  }
+}
+
 static void prv_ready_select_long(ClickRecognizerRef recognizer, void *context) {
+  if (prv_ready_select_special()) {
+    return;
+  }
   if (s_app->phase == SportPhase_Ready && prv_may_start()) {
     prv_begin(false);
   } else if (s_app->phase == SportPhase_Countdown) {
@@ -520,6 +619,7 @@ static void prv_ready_click_config(void *context) {
   window_single_click_subscribe(BUTTON_ID_SELECT, prv_ready_select);
   window_long_click_subscribe(BUTTON_ID_SELECT, 0, prv_ready_select_long, NULL);
   window_single_click_subscribe(BUTTON_ID_BACK, prv_ready_back);
+  window_single_click_subscribe(BUTTON_ID_DOWN, prv_ready_down);
 }
 
 static void prv_ready_load(Window *window) {
@@ -579,6 +679,7 @@ static void prv_active_back(ClickRecognizerRef recognizer, void *context) {
     return;
   }
   if (sport_engine_lap(&s_app->engine)) {
+    sport_recorder_lap(sport_engine_last_lap(&s_app->engine), s_app->engine.elapsed_s);
     prv_show_lap();
     layer_mark_dirty(s_app->active_layer);
   }
@@ -832,6 +933,136 @@ static void prv_push_summary(void) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// Activities recorded before a restart
+
+static void prv_stats_from_journal(const SportJournalStats *st, SportStats *out) {
+  *out = (SportStats){
+    .timer_s = st->timer_s,
+    .distance_mm = st->distance_cm * 10,
+    .ascent_cm = st->ascent_dm * 10U,
+    .descent_cm = st->descent_dm * 10U,
+    .max_speed_mm_s = st->max_speed_cm_s * 10U,
+    .hr_sum = (uint32_t)st->avg_hr * st->timer_s,
+    .hr_count = st->avg_hr ? st->timer_s : 0,
+    .hr_max = st->max_hr,
+    .cadence_sum = (uint32_t)st->avg_cadence * st->timer_s,
+    .cadence_count = st->avg_cadence ? st->timer_s : 0,
+  };
+}
+
+// Carry on the unfinished activity offered, paused, its totals and laps from the journal.
+static void prv_resume_activity(void) {
+  SportJournalReader *r = app_malloc(sizeof(*r));
+  SportEngine *e = &s_app->engine;
+  SportJournalScan scan;
+  SportJournalRecord rec;
+  SportJournalStats totals;
+  SportStats total;
+  uint16_t num_laps = 0;
+  uint32_t lap_start_s = 0;
+
+  s_app->resume_offered = false;
+  if (r == NULL || sport_journal_reader_open(r, s_app->resume_start) != 0) {
+    app_free(r);
+    layer_mark_dirty(s_app->ready_layer);
+    return;
+  }
+
+  sport_journal_scan_init(&scan, 0);
+  while (sport_journal_reader_next(r, &rec) == 1) {
+    sport_journal_scan_add(&scan, &rec);
+    if (rec.type == SportJournalType_Event && rec.event == SportJournalEvent_Lap) {
+      if (num_laps < SPORT_ENGINE_MAX_LAPS) {
+        SportLap *lap = &e->laps[num_laps];
+        *lap = (SportLap){
+          .start_elapsed_s = lap_start_s,
+          .number = rec.stats.laps,
+          .trigger = rec.stats.info,
+        };
+        prv_stats_from_journal(&rec.stats, &lap->stats);
+      }
+      num_laps++;
+      lap_start_s = rec.time_s;
+    }
+  }
+  sport_journal_reader_close(r);
+  app_free(r);
+
+  sport_journal_scan_stats(&scan, SportJournalEvent_Stop, &totals);
+  prv_stats_from_journal(&totals, &total);
+  total.hr_sum = scan.hr_sum;
+  total.hr_count = scan.hr_count;
+  total.cadence_sum = scan.cadence_sum;
+  total.cadence_count = scan.cadence_count;
+
+  // The time of the activity carries on from the clock, not from the last record.
+  const uint32_t now = (uint32_t)pbl_realtime();
+  uint32_t elapsed = scan.last_time_s + 1;
+  if (now > s_app->resume_start && now - s_app->resume_start > elapsed &&
+      now - s_app->resume_start - elapsed < RESUME_WINDOW_S) {
+    elapsed = now - s_app->resume_start;
+  }
+
+  sport_engine_restore(e, elapsed, &total, e->laps, num_laps, lap_start_s);
+  s_app->phase = SportPhase_Active;
+  s_app->workout = workout_service_start_workout(s_app->profile->session_type);
+  sport_sensors_set_workout(s_app->workout);
+  if (s_app->workout) {
+    workout_service_pause_workout(true);
+  }
+  sport_recorder_resume(s_app->resume_start, elapsed);
+  PBL_LOG_INFO("resumed activity %08" PRIx32 ": %" PRIu32 " s, %" PRIu32 " m, %u laps",
+               s_app->resume_start, total.timer_s, total.distance_mm / 1000, num_laps);
+
+  vibes_long_pulse();
+  prv_push_active_window();
+  app_window_stack_remove(s_app->ready_window, false);
+}
+
+// Close what a restart left unfinished, but the latest of this sport if recent: that is offered.
+static void prv_check_unfinished(void) {
+  SportStoreEntry *entries = app_malloc(MAX_LISTED * sizeof(*entries));
+  const uint32_t now = (uint32_t)pbl_realtime();
+  size_t n;
+
+  if (entries == NULL) {
+    return;
+  }
+
+  // An app that faulted mid-activity left the recorder running.
+  if (sport_recorder_is_active(NULL)) {
+    sport_recorder_abandon();
+  }
+
+  n = PBL_MIN(sport_store_list(entries, MAX_LISTED), MAX_LISTED);
+  for (size_t i = n; i-- > 0;) {
+    const SportStoreEntry *entry = &entries[i];
+    SportJournalScan scan;
+    uint8_t sport;
+
+    if (entry->closed || !entry->readable) {
+      continue;
+    }
+    if (sport_store_scan(entry->start_utc, &sport, &scan) != 0) {
+      continue;
+    }
+
+    const int64_t age = (int64_t)now - ((int64_t)entry->start_utc + scan.last_time_s);
+    const bool recent = age >= -60 && age <= RESUME_WINDOW_S;
+
+    if (recent && sport == s_app->profile->type && !s_app->resume_offered) {
+      s_app->resume_offered = true;
+      s_app->resume_start = entry->start_utc;
+      PBL_LOG_INFO("unfinished activity %08" PRIx32 ", %d s ago", entry->start_utc, (int)age);
+    } else if (!recent) {
+      sport_store_close(entry->start_utc);
+    }
+  }
+
+  app_free(entries);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 // Main
 
 static void prv_init(const SportProfile *profile) {
@@ -847,6 +1078,7 @@ static void prv_init(const SportProfile *profile) {
 
   workout_service_frontend_opened();
   sport_sensors_init(profile->sensors);
+  prv_check_unfinished();
 
   const time_t t = pbl_realtime();
   struct pbl_tm now;

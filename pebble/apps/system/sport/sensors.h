@@ -42,6 +42,15 @@ void sport_sensors_init(uint32_t sensors);
 
 void sport_sensors_deinit(void);
 
+//! Start the GNSS again after sport_sensors_gnss_stop(), if the sport uses it.
+void sport_sensors_gnss_start(void);
+
+//! Stop the GNSS, keeping the other sensors.
+void sport_sensors_gnss_stop(void);
+
+//! The UTC second of the last epoch, once the receiver gave the same time two epochs running.
+bool sport_sensors_gnss_utc(uint32_t *utc_s);
+
 //! Connect to the workout service once the activity starts, for heart rate and steps.
 void sport_sensors_set_workout(bool active);
 

@@ -4,85 +4,58 @@
 #pragma once
 
 #include "engine.h"
+#include "journal.h"
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <time.h>
 
-#include <pbl/kernel/compiler.h>
+//! Writes the activity being recorded to its journal (journal.h). The state is static, outside
+//! the app's heap, so that the restart and power-off handlers can write what is buffered.
+//! Samples are buffered and written every CONFIG_APP_SPORT_FLUSH_S seconds, events at once.
 
-//! Activity recording, in the filesystem:
-//! - "/act<start>.<n>": segments of up to SPORT_RECORD_PER_SEGMENT one-second records, each after
-//!   a SportRecordHeader;
-//! - "/act<start>.s": a SportSummaryHeader, the totals, then the stored laps;
-//! with <start> the UTC start time in 8 hex digits. Little-endian, for an exporter (FIT, GPX) to
-//! read later. The oldest activities past SPORT_RECORD_MAX_ACTIVITIES are deleted.
+//! Start a new activity: delete the oldest past the limit, create its first segment, write the
+//! start event.
+bool sport_recorder_start(uint8_t sport, uint32_t start_utc);
 
-#define SPORT_RECORD_MAGIC          0x54525053U // "SPRT"
-#define SPORT_SUMMARY_MAGIC         0x4d535053U // "SPSM"
-#define SPORT_RECORD_VERSION        1
-#define SPORT_RECORD_PER_SEGMENT    900
-#define SPORT_RECORD_MAX_ACTIVITIES 20
+//! Carry on recording an activity that has no summary, after its last record, with a restarted
+//! event. @p time_s is the activity's time now.
+bool sport_recorder_resume(uint32_t start_utc, uint32_t time_s);
 
-typedef enum SportRecordFlag {
-  SportRecordFlag_Fix = 1 << 0,
-  SportRecordFlag_Moving = 1 << 1,
-  SportRecordFlag_Paused = 1 << 2,
-  SportRecordFlag_AutoPaused = 1 << 3,
-  SportRecordFlag_Lap = 1 << 4,
-  SportRecordFlag_Elevation = 1 << 5,
-  SportRecordFlag_Hr = 1 << 6,
-} SportRecordFlag;
+//! Write what is buffered and stop recording, leaving the activity unfinished, as a restart would.
+void sport_recorder_abandon(void);
 
-typedef struct PBL_PACKED SportRecordHeader {
-  uint32_t magic;
-  uint8_t version;
-  uint8_t sport;
-  uint16_t record_size;
-  uint32_t start_utc;
-  //! Elapsed second of the first record.
-  uint32_t first_elapsed_s;
-  //! Records written, set when the segment is closed; 0xffffffff while recording.
-  uint32_t count;
-} SportRecordHeader;
+//! Whether an activity is being recorded, and which.
+bool sport_recorder_is_active(uint32_t *start_utc);
 
-typedef struct PBL_PACKED SportRecord {
-  int32_t lat_e7;
-  int32_t lon_e7;
-  uint32_t distance_cm;
-  uint16_t speed_cm_s;
-  //! Elevation in 0.2 m above -500 m.
-  uint16_t elevation;
-  uint16_t power_w;
-  uint8_t hr_bpm;
-  uint8_t cadence;
-  uint8_t flags;
-  uint8_t sats;
-} SportRecord;
+//! Whether the storage or the time limit ended the recording.
+bool sport_recorder_is_truncated(void);
 
-typedef struct PBL_PACKED SportSummaryHeader {
-  uint32_t magic;
-  uint8_t version;
-  uint8_t sport;
-  uint16_t num_laps_stored;
-  uint32_t start_utc;
-  uint32_t elapsed_s;
-  uint16_t num_laps;
-  uint16_t num_segments;
-} SportSummaryHeader;
+//! Add the second the engine just processed.
+void sport_recorder_sample(const SportEngine *engine, const SportSample *sample, uint32_t time_s);
 
-//! Pack the second the engine just processed.
-void sport_record_pack(const SportEngine *engine, const SportSample *sample, bool lap,
-                       SportRecord *record);
+//! Add an event without statistics, and write.
+void sport_recorder_event(uint8_t event, uint32_t time_s);
 
-//! Start recording an activity.
-bool sport_recorder_start(uint8_t sport, time_t start_utc);
+//! Add a closed lap, and write.
+void sport_recorder_lap(const SportLap *lap, uint32_t time_s);
 
-//! Add one second.
-void sport_recorder_add(const SportRecord *record, uint32_t elapsed_s);
+//! Add a time record: the GNSS's UTC at @p time_s, with the RTC's.
+void sport_recorder_time(uint32_t gnss_utc, uint32_t rtc_utc, uint32_t time_s);
 
-//! Flush and write the summary.
-void sport_recorder_finish(const SportEngine *engine);
+//! Write what is buffered.
+void sport_recorder_flush(void);
 
-//! Drop the activity being recorded.
+//! Write the stop event with the engine's totals, then the summary, and end.
+void sport_recorder_finish(const SportEngine *engine, uint32_t time_s);
+
+//! Delete the activity being recorded, and end.
 void sport_recorder_discard(void);
+
+//! Statistics of the journal for the engine's: a lap or the totals.
+void sport_recorder_pack_stats(const SportStats *stats, uint8_t event, uint8_t info, uint16_t laps,
+                               SportJournalStats *out);
+
+#if UNITTEST
+//! What a fault or a sudden power loss does: forget the state and what is buffered.
+void sport_recorder_test_lose_buffer(void);
+#endif
