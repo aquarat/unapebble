@@ -18,16 +18,30 @@ set(includes
   ${nimble}/porting/nimble/include
 )
 
-file(GLOB sources CONFIGURE_DEPENDS
-  ${nimble}/porting/nimble/src/*.c
-  ${nimble}/nimble/src/*.c
-  ${nimble}/nimble/host/src/*.c
-  ${nimble}/nimble/host/util/src/*.c
-  ${nimble}/nimble/host/services/gap/src/*.c
-  ${nimble}/nimble/host/services/gatt/src/*.c
-  ${nimble}/nimble/transport/src/*.c
-  ${nimble}/nimble/transport/common/hci_h4/src/*.c
-)
+if(CONFIG_NIMBLE_ACI_BLUENRG2)
+  # NimBLE's host API is aci/'s, over the chip's own stack: of the host, only what does not
+  # depend on its internals is built.
+  file(GLOB sources CONFIGURE_DEPENDS ${nimble}/porting/nimble/src/*.c)
+  list(APPEND sources
+    ${nimble}/nimble/host/src/ble_hs_adv.c
+    ${nimble}/nimble/host/src/ble_hs_cfg.c
+    ${nimble}/nimble/host/src/ble_hs_mbuf.c
+    ${nimble}/nimble/host/src/ble_store.c
+    ${nimble}/nimble/host/src/ble_store_util.c
+    ${nimble}/nimble/host/src/ble_uuid.c
+  )
+else()
+  file(GLOB sources CONFIGURE_DEPENDS
+    ${nimble}/porting/nimble/src/*.c
+    ${nimble}/nimble/src/*.c
+    ${nimble}/nimble/host/src/*.c
+    ${nimble}/nimble/host/util/src/*.c
+    ${nimble}/nimble/host/services/gap/src/*.c
+    ${nimble}/nimble/host/services/gatt/src/*.c
+    ${nimble}/nimble/transport/src/*.c
+    ${nimble}/nimble/transport/common/hci_h4/src/*.c
+  )
+endif()
 if(CONFIG_NIMBLE_BLE_SVC_BAS)
   list(APPEND sources ${nimble}/nimble/host/services/bas/src/ble_svc_bas.c)
 endif()
@@ -84,4 +98,5 @@ pbl_library_compile_options(
 # The PebbleOS side, built with the usual warnings.
 add_subdirectory(port)
 add_subdirectory(transport)
+add_subdirectory(aci)
 add_subdirectory(store)

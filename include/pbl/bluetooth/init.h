@@ -22,8 +22,8 @@
  *
  * The NimBLE host reaches its controller through the HCI transport selected with the
  * @c NIMBLE_HCI_* Kconfig choice: the in-image NimBLE link layer (@c NIMBLE_HCI_NRF52), the SiFli
- * LCPU over IPC (@c NIMBLE_HCI_SF32LB), H4 over UART (@c NIMBLE_HCI_UART) or a fake controller
- * (@c NIMBLE_HCI_FAKE). The fake controller, used on QEMU, accepts every HCI command and never
+ * LCPU over IPC (@c NIMBLE_HCI_SF32LB), H4 over UART (@c NIMBLE_HCI_UART), a BlueNRG-2 over SPI
+ * (@c NIMBLE_HCI_BLUENRG2) or a fake controller (@c NIMBLE_HCI_FAKE). The fake controller, used on QEMU, accepts every HCI command and never
  * raises an event: the host synchronizes and the GATT server runs, but no link is ever established.
  *
  * The watch is a peripheral only. Typical bring-up:

@@ -365,13 +365,21 @@ none.
 | `HCI_Reset`: Command Complete with status 0, then the chip restarts by itself | 71 ms | `04 ff 03 01 00 04`: reason 4, **updater mode** | 4 of 4 |
 | A reset of 5 ms to 3 s, straight after a start (normal or updater) | 94 ms | reason 4 | every time, 16 times; MISO pulled up, down or floating made no difference |
 | From updater mode: RESET low, the SPI pins set up again, 2 s, then a 5 ms pulse (mode 6) | 2.2 s | reason 1 | 8 of 8 |
+| A reset of 5 ms or 300 ms straight after a normal start, SCK, MOSI and CS analog in reset, CS driven high 5 ms before the release (mode 7) | 2.2 s | reason 1 | 2 of 2 |
+| `HCI_Reset` after a normal start, SCK, MOSI and CS analog from its Command Complete on (mode 8; approved, decision 261127-233626-01) | 1.7 s | reason 1 | 2 of 2 (the experiment, and the NimBLE transport once) |
+| PebbleOS's transport at boot: RESET held since the device's init, CS an input, the SPI pins analog | 2.2 s | reason 1 | 9 of 9 boots |
 
 The DTM's reason codes are: 2, updater by ACI command; 3, bad BLUE flag;
 4, updater by boot pin. In ST's DTM the boot pin is the chip's IO3, which
-is the SPI MISO line. On this module the state of MISO doesn't decide it.
-Why the mode 6 sequence recovers and a plain long reset doesn't is **not
-established**. The only difference in code is that the GPIO registers of
-the SPI pins are written during the hold. What PA8 really drives on the
+ST's updater source gives as the SPI MOSI line; MOSI held high starts the
+updater (see the DTM image below), and the state of MISO doesn't decide it.
+What decides it is the state of the SPI lines during the reset: with SCK,
+MOSI and CS driven (CS high) a reset of any length after a start ends in
+the updater; with them undriven (analog), even a 5 ms reset straight after
+a start starts normally (mode 7, 2026-11-27). Mode 6 left them as the stub
+found them, undriven. Driving CS high may feed the chip through its pin
+while RESET is low, so that it does not go through a power-on start
+(inferred). What PA8 really drives on the
 module is not known: the slow RESET rise and the 2.2 s start look like an
 RC or a supply switch (inferred).
 
@@ -381,10 +389,13 @@ away with a 5 ms pulse because it resets only after the chip has been held
 in reset since boot, and it never sends `HCI_Reset`. Consequences for a
 driver:
 
-- **It must never send `HCI_Reset`.** Zephyr's `no-reset` quirk and
-  STM32duinoBLE do the same.
+- **It must not send `HCI_Reset` with the SPI lines driven.** With them
+  released from its Command Complete on, the chip restarts normally
+  (mode 8); PebbleOS's transport sends none anyway, as nothing needs it.
 - **It must check the start event's reason**, and restart with the mode 6
   sequence until it gets reason 1.
+- **It must leave the SPI lines undriven while RESET is low**, CS too, and
+  drive CS high only shortly before the release.
 
 **What it runs.** After a normal start:
 
@@ -420,16 +431,129 @@ both with its stack on and in link-layer-only mode:
 (`01 0c fc 03 2c 01 01`), sent as the first command after the start event,
 returns success. Config 0x2C then reads 1, and the HCI commands above
 behave as before. The setting is in RAM and lasts until the next restart.
-In this mode the DTM passes ACL data to and from the host as H4 packets
-(`02`), according to ST's DTM source and the drivers that use it:
-Zephyr's `st,hci-spi-v2` with `req-ll-only`, and STM32duinoBLE on the
-BlueNRG-M2SP. This was **not** tried here, because it needs a connection.
+A restart, even a short one, clears it (mode 7: it reads 0 again).
+
+ST's DTM source and the drivers that use the mode (Zephyr's
+`st,hci-spi-v2` with `req-ll-only`, STM32duinoBLE on the BlueNRG-M2SP)
+have the DTM pass ACL data to and from the host as H4 packets (`02`).
+**On this chip it does not** (PebbleOS's NimBLE transport and a BlueZ
+central, 2026-11-27):
+
+| Run | Seen |
+|---|---|
+| Mode on, then `aci_gatt_init` and `aci_gap_init` or not; NimBLE as host (4 runs) | LE Enhanced Connection Complete, a Data Length Change (251 bytes), then nothing from the chip but HCI events for 22 s: no ACL, no vendor event. The host's first ACL packet, 15 bytes, gets no Number Of Completed Packets. The central's service discovery times out and it disconnects. |
+| Mode off, `aci_gatt_init` and `aci_gap_init` (1 run) | The central discovers the chip's own GAP and GATT services in 1 s, reads Appearance, Device Name (empty) and the preferred connection parameters, and writes the Service Changed CCCD: the chip's stack answers. NimBLE's ACL packet gets no completion either. |
+| Mode written after a restart from `HCI_Reset` (mode 8's restart), then `aci_gatt_init` and `aci_gap_init`, as STM32duinoBLE orders them; NimBLE as host (1 run) | The same as with the mode on: no ACL, discovery timed out (decision 261127-233959-01). |
+
+So the mode turns the chip's host off, but does not route the link's data
+to the SPI. ST's community forum has the same report for the stock DTM,
+and ST's answer is a DTM built with its `LL_ONLY` option (decision
+261127-204244-01). Other findings of those runs:
+
+- **Disconnections** come with reason `0x03`, whoever ends the link.
+- **LE Read Remote Features** just after a connection gets a Command
+  Status of Controller Busy (`0x3A`) whose opcode reads `0x0016`, the OGF
+  bits clear (decision 261127-194000-01).
+- **Config 0x80** reads `ce 45 ec e6 ce 01` on this watch, least
+  significant octet first: its top two bits are clear, so it is no static
+  random address as it stands (decision 261127-193700-01).
+- The connection came at an interval of 36 (45 ms) from BlueZ, and the
+  link was updated to 251-byte PDUs.
+
+**The DTM's ACL path and its updater, from ST's source.** Read in public
+mirrors of ST's BlueNRG-1_2 DK, 3.1.0 and 3.2.3 (DTM 3.4.0); the chip runs
+DTM 3.2, of SDK 3.2.1, whose source was not found. Not checked on the chip.
+
+- In DTM 3.1.0 `hci_parser.c` forwards ACL data, both ways, only under
+  `#if defined(LL_ONLY) || DTM_DEBUG==1`; in 3.4.0 the guard is gone. The
+  DTM 3.2 on the chip most likely still has it, which would explain why
+  config 0x2C alone passes no ACL (inferred). `LL_ONLY` is a preprocessor
+  define of the DTM's build, with the same prebuilt stack library; with it
+  the DTM writes 0x2C itself at each start. ST ships no `LL_ONLY` image in
+  the DK; stm32duino's X-NUCLEO-BNRG2A1 package has `DTM_LLOnly.bin`, not
+  checked to be the SPI build. SDK 3.2.0/3.2.1 had Atollic TrueSTUDIO
+  (GCC, free) projects, 3.2.2 and later WiSE-Studio GCC ones. The DK is
+  under ST's Production Limited License Agreement, which forbids combining
+  it with open-source code.
+- `HCI_Reset` answers, then `NVIC_SystemReset()`: the chip boots again
+  through the updater into the DTM, its RAM, config 0x2C included, lost.
+  `aci_hal_updater_start` (0xFC20) sets a RAM flag at 0x20000030 before the
+  same reset: reason 2. The updater (0x10040000, 8 KiB) starts the DTM at
+  0x10042000 unless that flag, a bad BLUE flag at 0x10042014 (reason 3) or
+  IO3 high (reason 4) says otherwise.
+- In the updater, 0xFC21 reboot, 0xFC22 version, 0xFC23 buffer size (64),
+  0xFC24/0xFC25 erase and set the BLUE flag, 0xFC26 erase a 2 KiB page,
+  0xFC27 program, **0xFC28 read a block**, 0xFC29 CRC-32 of 2 KiB pages,
+  0xFC2A hardware version. They check only `addr >= 0x10042000`: the
+  updater cannot be overwritten, nor read back; the DTM image, and the
+  stack's data page at 0x1007F000, can. So the image could be backed up,
+  64 bytes a read, before anything is written. Nothing of this was sent.
+
+**The DTM image, backed up and analysed (2026-11-28).** Read through the
+updater (`0xFC28`, 64-byte blocks) from 0x10042000 to the end of flash,
+three times, identical, and matching the updater's CRC in 8-page chunks
+(`0xFC29`); kept outside the repository, as it is ST's code, with its
+SHA-256 (`9a355e01…7393cb5`, which `tools/una/bluenrg2/patch.py` checks).
+The updater answered version 6, buffer size 64, hardware version 1, and
+refused a read below the DTM (0x10040000: status `0xFA`). What it holds:
+
+- The code from 0x10042000 to 0x10062cb8, blank flash after it, a block of
+  device data at 0x10067804 (32 bytes, then 6 that resemble the address at
+  config 0x80, then 0xAAAAAAAA), the rest blank, the page at 0x1007F000
+  too. The vector table has 0xAA5555AA at +0x10, the BLUE flag at +0x14 and
+  0x20BB8, the image's length, at +0x18.
+- Matched against the objects of ST's stack library (DK 3.2.3): about 420
+  functions are found as they are. **Both ACL paths are missing.** The HCI
+  parser's packet dispatch (at 0x1004e45a) handles commands and vendor
+  packets only: an ACL packet is accepted by the SPI framing and then
+  dropped. The stack's `hci_tx_acl_data` is not linked at all. On the way
+  up, the stack does hand received data to `hci_rx_acl_data` in
+  link-layer-only mode (the check is the bit 0 of its context at +0xA4),
+  which queues it, but the callback that would send it to the host
+  (0x10045e8e) calls a weak default that the linker reduced to
+  `movs r0, #0`. So the DTM was built without `LL_ONLY`, and no setting
+  can make it pass ACL data.
+- What a patch would use is there: the packet allocation, write, transmit
+  and release functions the stack's own L2CAP uses, `get_connection_no`,
+  the SPI event queue (`send_event_isr`, 0x100477ac), and the completion
+  path that reports Number Of Completed Packets.
+
+**A binary patch, tried and undone.** `tools/una/bluenrg2` holds our code
+for the two paths (268 bytes, for 0x10068000, in blank flash) and a tool
+that points the parser's dispatch and the callback at it, writing only the
+three pages concerned (decision 261128-003746-01). Written and read back
+exactly, page by page, CRC-checked: **the patched DTM never starts**, no
+start event in 3 s. Bisected, each time restored: the code page alone
+starts; either redirection alone does not; a single padding byte changed
+in the code (0x1004e492, never executed) does not either. So something
+checks the DTM's code before it runs, most likely over the 0x20BB8 bytes
+the vector table gives; the DTM's own code has no reference to that length
+or to a CRC of it, so the check is probably in the updater, which cannot
+be read back through itself, or in the ROM (inferred). The reference value
+was not found: none of CRC-32, the updater's CRC, a sum or SHA-256 over the
+plausible ranges matches a word or the 32-byte block in the image.
+
+ST's own update flow (BLUE flag erased, the first page rewritten with the
+flag blank, the pages written, the flag set and read back) gives the same:
+no start. A word written in blank flash just after the code (0x10062cc0,
+0x10062ffc) does not stop the start; the length word at +0x18 changed to 0
+does. So the check covers the vector table and the code, and nothing
+after it, and its reference is made neither by the update flow nor kept in
+readable flash (decision 261128-004526-01).
+
+**The updater by its boot pin.** ST's updater source names the boot pin
+"IO3 -> SPI MOSI PIN", not MISO. With MOSI (PB5) driven high through the
+release of RESET, the updater starts (reason 4) whatever the DTM does: 8
+of 8, among them every time the patched DTM did not start. MISO pulled up
+or driven high did nothing. That is the recovery for a DTM that does not
+start; each patched variant was restored this way and the chip started
+normally again. The flash read back as the original image at the end.
 
 **Replacing the firmware.** There are three ways:
 
 1. **The DTM's SPI updater.** It lives at 0x10040000 to 0x10042000 in the
    chip's flash. It starts by command (`aci_hal_updater_start`, 0xFC20),
-   when IO3/MISO is high at start-up, or when the BLUE flag is bad. Its
+   when IO3 (MOSI) is high at start-up, or when the BLUE flag is bad. Its
    commands 0xFC21 to 0xFC2A erase, program and CRC the application area
    only. Because a bad BLUE flag starts it, an interrupted update starts
    the updater again rather than a broken image. That makes it
@@ -448,6 +572,57 @@ licences (PLLA, SLA0055), not open ones.
 **Module EEPROM.** This is an N24S64B at 0x50, with its identification
 page at 0x58. Both answered on I2C3. Stock UNA reads only its unique ID,
 to find out whether the module is fitted.
+
+#### 2.5.2 The chip's own stack, through ACI (measured)
+
+Measured on the watch on 2026-11-28 with the ACI transport
+(`third_party/nimble/aci`, decision 261128-081601-02) and a BlueZ central.
+The commands and events are those of ST's ACI for the BlueNRG-1 and -2, as
+X-CUBE-BLE2's headers give them (read for the interface only); DTM 3.2.0
+takes every one used here with those layouts.
+
+- **The last byte of a read.** Over the STM32's SPI the last byte of every
+  transfer comes back with only its two low bits, at 1.25 MHz as at
+  625 kHz; the bit-banged reads of the tether experiment are right. Each
+  read now clocks one dummy byte more (decision 261128-092026-01). Before
+  that, config 0x80 read `ce 45 ec e6 ce 01`: it is `ce 45 ec e6 ce cd`,
+  the static random address `CD:CE:E6:EC:45:CE`. The disconnection reason
+  `0x03` of every link, and the Command Status opcode `0x0016` in 2.5.1,
+  were that byte cut.
+- **Start.** `aci_gatt_init`, `aci_gap_init` (peripheral, no privacy, a
+  32-byte name: GAP service at `0x0005`, Device Name `0x0006`, Appearance
+  `0x0008`; the GATT service at `0x0001`), then
+  `aci_gatt_set_access_permission` makes the name and appearance read only
+  (the chip has them writable by peers).
+- **GATT database.** `aci_gatt_add_service` and `aci_gatt_add_char` give the
+  handles in order from `0x000c`; the value is at the declaration plus one,
+  the CCCD next. The values of every characteristic share about a kilobyte:
+  seven of 64 bytes, two of 244 and the GAP's fit, a third of 244 got
+  `0x48`, out of memory. The ATT MTU is at most **220**, whatever the
+  central offers (BlueZ asks 517).
+- **Reads and writes.** A characteristic with
+  `GATT_NOTIFY_READ_REQ_AND_WAIT_FOR_APPL_RESP` raises a read-permit event,
+  answered with `aci_gatt_update_char_value_ext` and `aci_gatt_allow_read`
+  or `aci_gatt_deny_read`; with `GATT_NOTIFY_WRITE_REQ_AND_WAIT_FOR_APPL_RESP`
+  a write-permit event, answered with `aci_gatt_write_resp`; with
+  `GATT_NOTIFY_ATTRIBUTE_WRITE` an attribute-modified event, the CCCD's
+  writes included.
+- **Pairing.** `aci_gap_set_io_capability(display yes/no)` and
+  `aci_gap_set_authentication_requirement(bonding, MITM, SC only, keys of
+  16)`: a BlueZ central pairs by numeric comparison
+  (`aci_gap_numeric_comparison_value_event`, answered with
+  `aci_gap_numeric_comparison_value_confirm_yesno`), then
+  `aci_gap_pairing_complete_event`; the encryption change comes before the
+  pairing's end, and `aci_gap_get_security_level` gives mode 1 level 3.
+  On a reconnection with a bond the chip raises
+  `aci_gap_pairing_complete_event` too, before the encryption change. The
+  bond is in `aci_gap_get_bonded_devices` and survives a restart of the
+  chip. No event comes before a pairing starts: it cannot be refused before
+  its first confirmation.
+- **Connections.** HCI LE advertising, as NimBLE sends it, works with the
+  stack on: the connection is the stack's. BlueZ connects at 45 ms and
+  grants the L2CAP parameter updates PebbleOS asks for (15 ms; 45 to 60 ms
+  with a latency of 4). Data length 251 both ways.
 
 ### 2.6 Link2 module (GNSS AG3335M, BMI270, BMM350)
 

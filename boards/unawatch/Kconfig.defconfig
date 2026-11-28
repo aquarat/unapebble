@@ -52,6 +52,17 @@ config GNSS
 config GNSS_SHELL
     default y if SHELL
 
+# Bluetooth on the BlueNRG-2's own stack, through its ACI, under NimBLE's host API (decision
+# 261128-081601-02), its static random address the identity; NIMBLE_HCI_BLUENRG2 has it an HCI
+# controller under NimBLE's host instead. The experiments firmware keeps the fake controller.
+choice NIMBLE_HCI
+    default NIMBLE_ACI_BLUENRG2 if !BOARD_UNAWATCH_LAB
+endchoice
+
+choice NIMBLE_ID_ADDR_SOURCE
+    default NIMBLE_ID_ADDR_BLUENRG2 if NIMBLE_HCI_BLUENRG2 || NIMBLE_ACI_BLUENRG2
+endchoice
+
 # GPS workouts: the Run, Walk and Bike apps on the receiver, through the location service,
 # recording to the filesystem on the eMMC. Not in the experiments firmware.
 config SERVICE_LOCATION

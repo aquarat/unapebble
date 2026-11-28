@@ -18,6 +18,40 @@
  *                RESET held low 2 s with the pins in args[1] put back as found
  *                (bit 0 SCK, 1 MISO, 2 MOSI, 3 CS, 4 IRQ), the SPI pins set
  *                up again and a 5 ms reset (which starts normally)
+ *   args[0] = 7  a normal start (2 s in reset, SCK, MOSI and CS analog), link-layer-only mode
+ *                written and read back, then a restart from args[1] ms in reset (5 by default)
+ *                with those lines analog again, CS high from 5 ms before the release: its
+ *                start reason, and the mode read back
+ *   args[0] = 8  a normal start as in mode 7, then hci_reset (approved for this test, decision
+ *                261127-233626-01) with SCK, MOSI and CS made analog as soon as its Command
+ *                Complete is read; the restart's IRQ and start reason; on a normal start,
+ *                link-layer-only mode written and read back; otherwise the chip is recovered
+ *                from 2 s in reset with the lines analog. args[1]: bit 0 keeps CS driven high
+ *                through the restart, bit 1 writes link-layer-only mode before hci_reset too
+ *   args[0] = 9  read only: a normal start, aci_hal_updater_start (0xfc20) with the lines released
+ *                as in mode 8, the updater's version, buffer size and hardware version, the
+ *                flash from 0x10042000 to 0x10080000 read in 64-byte blocks (0xfc28) into RAM at
+ *                args[1] (0x20100000 by default), the updater's CRC of it and of the page at
+ *                0x1007f000 (0xfc29), then 0xfc21 to restart, and the start reason checked.
+ *                Nothing is erased or written. Recovered from 2 s in reset if the restart is
+ *                not a normal one.
+ *   args[0] = 10 checks before a write, read only: a read below the DTM (0x10040000) through the
+ *                updater, which must be refused, then a restart with the SPI lines driven,
+ *                which must start the updater (reason 4), as it would with a broken DTM, and
+ *                0xfc21 back to a normal start
+ *   args[0] = 11 writes the BlueNRG-2's flash through its updater, from a table in RAM at args[1]
+ *                (bluenrg2/patch.py): magic, count, then per page its address, the RAM address
+ *                of its 2048 bytes and flags (1 erase first, 2 program). Only whole 2 KiB pages
+ *                from 0x10042800 to 0x1007efff: never the DTM's first page, with its vector
+ *                table and BLUE flag, nor the stack's data at 0x1007f000. Each page is read back
+ *                and checked against the updater's CRC; the first failure stops the run, and
+ *                the chip stays in its updater. Only when all pass, 0xfc21 and a normal start.
+ *   args[0] = 13 as mode 11, the way ST's updater tools do it: the BLUE flag erased (0xfc24) first,
+ *                the DTM's first page then allowed, given with its flag word blank, the pages
+ *                written and checked, the flag set (0xfc25) and read back, then the restart
+ *   args[0] = 12 a probe of a chip that does not start: RESET held low args[1] ms (10000 by
+ *                default) with every SPI line and IRQ analog, released, IRQ sampled every
+ *                100 ms for 5 s, then a version query written blindly, an IRQ or not
  *   args[1] != 0 in modes 0 to 2, also advertise for args[1] seconds (at most
  *                10) with standard HCI commands, non-connectable, as
  *                "unapebble-test"
@@ -59,6 +93,8 @@ struct pin_save {
 static struct pin_save s_save[6];
 static uint8_t s_pkt[300];
 static int s_errors;
+/* No per-packet output, for the many reads of mode 9 */
+static bool s_quiet;
 
 static void prv_save(struct pin_save *s, uint32_t port, uint32_t pin) {
   const uint32_t b = GPIO_PORT(port);
@@ -91,6 +127,12 @@ static void prv_in(uint32_t port, uint32_t pin) {
   const uint32_t b = GPIO_PORT(port);
   REG32(b + 0x0cU) &= ~(3U << (pin * 2U));
   REG32(b + 0x00U) &= ~(3U << (pin * 2U));
+}
+
+static void prv_analog(uint32_t port, uint32_t pin) {
+  const uint32_t b = GPIO_PORT(port);
+  REG32(b + 0x0cU) &= ~(3U << (pin * 2U));
+  REG32(b + 0x00U) |= 3U << (pin * 2U);
 }
 
 static inline void prv_set(uint32_t port, uint32_t pin, uint32_t level) {
@@ -223,7 +265,9 @@ static int prv_cmd(const char *name, uint16_t op, const uint8_t *par, uint8_t le
   for (uint32_t i = 0U; i < len; i++) {
     c[4 + i] = par[i];
   }
-  tprintf("> %s (%04x)\n", name, op);
+  if (!s_quiet) {
+    tprintf("> %s (%04x)\n", name, op);
+  }
   if (prv_write(c, 4U + len) != 0) {
     return -1;
   }
@@ -234,7 +278,9 @@ static int prv_cmd(const char *name, uint16_t op, const uint8_t *par, uint8_t le
       continue;
     }
     const int n = prv_read(s_pkt, sizeof(s_pkt), false);
-    prv_dump("<", s_pkt, (uint32_t)n);
+    if (!s_quiet) {
+      prv_dump("<", s_pkt, (uint32_t)n);
+    }
     if (n >= 7 && s_pkt[0] == 0x04U && s_pkt[1] == 0x0eU &&
         (s_pkt[4] | (s_pkt[5] << 8)) == op) {
       if (ret != NULL) {
@@ -408,6 +454,463 @@ static void prv_advertise(uint32_t seconds) {
   tprintf("  status %d\n", prv_cmd("hci_le_set_advertise_enable", 0x200aU, &s_off, 1U, r, &n));
 }
 
+
+static void prv_lines_released(bool keep_cs) {
+  prv_analog(SCK_PORT, SCK_PIN);
+  prv_analog(MOSI_PORT, MOSI_PIN);
+  if (!keep_cs) {
+    prv_analog(CS_PORT, CS_PIN);
+  }
+}
+
+static void prv_lines_driven(void) {
+  prv_out(CS_PORT, CS_PIN, false, 1U);
+  prv_out(SCK_PORT, SCK_PIN, false, 0U);
+  prv_out(MOSI_PORT, MOSI_PIN, false, 0U);
+}
+
+/* A restart the chip makes itself after a command's reply, the lines released meanwhile: its
+   start reason, or -1 */
+static int prv_self_restart(void) {
+  prv_lines_released(false);
+  const uint32_t t0 = tether->millis();
+  bool up = false;
+  while (!up && tether->millis() - t0 < 3000U) {
+    tether->watchdog_feed();
+    up = prv_irq();
+  }
+  prv_lines_driven();
+  int reason = -1;
+  if (up) {
+    const int k = prv_read(s_pkt, sizeof(s_pkt), false);
+    if (k >= 6 && s_pkt[1] == 0xffU && s_pkt[3] == 0x01U && s_pkt[4] == 0x00U) {
+      reason = s_pkt[5];
+    }
+  }
+  tprintf("  restart: IRQ %s after %lu ms, reason %d\n", up ? "high" : "never high",
+          (unsigned long)(tether->millis() - t0), reason);
+  return reason;
+}
+
+/* 2 s in reset with the lines released, then a start: its reason */
+static int prv_long_restart(void) {
+  s_pkt[5] = 0U;
+  prv_set(RST_PORT, RST_PIN, 0U);
+  prv_lines_released(false);
+  tether_delay_ms(2000U);
+  prv_lines_driven();
+  prv_reset();
+  return s_pkt[5];
+}
+
+static uint32_t prv_le32(const uint8_t *p) {
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static void prv_put_le32(uint8_t *p, uint32_t v) {
+  p[0] = (uint8_t)v;
+  p[1] = (uint8_t)(v >> 8);
+  p[2] = (uint8_t)(v >> 16);
+  p[3] = (uint8_t)(v >> 24);
+}
+
+#define FLASH_DTM   0x10042000U
+#define FLASH_END   0x10080000U
+#define FLASH_NVM   0x1007f000U
+#define FLASH_PAGE  0x800U
+#define READ_BLOCK  64U
+
+static int prv_enter_updater(void);
+
+static void prv_backup(uint32_t dest) {
+  uint8_t r[260];
+  uint32_t n;
+  int st;
+
+  if (prv_enter_updater() != 0) {
+    s_errors++;
+    tprintf("  no updater; recovery reason %d\n", prv_long_restart());
+    return;
+  }
+  if (prv_cmd("updater_get_version", 0xfc22U, NULL, 0U, r, &n) == 0 && n >= 2U) {
+    tprintf("  updater version %u\n", r[1]);
+  }
+  if (prv_cmd("updater_get_bufsize", 0xfc23U, NULL, 0U, r, &n) == 0 && n >= 3U) {
+    tprintf("  buffer size %u\n", r[1] | (r[2] << 8));
+  }
+  if (prv_cmd("updater_read_hw_version", 0xfc2aU, NULL, 0U, r, &n) == 0 && n >= 2U) {
+    tprintf("  hardware version %u\n", r[1]);
+  }
+
+  s_quiet = true;
+  uint32_t bad = 0U;
+  for (uint32_t a = FLASH_DTM; a < FLASH_END; a += READ_BLOCK) {
+    uint8_t par[6];
+    prv_put_le32(par, a);
+    par[4] = (uint8_t)READ_BLOCK;
+    par[5] = 0U;
+    st = prv_cmd("updater_read_data_block", 0xfc28U, par, 6U, r, &n);
+    if (st != 0 || n != 1U + READ_BLOCK) {
+      bad++;
+      if (bad <= 4U) {
+        tprintf("  read %08lx: status %d, %lu bytes\n", (unsigned long)a, st, (unsigned long)n);
+      }
+      for (uint32_t i = 0U; i < READ_BLOCK; i++) {
+        ((volatile uint8_t *)dest)[a - FLASH_DTM + i] = 0U;
+      }
+      continue;
+    }
+    for (uint32_t i = 0U; i < READ_BLOCK; i++) {
+      ((volatile uint8_t *)dest)[a - FLASH_DTM + i] = r[1 + i];
+    }
+    if (((a - FLASH_DTM) & 0x7fffU) == 0U) {
+      tether->watchdog_feed();
+    }
+  }
+  s_quiet = false;
+  tprintf("  read %lu bytes to %08lx, %lu blocks failed\n", (unsigned long)(FLASH_END - FLASH_DTM),
+          (unsigned long)dest, (unsigned long)bad);
+  if (bad != 0U) {
+    s_errors++;
+  }
+
+  /* The updater's CRC, 8 pages a command: more takes it past the reply timeout */
+  for (uint32_t a = FLASH_DTM; a < FLASH_END; a += 8U * FLASH_PAGE) {
+    uint8_t par[5];
+    const uint32_t pages = (FLASH_END - a) / FLASH_PAGE < 8U ? (FLASH_END - a) / FLASH_PAGE : 8U;
+    prv_put_le32(par, a);
+    par[4] = (uint8_t)pages;
+    st = prv_cmd("updater_calc_crc", 0xfc29U, par, 5U, r, &n);
+    if (st == 0 && n >= 5U) {
+      tprintf("  crc %08lx %lu %08lx\n", (unsigned long)a, (unsigned long)pages,
+              (unsigned long)prv_le32(&r[1]));
+    } else {
+      s_errors++;
+      tprintf("  crc %08lx: status %d\n", (unsigned long)a, st);
+    }
+  }
+
+  st = prv_cmd("updater_reboot", 0xfc21U, NULL, 0U, r, &n);
+  tprintf("  status %d\n", st);
+  if (prv_self_restart() != 1) {
+    s_errors++;
+    tprintf("  recovery reason %d\n", prv_long_restart());
+  }
+  prv_aci_versions();
+}
+
+static uint32_t prv_crc(const volatile uint8_t *p, uint32_t len) {
+  uint32_t crc = 0U;
+  for (uint32_t i = 0U; i < len; i += 4U) {
+    crc ^= (uint32_t)p[i] | ((uint32_t)p[i + 1U] << 8) | ((uint32_t)p[i + 2U] << 16) |
+           ((uint32_t)p[i + 3U] << 24);
+    for (int j = 0; j < 32; j++) {
+      crc = (crc << 1) ^ ((crc >> 31) != 0U ? 0x04c11db7U : 0U);
+    }
+  }
+  return crc;
+}
+
+/* A start with IO3 (MISO) held high through the release of RESET, the updater's boot pin in ST's
+   DTM: pulled up (pull 1) or driven (pull 2) for hold_ms after the release, then an input again.
+   Its start reason, or -1. */
+static int prv_start_io3_high(uint32_t pull, uint32_t hold_ms) {
+  const uint32_t b = GPIO_PORT(MISO_PORT);
+
+  prv_set(RST_PORT, RST_PIN, 0U);
+  prv_lines_released(false);
+  if (pull == 1U) {
+    REG32(b + 0x0cU) = (REG32(b + 0x0cU) & ~(3U << (MISO_PIN * 2U))) | (1U << (MISO_PIN * 2U));
+  } else if (pull == 2U) {
+    prv_out(MISO_PORT, MISO_PIN, false, 1U);
+  }
+  tether_delay_ms(100U);
+  prv_out(CS_PORT, CS_PIN, false, 1U);
+  prv_out(SCK_PORT, SCK_PIN, false, 0U);
+  /* ST's updater source: "IO3 -> SPI MOSI PIN" */
+  prv_out(MOSI_PORT, MOSI_PIN, false, pull == 3U ? 1U : 0U);
+  tether_delay_ms(5U);
+  prv_set(RST_PORT, RST_PIN, 1U);
+  const uint32_t t0 = tether->millis();
+  bool up = false;
+  /* hold_ms 0: held until IRQ rises, through any restarts of the chip meanwhile */
+  if (hold_ms != 0U) {
+    tether_delay_ms(hold_ms);
+    prv_in(MISO_PORT, MISO_PIN);
+    prv_set(MOSI_PORT, MOSI_PIN, 0U);
+  }
+  while (!up && tether->millis() - t0 < 4000U) {
+    tether->watchdog_feed();
+    up = prv_irq();
+  }
+  prv_in(MISO_PORT, MISO_PIN);
+  prv_set(MOSI_PORT, MOSI_PIN, 0U);
+  int reason = -1;
+  if (up) {
+    const int k = prv_read(s_pkt, sizeof(s_pkt), false);
+    prv_dump("  start event", s_pkt, (uint32_t)k);
+    if (k >= 6 && s_pkt[1] == 0xffU && s_pkt[3] == 0x01U && s_pkt[4] == 0x00U) {
+      reason = s_pkt[5];
+    }
+  }
+  tprintf("  %s for %lu ms: IRQ %s after %lu ms, reason %d\n",
+          pull == 1U ? "MISO pulled up" : pull == 2U ? "MISO driven high" : "MOSI driven high", (unsigned long)hold_ms,
+          up ? "high" : "never high", (unsigned long)(tether->millis() - t0), reason);
+  return reason;
+}
+
+/* The updater by its boot pin, whatever the DTM does: IO3 pulled up, then driven */
+static int prv_updater_by_pin(void) {
+  tprintf("updater by the boot pin:\n");
+  return prv_start_io3_high(3U, 0U) == 4 ? 0 : -1;
+}
+
+static int prv_enter_updater(void) {
+  uint8_t r[260];
+  uint32_t n;
+
+  tprintf("normal start:\n");
+  if (prv_long_restart() != 1) {
+    s_errors--;
+    tprintf("  no normal start\n");
+    return prv_updater_by_pin();
+  }
+  if (prv_cmd("aci_hal_updater_start", 0xfc20U, NULL, 0U, r, &n) != 0) {
+    return -1;
+  }
+  return prv_self_restart() == 2 ? 0 : -1;
+}
+
+static void prv_checks(void) {
+  uint8_t r[260];
+  uint32_t n;
+  uint8_t par[6];
+
+  if (prv_enter_updater() != 0) {
+    s_errors++;
+    tprintf("  no updater; recovery reason %d\n", prv_long_restart());
+    return;
+  }
+  prv_put_le32(par, 0x10040000U);
+  par[4] = 16U;
+  par[5] = 0U;
+  const int st = prv_cmd("updater_read_data_block 0x10040000", 0xfc28U, par, 6U, r, &n);
+  tprintf("  read below the DTM: status %d, %lu bytes: %s\n", st, (unsigned long)n,
+          st != 0 ? "refused" : "NOT REFUSED");
+  if (st == 0) {
+    s_errors++;
+  }
+  (void)prv_cmd("updater_reboot", 0xfc21U, NULL, 0U, r, &n);
+  if (prv_self_restart() != 1) {
+    s_errors++;
+  }
+
+  tprintf("a 5 ms reset with the lines driven:\n");
+  s_reset_ms = 5U;
+  prv_reset();
+  const uint8_t reason = s_pkt[5];
+  tprintf("  reason %u: %s\n", reason, reason == 4U ? "updater, by the boot pin" : "not the updater");
+  if (reason != 4U) {
+    s_errors++;
+  }
+  (void)prv_cmd("updater_reboot", 0xfc21U, NULL, 0U, r, &n);
+  if (prv_self_restart() != 1) {
+    s_errors++;
+    tprintf("  recovery reason %d\n", prv_long_restart());
+  }
+}
+
+#define WRITE_MAGIC 0x57524e42U /* "BNRW" */
+#define PAGE_LOW    0x10042800U
+#define PAGE_HIGH   0x1007f000U
+
+static void prv_write_pages(const volatile uint32_t *t, bool official) {
+  uint8_t r[260];
+  uint32_t n;
+  int st;
+
+  if (t[0] != WRITE_MAGIC || t[1] == 0U || t[1] > 16U) {
+    s_errors++;
+    tprintf("bad table\n");
+    return;
+  }
+  const uint32_t count = t[1];
+  for (uint32_t i = 0U; i < count; i++) {
+    const uint32_t a = t[2U + i * 3U];
+    const volatile uint8_t *src = (const volatile uint8_t *)t[3U + i * 3U];
+    /* The official flow may rewrite the DTM's first page, its BLUE flag left blank for 0xfc25 */
+    if (official && a == FLASH_DTM && src[0x14] == 0xffU && src[0x15] == 0xffU &&
+        src[0x16] == 0xffU && src[0x17] == 0xffU) {
+      continue;
+    }
+    if (a < PAGE_LOW || a >= PAGE_HIGH || (a & (FLASH_PAGE - 1U)) != 0U) {
+      s_errors++;
+      tprintf("page %08lx refused: outside 0x10042800..0x1007efff or not a page\n",
+              (unsigned long)a);
+      return;
+    }
+  }
+  if (prv_enter_updater() != 0) {
+    s_errors++;
+    tprintf("  no updater; recovery reason %d\n", prv_long_restart());
+    return;
+  }
+
+  if (official) {
+    /* As ST's updater tools do: the flag cleared first, so that an interrupted update starts the
+       updater (reason 3) rather than a part-written DTM */
+    st = prv_cmd("updater_erase_blueflag", 0xfc24U, NULL, 0U, r, &n);
+    tprintf("  erase BLUE flag: status %d\n", st);
+    if (st != 0) {
+      s_errors++;
+      return;
+    }
+  }
+
+  for (uint32_t i = 0U; i < count; i++) {
+    const uint32_t a = t[2U + i * 3U];
+    const volatile uint8_t *src = (const volatile uint8_t *)t[3U + i * 3U];
+    const uint32_t flags = t[4U + i * 3U];
+    uint8_t par[6 + READ_BLOCK];
+
+    tprintf("page %08lx:%s%s\n", (unsigned long)a, (flags & 1U) ? " erase" : "",
+            (flags & 2U) ? " program" : "");
+    if (flags & 1U) {
+      prv_put_le32(par, a);
+      st = prv_cmd("updater_erase_sector", 0xfc26U, par, 4U, r, &n);
+      if (st != 0) {
+        s_errors++;
+        tprintf("  erase: status %d; stopping, in the updater\n", st);
+        return;
+      }
+    }
+    s_quiet = true;
+    for (uint32_t off = 0U; (flags & 2U) && off < FLASH_PAGE; off += READ_BLOCK) {
+      bool blank = true;
+      for (uint32_t k = 0U; k < READ_BLOCK; k++) {
+        par[6 + k] = src[off + k];
+        blank = blank && par[6 + k] == 0xffU;
+      }
+      if (blank) {
+        continue;
+      }
+      prv_put_le32(par, a + off);
+      par[4] = (uint8_t)READ_BLOCK;
+      par[5] = 0U;
+      st = prv_cmd("updater_prog_data_block", 0xfc27U, par, 6U + READ_BLOCK, r, &n);
+      if (st != 0) {
+        s_quiet = false;
+        s_errors++;
+        tprintf("  program %08lx: status %d; stopping, in the updater\n",
+                (unsigned long)(a + off), st);
+        return;
+      }
+    }
+    uint32_t diff = 0U;
+    for (uint32_t off = 0U; off < FLASH_PAGE; off += READ_BLOCK) {
+      prv_put_le32(par, a + off);
+      par[4] = (uint8_t)READ_BLOCK;
+      par[5] = 0U;
+      st = prv_cmd("updater_read_data_block", 0xfc28U, par, 6U, r, &n);
+      for (uint32_t k = 0U; k < READ_BLOCK; k++) {
+        const uint8_t want = (flags & 2U) ? src[off + k] : 0xffU;
+        if (st != 0 || r[1 + k] != want) {
+          diff++;
+        }
+      }
+    }
+    s_quiet = false;
+    prv_put_le32(par, a);
+    par[4] = 1U;
+    st = prv_cmd("updater_calc_crc", 0xfc29U, par, 5U, r, &n);
+    const uint32_t chip = st == 0 ? prv_le32(&r[1]) : 0U;
+    uint32_t want = 0U;
+    if (flags & 2U) {
+      want = prv_crc(src, FLASH_PAGE);
+    } else {
+      static const uint8_t s_ff[4] = {0xffU, 0xffU, 0xffU, 0xffU};
+      /* An erased page: the CRC of 2048 bytes of 0xff */
+      uint32_t crc = 0U;
+      for (uint32_t k = 0U; k < FLASH_PAGE; k += 4U) {
+        crc ^= prv_le32(s_ff);
+        for (int j = 0; j < 32; j++) {
+          crc = (crc << 1) ^ ((crc >> 31) != 0U ? 0x04c11db7U : 0U);
+        }
+      }
+      want = crc;
+    }
+    tprintf("  read back: %lu bytes differ; crc %08lx, expected %08lx\n", (unsigned long)diff,
+            (unsigned long)chip, (unsigned long)want);
+    if (diff != 0U || st != 0 || chip != want) {
+      s_errors++;
+      tprintf("  stopping, in the updater\n");
+      return;
+    }
+  }
+
+  if (official) {
+    st = prv_cmd("updater_reset_blueflag", 0xfc25U, NULL, 0U, r, &n);
+    uint8_t par[6];
+    prv_put_le32(par, FLASH_DTM + 0x14U);
+    par[4] = 4U;
+    par[5] = 0U;
+    const int st2 = prv_cmd("updater_read_data_block", 0xfc28U, par, 6U, r, &n);
+    const uint32_t flag = st2 == 0 ? prv_le32(&r[1]) : 0U;
+    tprintf("  set BLUE flag: status %d, flag now %08lx\n", st, (unsigned long)flag);
+    if (st != 0 || flag != 0x424c5545U) {
+      s_errors++;
+      tprintf("  stopping, in the updater\n");
+      return;
+    }
+  }
+
+  (void)prv_cmd("updater_reboot", 0xfc21U, NULL, 0U, r, &n);
+  if (prv_self_restart() != 1) {
+    s_errors++;
+    tprintf("  not a normal start after the write\n");
+    return;
+  }
+  prv_aci_versions();
+}
+
+static void prv_probe(uint32_t hold_ms) {
+  uint8_t r[260];
+  uint32_t n;
+
+  prv_set(RST_PORT, RST_PIN, 0U);
+  prv_lines_released(false);
+  prv_analog(MISO_PORT, MISO_PIN);
+  tprintf("RESET low %lu ms, all lines analog\n", (unsigned long)hold_ms);
+  for (uint32_t t = 0U; t < hold_ms; t += 500U) {
+    tether->watchdog_feed();
+    tether_delay_ms(500U);
+  }
+  prv_in(MISO_PORT, MISO_PIN);
+  prv_lines_driven();
+  tether_delay_ms(5U);
+  prv_set(RST_PORT, RST_PIN, 1U);
+  tprintf("released; IRQ, MISO, RESET every 100 ms:");
+  for (int i = 0; i < 50; i++) {
+    tether->watchdog_feed();
+    if (i % 10 == 0) {
+      tprintf("\n ");
+    }
+    tprintf(" %lu%lu%lu", (unsigned long)prv_irq(), (unsigned long)prv_get(MISO_PORT, MISO_PIN),
+            (unsigned long)prv_get(RST_PORT, RST_PIN));
+    if (prv_irq()) {
+      break;
+    }
+    tether_delay_ms(100U);
+  }
+  tprintf("\n");
+  if (prv_irq()) {
+    const int k = prv_read(s_pkt, sizeof(s_pkt), true);
+    prv_dump("  packet", s_pkt, (uint32_t)k);
+  }
+  (void)prv_cmd("hci_read_local_version_information", 0x1001U, NULL, 0U, r, &n);
+  (void)prv_cmd("updater_get_version", 0xfc22U, NULL, 0U, r, &n);
+}
+
 uint32_t blob_main(const uint32_t *args, uint32_t nargs) {
   const uint32_t mode = nargs > 0U ? args[0] : 0U;
   const uint32_t adv_s = nargs > 1U && mode < 3U ? (args[1] > 10U ? 10U : args[1]) : 0U;
@@ -472,6 +975,120 @@ uint32_t blob_main(const uint32_t *args, uint32_t nargs) {
     prv_in(MISO_PORT, MISO_PIN);
     prv_in(IRQ_PORT, IRQ_PIN);
     prv_reset();
+  } else if (mode == 7U) {
+    static const uint8_t s_ll_only[3] = {0x2cU, 0x01U, 0x01U};
+    static const uint8_t s_off = 0x2cU;
+    const uint32_t hold = nargs > 1U && args[1] != 0U ? (args[1] > 3000U ? 3000U : args[1]) : 5U;
+    uint8_t r[260];
+    uint32_t n;
+
+    for (int run = 0; run < 2 && s_errors == 0; run++) {
+      const uint32_t ms = run == 0 ? 2000U : hold;
+
+      tprintf("restart from %lu ms in reset, SCK MOSI CS analog:\n", (unsigned long)ms);
+      prv_set(RST_PORT, RST_PIN, 0U);
+      prv_analog(SCK_PORT, SCK_PIN);
+      prv_analog(MOSI_PORT, MOSI_PIN);
+      prv_analog(CS_PORT, CS_PIN);
+      tether_delay_ms(ms);
+      prv_out(CS_PORT, CS_PIN, false, 1U);
+      prv_out(SCK_PORT, SCK_PIN, false, 0U);
+      prv_out(MOSI_PORT, MOSI_PIN, false, 0U);
+      prv_reset();
+      if (s_errors != 0 || s_pkt[5] != 1U) {
+        break;
+      }
+      tprintf("  config 0x2c:\n");
+      (void)prv_cmd("aci_hal_read_config_data", 0xfc0dU, &s_off, 1U, r, &n);
+      if (run == 0) {
+        tprintf("  status %d\n",
+                prv_cmd("aci_hal_write_config_data (ll only)", 0xfc0cU, s_ll_only, 3U, r, &n));
+        (void)prv_cmd("aci_hal_read_config_data", 0xfc0dU, &s_off, 1U, r, &n);
+      }
+    }
+    prv_versions();
+  } else if (mode == 12U) {
+    prv_probe(nargs > 1U && args[1] != 0U ? args[1] : 10000U);
+  } else if (mode == 10U) {
+    prv_checks();
+  } else if (mode == 11U) {
+    prv_write_pages((const volatile uint32_t *)(nargs > 1U ? args[1] : 0U), false);
+  } else if (mode == 13U) {
+    prv_write_pages((const volatile uint32_t *)(nargs > 1U ? args[1] : 0U), true);
+  } else if (mode == 9U) {
+    prv_backup(nargs > 1U && args[1] != 0U ? args[1] : 0x20100000U);
+  } else if (mode == 8U) {
+    static const uint8_t s_ll_only[3] = {0x2cU, 0x01U, 0x01U};
+    static const uint8_t s_off = 0x2cU;
+    const uint32_t flags = nargs > 1U ? args[1] : 0U;
+    uint8_t r[260];
+    uint32_t n;
+
+    tprintf("normal start from 2000 ms in reset, SCK MOSI CS analog:\n");
+    prv_set(RST_PORT, RST_PIN, 0U);
+    prv_analog(SCK_PORT, SCK_PIN);
+    prv_analog(MOSI_PORT, MOSI_PIN);
+    prv_analog(CS_PORT, CS_PIN);
+    tether_delay_ms(2000U);
+    prv_out(CS_PORT, CS_PIN, false, 1U);
+    prv_out(SCK_PORT, SCK_PIN, false, 0U);
+    prv_out(MOSI_PORT, MOSI_PIN, false, 0U);
+    prv_reset();
+    if (s_errors == 0 && s_pkt[5] == 1U) {
+      if (flags & 2U) {
+        tprintf("  status %d\n",
+                prv_cmd("aci_hal_write_config_data (ll only)", 0xfc0cU, s_ll_only, 3U, r, &n));
+      }
+      (void)prv_cmd("aci_hal_read_config_data", 0xfc0dU, &s_off, 1U, r, &n);
+      const int st = prv_cmd("hci_reset", 0x0c03U, NULL, 0U, r, &n);
+      prv_analog(SCK_PORT, SCK_PIN);
+      prv_analog(MOSI_PORT, MOSI_PIN);
+      if ((flags & 1U) == 0U) {
+        prv_analog(CS_PORT, CS_PIN);
+      }
+      const uint32_t t0 = tether->millis();
+      tprintf("  hci_reset status %d, lines released (CS %s)\n", st,
+              (flags & 1U) ? "kept high" : "analog");
+      bool up = false;
+      while (!up && tether->millis() - t0 < 3000U) {
+        tether->watchdog_feed();
+        up = prv_irq();
+      }
+      const uint32_t t_up = tether->millis() - t0;
+      prv_out(CS_PORT, CS_PIN, false, 1U);
+      prv_out(SCK_PORT, SCK_PIN, false, 0U);
+      prv_out(MOSI_PORT, MOSI_PIN, false, 0U);
+      int reason = -1;
+      if (up) {
+        const int k = prv_read(s_pkt, sizeof(s_pkt), true);
+        prv_dump("  start event", s_pkt, (uint32_t)k);
+        if (k >= 6 && s_pkt[1] == 0xffU && s_pkt[3] == 0x01U && s_pkt[4] == 0x00U) {
+          reason = s_pkt[5];
+        }
+      }
+      tprintf("  restart: IRQ %s after %lu ms, reason %d\n", up ? "high" : "never high",
+              (unsigned long)t_up, reason);
+      if (reason == 1) {
+        (void)prv_cmd("aci_hal_read_config_data", 0xfc0dU, &s_off, 1U, r, &n);
+        tprintf("  status %d\n",
+                prv_cmd("aci_hal_write_config_data (ll only)", 0xfc0cU, s_ll_only, 3U, r, &n));
+        (void)prv_cmd("aci_hal_read_config_data", 0xfc0dU, &s_off, 1U, r, &n);
+        prv_versions();
+      } else {
+        s_errors++;
+        tprintf("recovery: 2000 ms in reset, SCK MOSI CS analog:\n");
+        prv_set(RST_PORT, RST_PIN, 0U);
+        prv_analog(SCK_PORT, SCK_PIN);
+        prv_analog(MOSI_PORT, MOSI_PIN);
+        prv_analog(CS_PORT, CS_PIN);
+        tether_delay_ms(2000U);
+        prv_out(CS_PORT, CS_PIN, false, 1U);
+        prv_out(SCK_PORT, SCK_PIN, false, 0U);
+        prv_out(MOSI_PORT, MOSI_PIN, false, 0U);
+        prv_reset();
+        prv_versions();
+      }
+    }
   } else if (mode == 4U) {
     REG32(GPIO_PORT(MISO_PORT) + 0x0cU) |= 2U << (MISO_PIN * 2U);
     for (int i = 0; i < 3; i++) {

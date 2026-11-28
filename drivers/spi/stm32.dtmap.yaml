@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 The unapebble authors
+# SPDX-License-Identifier: Apache-2.0
+
+compatible: st,stm32h7-spi
+config: SPI_STM32
+class: spi
+define: PBL_SPI_STM32_DEFINE
+args:
+  - name: true
+  - reg: 0
+  - irq: 0
+  - pinctrl: default
+  - pinctrl: sleep
+    default: nullptr
+  - clock: 0
+  - gpio: cs
+    all: true
+    optional: true

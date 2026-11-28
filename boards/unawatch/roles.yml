@@ -19,3 +19,4 @@ gnss: gnss
 accel: bmi270
 mag: bmm350
 pressure: ms5837
+bt_hci: bluetooth
