@@ -35,9 +35,10 @@ the phone's notifications, *Notification access*.
 
 ## Pair
 
-1. Make the watch pairable: a watch that has never paired is; otherwise open
-   *Settings > Bluetooth* on the watch. The watch keeps one phone: pairing a
-   new one replaces the old.
+1. Make the watch pairable: a watch without a paired phone is, and
+   advertises its name. The watch keeps one phone: to pair another, forget
+   the old one first on the watch (*Settings > Bluetooth*, select the phone,
+   *Forget*).
 2. In Gadgetbridge, tap **+** (*Connect new device*). The watch shows up as
    *Pebble* followed by the last four digits of its address, e.g.
    *Pebble 45CE*. Tap it.
@@ -89,8 +90,10 @@ none while the phone's screen is on: turn on *Settings > Notifications >
 ## Troubleshooting
 
 - **The watch is not found.** It advertises its name only while it is
-  pairable; paired, it advertises without it, for its phone to reconnect.
-  Open *Settings > Bluetooth* on the watch.
+  pairable, that is without a paired phone; paired, it advertises without
+  it, for its phone to reconnect. Forget the old phone on the watch
+  (*Settings > Bluetooth*). For development, `bt pairable SECONDS` on the
+  console makes it pairable for a while, the bond kept.
 - **A watch paired before 28 November 2026 is not found, or does not
   connect.** Earlier builds read the module's address wrongly: the watch was
   `C1:CE:E6:EC:45:CE` and is now `CD:CE:E6:EC:45:CE` (decision

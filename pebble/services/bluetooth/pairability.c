@@ -139,3 +139,25 @@ void bt_pairability_init(void) {
   bt_pairability_update_due_to_bonding_change();
   pbl_sys_work_call(prv_init, nullptr);
 }
+
+#ifdef CONFIG_SHELL
+#include <errno.h>
+
+#include <pbl/shell/shell.h>
+
+static int prv_cmd_pairable(const struct pbl_shell *sh, size_t argc, char **argv) {
+  unsigned long secs;
+
+  if (pbl_shell_strtoul(argv[1], &secs) != 0 || secs > UINT16_MAX) {
+    pbl_shell_error(sh, "invalid duration '%s'", argv[1]);
+    return -EINVAL;
+  }
+
+  // As the phone app's request does: discoverable and pairable for a while, a bond or not
+  bt_pairability_use_for_period((uint16_t)secs);
+  return 0;
+}
+
+PBL_SHELL_SUBCMD_ADD(sub_bt, pairable, nullptr, "Pairable and discoverable for <seconds>, 0 to end",
+                     prv_cmd_pairable, 2, 0);
+#endif
