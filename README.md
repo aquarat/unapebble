@@ -16,6 +16,8 @@
 > - **GPS workouts:** Run, Walk and Bike record with the watch's own GPS, no
 >   phone needed, and export as FIT files for Strava or Garmin Connect: see
 >   [`workouts.md`](docs/boards/unawatch/workouts.md).
+> - **Phone:** pair with an Android phone through Gadgetbridge for the time,
+>   notifications and calls: see [`phone.md`](docs/boards/unawatch/phone.md).
 > - **Board documentation:** [`docs/boards/unawatch`](docs/boards/unawatch/index.md),
 >   with how to build, install and recover, the hardware notes, and the
 >   [decision log](docs/boards/unawatch/decisions/index.md).
@@ -43,6 +45,12 @@
   <img src="docs/boards/unawatch/images/workout-active.webp" alt="A run being recorded with GPS on a UNA Watch" width="30%">
   &nbsp;
   <img src="docs/boards/unawatch/images/workout-track.webp" alt="The track of a recorded workout, drawn from its exported FIT file" width="30%">
+</p>
+
+<p align="center">
+  <img src="docs/boards/unawatch/images/watch-notification.webp" alt="A phone notification on a UNA Watch, sent by Gadgetbridge over Bluetooth" width="30%">
+  &nbsp;
+  <img src="docs/boards/unawatch/images/phone-connected.webp" alt="Gadgetbridge on an Android phone, connected to the watch" width="45%">
 </p>
 
 <p align="center">
