@@ -24,7 +24,7 @@ import sys
 import zlib
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tether"))
-import console  # noqa: E402
+import console
 
 CHUNK = 16384
 TRIES = 3
@@ -48,11 +48,19 @@ class Watch:
         for line in self.run("workout list").splitlines():
             m = ROW.match(line.strip())
             if m:
-                rows.append({
-                    "id": m[1], "sport": m[2], "state": m[3], "utc": int(m[4]),
-                    "gnss_time": m[5] == "1", "elapsed_s": int(m[6]), "timer_s": int(m[7]),
-                    "distance_m": int(m[8]), "laps": int(m[9]),
-                })
+                rows.append(
+                    {
+                        "id": m[1],
+                        "sport": m[2],
+                        "state": m[3],
+                        "utc": int(m[4]),
+                        "gnss_time": m[5] == "1",
+                        "elapsed_s": int(m[6]),
+                        "timer_s": int(m[7]),
+                        "distance_m": int(m[8]),
+                        "laps": int(m[9]),
+                    }
+                )
         return rows
 
     def chunk(self, wid, offset, length):
@@ -104,8 +112,24 @@ class Watch:
 
 
 def fit_crc(data):
-    table = (0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
-             0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400)
+    table = (
+        0x0000,
+        0xCC01,
+        0xD801,
+        0x1400,
+        0xF001,
+        0x3C00,
+        0x2800,
+        0xE401,
+        0xA001,
+        0x6C00,
+        0x7800,
+        0xB401,
+        0x5000,
+        0x9C01,
+        0x8801,
+        0x4400,
+    )
     crc = 0
     for b in data:
         for nibble in (b & 0xF, b >> 4):
@@ -125,32 +149,45 @@ def check_fit(data):
 
 
 def file_name(row):
-    t = datetime.datetime.fromtimestamp(row["utc"], datetime.timezone.utc)
+    t = datetime.datetime.fromtimestamp(row["utc"], datetime.UTC)
     return f"{t:%Y-%m-%d-%H%M%S}-{row['sport'].lower()}-{row['id']}.fit"
 
 
 def fmt_row(row):
-    t = datetime.datetime.fromtimestamp(row["utc"], datetime.timezone.utc)
+    t = datetime.datetime.fromtimestamp(row["utc"], datetime.UTC)
     timer = row["timer_s"]
-    return (f"{row['id']}  {t:%Y-%m-%d %H:%M}Z{'' if row['gnss_time'] else '?'}  "
-            f"{row['sport']:<5} {row['distance_m'] / 1000:6.2f} km  "
-            f"{timer // 3600}:{timer // 60 % 60:02}:{timer % 60:02}  {row['laps']:3} laps  "
-            f"{row['state']}")
+    return (
+        f"{row['id']}  {t:%Y-%m-%d %H:%M}Z{'' if row['gnss_time'] else '?'}  "
+        f"{row['sport']:<5} {row['distance_m'] / 1000:6.2f} km  "
+        f"{timer // 3600}:{timer // 60 % 60:02}:{timer % 60:02}  {row['laps']:3} laps  "
+        f"{row['state']}"
+    )
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--port", help="PebbleOS's console port (default: found by its USB IDs)")
-    p.add_argument("--tcp", help="HOST:PORT of a bridge.py serving the console, usually :4501")
+    p.add_argument(
+        "--port", help="PebbleOS's console port (default: found by its USB IDs)"
+    )
+    p.add_argument(
+        "--tcp", help="HOST:PORT of a bridge.py serving the console, usually :4501"
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="the workouts on the watch")
     g = sub.add_parser("get", help="download workouts as FIT files")
-    g.add_argument("ids", nargs="*", help="workout ids (default: those not downloaded yet)")
+    g.add_argument(
+        "ids", nargs="*", help="workout ids (default: those not downloaded yet)"
+    )
     g.add_argument("-o", "--out", default=".", help="directory for the files")
     g.add_argument("--all", action="store_true", help="every workout")
-    g.add_argument("--force", action="store_true", help="download again files already there")
-    g.add_argument("--include-open", action="store_true",
-                   help="also workouts not closed yet, as far as recorded")
+    g.add_argument(
+        "--force", action="store_true", help="download again files already there"
+    )
+    g.add_argument(
+        "--include-open",
+        action="store_true",
+        help="also workouts not closed yet, as far as recorded",
+    )
     d = sub.add_parser("delete", help="delete workouts from the watch")
     d.add_argument("ids", nargs="+")
     args = p.parse_args(argv)
@@ -168,12 +205,18 @@ def main(argv=None):
                 print(fmt_row(row))
             if not rows:
                 print("no workouts")
-            print("? : the time is the watch's clock, the GNSS never gave one", file=sys.stderr)
+            print(
+                "? : the time is the watch's clock, the GNSS never gave one",
+                file=sys.stderr,
+            )
         elif args.cmd == "get":
             rows = {r["id"]: r for r in watch.list()}
-            ids = args.ids or [i for i, r in rows.items()
-                               if r["state"] not in ("unreadable", "recording")
-                               and (args.include_open or args.all or r["state"] != "open")]
+            ids = args.ids or [
+                i
+                for i, r in rows.items()
+                if r["state"] not in ("unreadable", "recording")
+                and (args.include_open or args.all or r["state"] != "open")
+            ]
             os.makedirs(args.out, exist_ok=True)
             for wid in ids:
                 if wid not in rows:
