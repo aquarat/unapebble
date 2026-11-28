@@ -22,9 +22,9 @@ unit, the buttons, the display, the haptics, storage on the eMMC and the
 battery: its charger and its fuel gauge, and the motion and environment
 sensors: the accelerometer, the magnetometer and the barometer, and the
 GNSS receiver, with GPS workouts recorded on the watch and exported as FIT
-files. Bluetooth runs on the BlueNRG-2's own stack: GATT, pairing,
-bonds and the Pebble protocol over PPoGATT work with a BlueZ central, not
-yet tried with a phone (see [](#unawatch-bluetooth)); the heart rate sensor
+files. Bluetooth runs on the BlueNRG-2's own stack: an Android phone with
+Gadgetbridge pairs, sets the time and forwards notifications
+({doc}`phone`, [](#unawatch-bluetooth)); the heart rate sensor
 and USB come next; see
 [](#unawatch-status). The first port, with its storage in the embedded flash,
 boots on a watch, and so does the firmware with the storage on the eMMC,
@@ -730,7 +730,7 @@ setting (`CONFIG_DEV_USB`): {doc}`tether` too.
 | **Built, not yet run on a watch** | The same firmware installed as one `.ota` through the bootloader (it differs only in its address); the Lab; the Battery test app (it is in the launcher, but no test has run); the USB Developer setting in a normal install |
 | **Runs on a watch, from the tether slot: the sensors** | The BMI270 accelerometer (FIFO and interrupt, shakes), the BMM350 magnetometer and the MS5837 barometer, read on the watch lying still (see [](#unawatch-sensors)); not yet moved: steps, shakes, the compass's calibration and the X and Y signs need someone to move the watch |
 | **Runs on a watch, from the tether slot: GNSS** | The AG3335M answers and starts, NMEA flows at 1 Hz and is parsed into epochs with the UART receiving in Stop 2 (no overrun nor bad sentence in 400 epochs); indoors, up to 4 satellites in view and 3 with a signal, the UTC time after about 4 minutes, no fix yet. Draw in [](#unawatch-power). The location service and the sport apps run on it ([](#unawatch-workouts)) |
-| **Runs on a watch, from the tether slot: Bluetooth** | On the BlueNRG-2's own stack, through its ACI, under NimBLE's host API (see [](#unawatch-bluetooth)): advertising, PebbleOS's GATT services read, written and subscribed to from a BlueZ central, pairing by numeric comparison and bonds that survive a restart, and the Pebble protocol over reversed PPoGATT (version and ping answered). Not yet tried with a phone or the Pebble app |
+| **Runs on a watch, from the tether slot: Bluetooth** | On the BlueNRG-2's own stack, through its ACI, under NimBLE's host API (see [](#unawatch-bluetooth)): advertising, PebbleOS's GATT services read, written and subscribed to from a BlueZ central, pairing by numeric comparison and bonds that survive a restart, and the Pebble protocol over reversed PPoGATT (version and ping answered). Tried with Gadgetbridge on Android ({doc}`phone`); not yet with the Pebble app or an iPhone |
 | **Runs on a watch, from the tether slot: workouts** | Run recorded indoors on the receiver with the replayed route (`gnss replay`): start, laps, pause and resume, a restart in the middle (nothing lost but what an orderly restart writes anyway), resuming it from the app, saving; the receiver off after; the FIT file downloaded with `workouts.py` and decoded by fitdecode and fitparse. A Run started without a fix records, without positions; the watch lying still, it auto-paused after 4 s, as it should. The clock set from the receiver's time on a ready screen, from 2010 to the right UTC. Power while recording in [](#unawatch-power). Not yet outdoors: a real fix, the GNSS's time in a workout, distance and pace against a known course, steps and cadence while moving, an upload to Strava or Garmin Connect |
 | **Stand-ins, which nothing feeds** | Ambient light, microphone and die temperature are simulators |
 | **Off** | No heart rate or buzzer; USB only for development, so workouts come off only through the developer access. No GNSS fix seen yet: the watch has only been indoors |
