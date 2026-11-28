@@ -43,3 +43,17 @@ $py tools/una/ble/hold.py 450 & sleep 30; tools/una/ble/watch.sh measure 300 con
 
 Pairing leaves a bond in BlueZ: `bluetoothctl remove CD:CE:E6:EC:45:CE` takes
 it away.
+
+## With a phone
+
+`phone.py` drives an Android phone over adb (`$UNA_ADB_SERIAL`, and
+`$UNA_ADB_HOST` when it is plugged into another machine), for Gadgetbridge:
+shell commands, the screen's widgets (`--texts`) and taps (`--tap REGEX`).
+`snoop.py` summarises the phone's HCI snoop log, taken from a bugreport. For
+example, a notification to the watch, the screen off (Gadgetbridge sends none
+while it is on, by default):
+
+```shell
+tools/una/ble/phone.py 'input keyevent KEYCODE_SLEEP; cmd notification post -t Test tag Hello'
+tools/una/ble/phone.py 'dumpsys notification >/dev/null'   # any command
+```
