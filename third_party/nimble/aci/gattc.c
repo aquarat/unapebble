@@ -107,8 +107,7 @@ static void prv_cb_chr(struct proc *p, int status, const struct ble_gatt_chr *ch
 
 static void prv_cb_dsc(struct proc *p, int status, const struct ble_gatt_dsc *dsc) {
   if (p->cb != nullptr) {
-    ((ble_gatt_dsc_fn *)p->cb)(p->conn_handle, prv_error(status, p->handle), p->start, dsc,
-                               p->arg);
+    ((ble_gatt_dsc_fn *)p->cb)(p->conn_handle, prv_error(status, p->handle), p->start, dsc, p->arg);
   }
 }
 
@@ -118,10 +117,9 @@ static void prv_cb_attr(struct proc *p, int status, uint16_t handle, uint16_t of
   struct ble_gatt_attr attr = {.handle = handle, .offset = offset, .om = om};
 
   if (p->cb != nullptr) {
-    ((ble_gatt_attr_fn *)p->cb)(p->conn_handle, prv_error(status, handle),
-                                (om != nullptr || status == 0 || p->type == PROC_WRITE) ? &attr
-                                                                                       : nullptr,
-                                p->arg);
+    ((ble_gatt_attr_fn *)p->cb)(
+        p->conn_handle, prv_error(status, handle),
+        (om != nullptr || status == 0 || p->type == PROC_WRITE) ? &attr : nullptr, p->arg);
   }
   os_mbuf_free_chain(attr.om);
 }
@@ -328,8 +326,8 @@ int ble_gattc_disc_svc_by_uuid(uint16_t conn_handle, const ble_uuid_t *uuid,
 
 int ble_gattc_disc_all_chrs(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle,
                             ble_gatt_chr_fn *cb, void *cb_arg) {
-  return prv_queue(PROC_DISC_ALL_CHRS, conn_handle, start_handle, end_handle, 0U, 0U, nullptr,
-                   cb, cb_arg, nullptr);
+  return prv_queue(PROC_DISC_ALL_CHRS, conn_handle, start_handle, end_handle, 0U, 0U, nullptr, cb,
+                   cb_arg, nullptr);
 }
 
 int ble_gattc_disc_chrs_by_uuid(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle,
@@ -340,12 +338,11 @@ int ble_gattc_disc_chrs_by_uuid(uint16_t conn_handle, uint16_t start_handle, uin
 
 int ble_gattc_disc_all_dscs(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle,
                             ble_gatt_dsc_fn *cb, void *cb_arg) {
-  return prv_queue(PROC_DISC_ALL_DSCS, conn_handle, start_handle, end_handle, 0U, 0U, nullptr,
-                   cb, cb_arg, nullptr);
+  return prv_queue(PROC_DISC_ALL_DSCS, conn_handle, start_handle, end_handle, 0U, 0U, nullptr, cb,
+                   cb_arg, nullptr);
 }
 
-int ble_gattc_read(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_attr_fn *cb,
-                   void *cb_arg) {
+int ble_gattc_read(uint16_t conn_handle, uint16_t attr_handle, ble_gatt_attr_fn *cb, void *cb_arg) {
   return prv_queue(PROC_READ, conn_handle, 0U, 0U, attr_handle, 0U, nullptr, cb, cb_arg, nullptr);
 }
 

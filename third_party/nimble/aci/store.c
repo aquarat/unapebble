@@ -76,7 +76,8 @@ static void prv_chip_remove(const ble_addr_t *addr, bool others_kept) {
   [[maybe_unused]] int rc = prv_remove(addr);
 
   if (!prv_chip_has(addr)) {
-    PBL_LOG_DBG("Bond with " PBL_BT_ADDR_FMT " removed from the chip", PBL_BT_ADDR_XPLODE_VAL(addr->val));
+    PBL_LOG_DBG("Bond with " PBL_BT_ADDR_FMT " removed from the chip",
+                PBL_BT_ADDR_XPLODE_VAL(addr->val));
     return;
   }
 

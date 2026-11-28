@@ -1,17 +1,16 @@
 /* SPDX-FileCopyrightText: 2026 The unapebble authors */
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#include <clar.h>
-
 #include <string.h>
 
+#include <clar.h>
 #include <gatts_map.h>
 #include <host/ble_att.h>
 #include <host/ble_gatt.h>
 #include <host/ble_uuid.h>
 
-static int prv_access(uint16_t conn_handle, uint16_t attr_handle,
-                      struct ble_gatt_access_ctxt *ctxt, void *arg) {
+static int prv_access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt,
+                      void *arg) {
   return 0;
 }
 
@@ -109,8 +108,7 @@ void test_aci_gatts_map__properties(void) {
   cl_assert_equal_i(aci_map_chr_props(BLE_GATT_CHR_F_WRITE_NO_RSP | BLE_GATT_CHR_F_WRITE_ENC),
                     0x04);
   // A reliable write is announced in the extended properties
-  cl_assert_equal_i(aci_map_chr_props(BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_RELIABLE_WRITE),
-                    0x88);
+  cl_assert_equal_i(aci_map_chr_props(BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_RELIABLE_WRITE), 0x88);
 }
 
 void test_aci_gatts_map__permissions(void) {

@@ -7,9 +7,9 @@
 
 #include <host/ble_att.h>
 
-#define CHR_F_WRITES (BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP | \
-                      BLE_GATT_CHR_F_AUTH_SIGN_WRITE | BLE_GATT_CHR_F_RELIABLE_WRITE | \
-                      BLE_GATT_CHR_F_AUX_WRITE)
+#define CHR_F_WRITES                                                                     \
+  (BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP | BLE_GATT_CHR_F_AUTH_SIGN_WRITE | \
+   BLE_GATT_CHR_F_RELIABLE_WRITE | BLE_GATT_CHR_F_AUX_WRITE)
 #define CHR_F_SUBSCRIBE (BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_INDICATE)
 
 // The Bluetooth Base UUID, least significant octet first, its 32 bits at 12 to 15
@@ -200,8 +200,8 @@ void aci_svcs_count(const struct ble_gatt_svc_def *svcs, size_t *num_chrs, size_
 }
 
 int aci_table_add_chr(struct aci_attr_table *t, const struct ble_gatt_svc_def *svc,
-                      const struct ble_gatt_chr_def *chr, uint16_t svc_handle,
-                      uint16_t decl_handle, uint16_t max_len) {
+                      const struct ble_gatt_chr_def *chr, uint16_t svc_handle, uint16_t decl_handle,
+                      uint16_t max_len) {
   struct aci_chr *c;
 
   if (t->num_chrs >= t->max_chrs) {

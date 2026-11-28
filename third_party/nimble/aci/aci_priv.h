@@ -74,22 +74,22 @@
 
 // --- Events ------------------------------------------------------------------------------------
 
-#define ACI_EVT_DISCONN_COMPLETE  0x05U
-#define ACI_EVT_ENC_CHANGE        0x08U
-#define ACI_EVT_CMD_COMPLETE      0x0eU
-#define ACI_EVT_CMD_STATUS        0x0fU
-#define ACI_EVT_HW_ERROR          0x10U
-#define ACI_EVT_NUM_COMP_PKTS     0x13U
-#define ACI_EVT_ENC_KEY_REFRESH   0x30U
-#define ACI_EVT_LE_META           0x3eU
-#define ACI_EVT_VS                0xffU
+#define ACI_EVT_DISCONN_COMPLETE 0x05U
+#define ACI_EVT_ENC_CHANGE       0x08U
+#define ACI_EVT_CMD_COMPLETE     0x0eU
+#define ACI_EVT_CMD_STATUS       0x0fU
+#define ACI_EVT_HW_ERROR         0x10U
+#define ACI_EVT_NUM_COMP_PKTS    0x13U
+#define ACI_EVT_ENC_KEY_REFRESH  0x30U
+#define ACI_EVT_LE_META          0x3eU
+#define ACI_EVT_VS               0xffU
 // Ours, from the link to the host: the chip is up (1) or went down by itself (0)
-#define ACI_EVT_LINK              0x00U
+#define ACI_EVT_LINK 0x00U
 
-#define ACI_LE_CONN_COMPLETE      0x01U
-#define ACI_LE_CONN_UPDATE        0x03U
-#define ACI_LE_DATA_LEN_CHANGE    0x07U
-#define ACI_LE_ENH_CONN_COMPLETE  0x0aU
+#define ACI_LE_CONN_COMPLETE     0x01U
+#define ACI_LE_CONN_UPDATE       0x03U
+#define ACI_LE_DATA_LEN_CHANGE   0x07U
+#define ACI_LE_ENH_CONN_COMPLETE 0x0aU
 
 #define ACI_VS_BLUE_INITIALIZED   0x0001U
 #define ACI_VS_BLUE_EVENTS_LOST   0x0002U

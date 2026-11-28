@@ -19,8 +19,8 @@ PBL_LOG_MODULE_DECLARE(nimble_aci, CONFIG_NIMBLE_ACI_BLUENRG2_LOG_LEVEL);
 #define NAME_MAX 32U
 
 // Where aci_gatt_init puts the GATT service and its Service Changed characteristic
-#define GATT_SVC_HANDLE            0x0001U
-#define GATT_SERVICE_CHANGED_DECL  0x0002U
+#define GATT_SVC_HANDLE           0x0001U
+#define GATT_SERVICE_CHANGED_DECL 0x0002U
 
 static char s_name[NAME_MAX + 1U];
 static uint16_t s_appearance;

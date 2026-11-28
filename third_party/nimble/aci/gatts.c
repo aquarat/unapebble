@@ -33,7 +33,7 @@ PBL_LOG_MODULE_DECLARE(nimble_aci, CONFIG_NIMBLE_ACI_BLUENRG2_LOG_LEVEL);
 #define UPDATE_NOTIFY   0x01U
 #define UPDATE_INDICATE 0x02U
 
-#define CCCD_UUID16 0x2902U
+#define CCCD_UUID16   0x2902U
 #define CCCD_NOTIFY   0x0001U
 #define CCCD_INDICATE 0x0002U
 
@@ -604,8 +604,7 @@ static void prv_rx_attr_modified(const uint8_t *p, size_t n) {
   }
 
   // Writes that waited for the host have been seen
-  if (kind != ACI_ATTR_VALUE ||
-      (s_chrs[chr_idx].evt_mask & ACI_GATT_NOTIFY_WRITE_REQ_WAIT) != 0U) {
+  if (kind != ACI_ATTR_VALUE || (s_chrs[chr_idx].evt_mask & ACI_GATT_NOTIFY_WRITE_REQ_WAIT) != 0U) {
     return;
   }
 
@@ -711,8 +710,8 @@ static int prv_send(uint16_t conn_handle, uint16_t val_handle, struct os_mbuf *o
   }
 
   // As NimBLE: what is past the MTU's room is cut
-  len = (uint16_t)PBL_MIN(OS_MBUF_PKTLEN(om), (uint32_t)PBL_MIN(c.max_len,
-                                                                ble_att_mtu(conn_handle) - 3U));
+  len = (uint16_t)PBL_MIN(OS_MBUF_PKTLEN(om),
+                          (uint32_t)PBL_MIN(c.max_len, ble_att_mtu(conn_handle) - 3U));
   (void)os_mbuf_copydata(om, 0, len, value);
   os_mbuf_free_chain(om);
 

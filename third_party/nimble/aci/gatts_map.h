@@ -133,8 +133,8 @@ void aci_svcs_count(const struct ble_gatt_svc_def *svcs, size_t *num_chrs, size_
  * its CCCD if it has one. Its index, or -1 if the table is full.
  */
 int aci_table_add_chr(struct aci_attr_table *t, const struct ble_gatt_svc_def *svc,
-                      const struct ble_gatt_chr_def *chr, uint16_t svc_handle,
-                      uint16_t decl_handle, uint16_t max_len);
+                      const struct ble_gatt_chr_def *chr, uint16_t svc_handle, uint16_t decl_handle,
+                      uint16_t max_len);
 
 /** Adds a descriptor of the characteristic chr_idx. 0, or -1 if the table is full. */
 int aci_table_add_dsc(struct aci_attr_table *t, uint16_t chr_idx,

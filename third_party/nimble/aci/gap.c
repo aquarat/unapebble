@@ -1075,10 +1075,10 @@ int ble_gap_adv_start(uint8_t own_addr_type, const ble_addr_t *direct_addr, int3
     return BLE_HS_EALREADY;
   }
 
-  p = aci_put_le16(par, adv_params->itvl_min != 0U ? adv_params->itvl_min
-                                                   : BLE_GAP_ADV_FAST_INTERVAL1_MIN);
-  p = aci_put_le16(p, adv_params->itvl_max != 0U ? adv_params->itvl_max
-                                                 : BLE_GAP_ADV_FAST_INTERVAL1_MAX);
+  p = aci_put_le16(
+      par, adv_params->itvl_min != 0U ? adv_params->itvl_min : BLE_GAP_ADV_FAST_INTERVAL1_MIN);
+  p = aci_put_le16(
+      p, adv_params->itvl_max != 0U ? adv_params->itvl_max : BLE_GAP_ADV_FAST_INTERVAL1_MAX);
   *p++ = prv_adv_type(adv_params);
   *p++ = own_addr_type;
   if (direct_addr != nullptr) {
