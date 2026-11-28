@@ -1,6 +1,6 @@
 # The DTM passes no ACL data in link-layer-only mode: how to go on
 
-- Status: Proposed
+- Status: Superseded by 261128-081601-01-aci-on-the-chip-accepted
 - Date: 2026-11-27 20:42 UTC
 - Decided by: agent (proposal; the maintainer decides)
 
