@@ -44,10 +44,8 @@ int aci_chip_bonds(ble_addr_t *out, int max) {
   return num;
 }
 
-// The DTM gives each bond's address with its most significant octet 0
 bool aci_chip_bond_match(const ble_addr_t *listed, const ble_addr_t *addr) {
-  return listed->type == addr->type && memcmp(listed->val, addr->val, 5U) == 0 &&
-         (listed->val[5] == addr->val[5] || listed->val[5] == 0U);
+  return ble_addr_cmp(listed, addr) == 0;
 }
 
 static bool prv_chip_has(const ble_addr_t *addr) {
