@@ -737,6 +737,11 @@ bool activity_get_metric(ActivityMetric metric, uint32_t history_len, int32_t *h
     history[i] = -1;
   }
 
+  // Not initialized: the service waits for a valid time.
+  if (state == nullptr) {
+    return false;
+  }
+
   pbl_mutex_lock(&state->mutex, PBL_FOREVER);
   {
     // Update derived metrics

@@ -158,6 +158,10 @@ static bool prv_activity_sessions_equal(ActivitySession *session_a, ActivitySess
 // If we already have this activity registered, it is updated.
 void activity_sessions_prv_add_activity_session(ActivitySession *session) {
   ActivityState *state = activity_private_state();
+  // Not initialized: the service waits for a valid time.
+  if (state == nullptr) {
+    return;
+  }
   pbl_mutex_lock(&state->mutex, PBL_FOREVER);
   {
     if (!session->ongoing) {
@@ -198,6 +202,10 @@ unlock:
 // that was previously ongoing should not be registered after all.
 void activity_sessions_prv_delete_activity_session(ActivitySession *session) {
   ActivityState *state = activity_private_state();
+  // Not initialized: the service waits for a valid time.
+  if (state == nullptr) {
+    return;
+  }
   pbl_mutex_lock(&state->mutex, PBL_FOREVER);
   {
     // Look for this activity
