@@ -16,9 +16,8 @@ once waited 2 s for its Command Complete.
 The link thread signals the event; `ble_gatts_notify_custom()` and
 `ble_gattc_write_no_rsp_flat()` wait for it after a refusal, up to 100 ms,
 three times, before failing as NimBLE would. On NimBLE's host thread they
-do not wait, as that thread would have to see the event first (it does
-not: the link thread gives it, but the host thread may hold what the
-caller waits on). A command's buffer is copied by the link thread before
+fail at once, as before: waiting there would hold up every other event of
+the chip. A command's buffer is copied by the link thread before
 it is written, so that a caller that gave up cannot change it.
 
 ## Consequences
