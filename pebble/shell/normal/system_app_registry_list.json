@@ -406,6 +406,15 @@
       "color_argb8": "GColorChromeYellowARGB8"
     },
     {
+      "id": -199,
+      "enum": "SPORT_WALK",
+      "md_fn": "sport_walk_get_app_info",
+      "ifdefs": [
+        "CONFIG_APP_SPORT"
+      ],
+      "color_argb8": "GColorIslamicGreenARGB8"
+    },
+    {
       "id": -196,
       "enum": "SPORT_BIKE",
       "md_fn": "sport_bike_get_app_info",
