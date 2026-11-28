@@ -11,7 +11,7 @@ Android 17; the screenshots are from that test.
 | | |
 | --- | --- |
 | Pairing | Yes: numeric comparison, confirmed on the phone and on the watch; the bond survives restarts of both |
-| Reconnecting | Yes: after a restart of the watch, or when the phone comes back in range, within a few seconds |
+| Reconnecting | Yes: after a restart of the watch, within a few seconds; after the phone's Bluetooth was turned off and on, once Gadgetbridge is opened (see Troubleshooting) |
 | Time | Yes: the watch takes the phone's time and time zone when it connects |
 | Notifications | Yes: the phone's notifications, as Gadgetbridge forwards them |
 | Incoming calls | Yes: the caller is shown, with accept and decline |
