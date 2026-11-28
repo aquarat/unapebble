@@ -675,6 +675,35 @@ bool aci_gatts_rx_vs(uint16_t code, const uint8_t *p, size_t n) {
   }
 }
 
+void aci_gatts_bond_restored(uint16_t conn_handle) {
+  for (size_t i = 0U; i < s_table.num_chrs; i++) {
+    uint8_t par[6];
+    uint8_t rsp[6];
+    size_t len = sizeof(rsp);
+    uint8_t *p;
+    int rc;
+
+    if (s_chrs[i].cccd_handle == 0U) {
+      continue;
+    }
+
+    p = aci_put_le16(par, s_chrs[i].cccd_handle);
+    p = aci_put_le16(p, 0U);
+    (void)aci_put_le16(p, 2U);
+    rc = aci_cmd(ACI_OP_GATT_READ_HANDLE_VALUE, par, sizeof(par), rsp, &len);
+    // Its length, the value's length, the value
+    if (rc != 0 || len < 5U || aci_get_le16(&rsp[2]) < 1U) {
+      PBL_LOG_DBG("CCCD %04x not read (%d)", s_chrs[i].cccd_handle, rc);
+      continue;
+    }
+
+    PBL_LOG_DBG("CCCD %04x restored: %02x", s_chrs[i].cccd_handle, rsp[4]);
+    if (rsp[4] != 0U) {
+      prv_subscribe(conn_handle, i, rsp[4], BLE_GAP_SUBSCRIBE_REASON_RESTORE);
+    }
+  }
+}
+
 void aci_gatts_conn_closed(uint16_t conn_handle) {
   for (size_t i = 0U; i < s_table.num_chrs; i++) {
     aci_lock();

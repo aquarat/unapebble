@@ -30,6 +30,7 @@ address, `CD:CE:E6:EC:45:CE`.
 | `ppog_reversed.py LOG [--count N]` | the Pebble protocol over the watch's PPoGATT service: handshake, version, ping, round trip and rate |
 | `ppog_forward.py LOG [--count N]` | the same with BlueZ hosting the phone's PPoGATT service (no advertising), the watch its client |
 | `hold.py SECONDS` | a connection held, for measuring connected idle |
+| `watchshot.py --elf ELF OUT.png [--scale N]` | the watch's screen, read from its framebuffer over the tether |
 
 For example:
 

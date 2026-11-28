@@ -22,9 +22,9 @@ unit, the buttons, the display, the haptics, storage on the eMMC and the
 battery: its charger and its fuel gauge, and the motion and environment
 sensors: the accelerometer, the magnetometer and the barometer, and the
 GNSS receiver, with GPS workouts recorded on the watch and exported as FIT
-files. Bluetooth runs on the BlueNRG-2's own stack: GATT, pairing,
-bonds and the Pebble protocol over PPoGATT work with a BlueZ central, not
-yet tried with a phone (see [](#unawatch-bluetooth)); the heart rate sensor
+files. Bluetooth runs on the BlueNRG-2's own stack: an Android phone with
+Gadgetbridge pairs, sets the time and forwards notifications
+({doc}`phone`, [](#unawatch-bluetooth)); the heart rate sensor
 and USB come next; see
 [](#unawatch-status). The first port, with its storage in the embedded flash,
 boots on a watch, and so does the firmware with the storage on the eMMC,
@@ -351,6 +351,8 @@ counter agree with it.
 | Bluetooth on the chip's own stack (ACI), bonded, advertising to reconnect every 1022 ms, empty payload | | 0.81 mA (Current 1.24 mA), 97.9% in Stop 2 |
 | The same, connected to a BlueZ central, idle, at 60 ms with a latency of 4 (PebbleOS's request, granted) | | 0.79 mA (Current 1.21 mA), 98.3% in Stop 2 |
 | The same, airplane mode: the chip held in reset | | 1.01 mA (Current 1.32 mA), 97.2% in Stop 2 |
+| The same, discoverable, advertising every 20 ms with the discovery payload (`bt pairable`) | | 1.77 mA (Current 1.91 mA), 97.5% in Stop 2 |
+| The same, advertising to reconnect every 1022 ms, a 12-minute window | | 0.66 mA (Current 0.81 mA, 346 samples), 97.9% in Stop 2 |
 | Run recording (Sport app): the receiver searching indoors, its epochs replayed as fixes on a route (`gnss replay`), the data screen redrawn each second, the journal written every 10 s (5 min) | | AvgCurrent 11.7 mA, coulomb counter 13.3 mA; Current 18.4 mA (sd 17.9 mA) |
 
 The Bluetooth figures are of 5-minute windows after 30 s, the gauge's
@@ -362,8 +364,9 @@ firmware sets it. On the chip's own stack (decision 261128-081601-02),
 advertising every second, connected idle and Bluetooth off all read 0.8 to
 1.0 mA: the differences are below what the gauge resolves over 5 minutes,
 the airplane-mode window reading highest. The chip's stack costs nothing
-measurable over the HCI controller it replaced. Advertising every 20 ms on
-the ACI, the first 5 minutes of discovery, was not measured again.
+measurable over the HCI controller it replaced. Advertising every 20 ms
+for discovery costs about 1.1 mA over the 0.66 mA of the 12-minute window of
+advertising every second (2.1 mA with the HCI controller).
 
 The GNSS figures are of 3 to 4 minute windows (8 minutes for the default),
 the gauge's Current and AvgCurrent, which differ by up to 2 mA there: the
@@ -476,7 +479,7 @@ Python client on bleak):
   callers' 20 to 200 ms retries (1.5 kB/s before).
 
 With a phone: Gadgetbridge 2026.11.1 (F-Droid) on a Pixel 6a, Android 17
-(`tools/una/ble/phone.py`):
+(`tools/una/ble/phone.py`); {doc}`phone` is the user's guide:
 
 - Found in its discovery as `Pebble 45CE`, paired by numeric comparison,
   the code confirmed on both sides; the HCI snoop log shows the watch's
@@ -489,6 +492,15 @@ With a phone: Gadgetbridge 2026.11.1 (F-Droid) on a Pixel 6a, Android 17
   notification store, five of five one second apart.
 - After a restart of the watch, Gadgetbridge reconnects, encrypted with the
   bond, and the session opens again within 2 s.
+- Gadgetbridge's *Take Screenshot*: 66 kB from the watch in 5.4 s (12 kB/s).
+  Its test call shows the call screen, its test notification the
+  notification.
+- The chip's own restart (its reset pulsed under PebbleOS, through the
+  tether) and a host reset (`bt host_reset`) are recovered: the host resets,
+  the chip is set up again in about 4 s and the phone reconnects. A bonded
+  peer's subscriptions, which the chip keeps, are read back
+  (`aci_gatt_read_handle_value` on each CCCD) and given to PebbleOS as
+  restored, as NimBLE does.
 
 Not tested yet: ANCS and AMS against a real iPhone (their discovery,
 reads, writes and notifications are the paths the PPoGATT client takes),
@@ -721,7 +733,7 @@ setting (`CONFIG_DEV_USB`): {doc}`tether` too.
 | **Built, not yet run on a watch** | The same firmware installed as one `.ota` through the bootloader (it differs only in its address); the Lab; the Battery test app (it is in the launcher, but no test has run); the USB Developer setting in a normal install |
 | **Runs on a watch, from the tether slot: the sensors** | The BMI270 accelerometer (FIFO and interrupt, shakes), the BMM350 magnetometer and the MS5837 barometer, read on the watch lying still (see [](#unawatch-sensors)); not yet moved: steps, shakes, the compass's calibration and the X and Y signs need someone to move the watch |
 | **Runs on a watch, from the tether slot: GNSS** | The AG3335M answers and starts, NMEA flows at 1 Hz and is parsed into epochs with the UART receiving in Stop 2 (no overrun nor bad sentence in 400 epochs); indoors, up to 4 satellites in view and 3 with a signal, the UTC time after about 4 minutes, no fix yet. Draw in [](#unawatch-power). The location service and the sport apps run on it ([](#unawatch-workouts)) |
-| **Runs on a watch, from the tether slot: Bluetooth** | On the BlueNRG-2's own stack, through its ACI, under NimBLE's host API (see [](#unawatch-bluetooth)): advertising, PebbleOS's GATT services read, written and subscribed to from a BlueZ central, pairing by numeric comparison and bonds that survive a restart, and the Pebble protocol over reversed PPoGATT (version and ping answered). Not yet tried with a phone or the Pebble app |
+| **Runs on a watch, from the tether slot: Bluetooth** | On the BlueNRG-2's own stack, through its ACI, under NimBLE's host API (see [](#unawatch-bluetooth)): advertising, PebbleOS's GATT services read, written and subscribed to from a BlueZ central, pairing by numeric comparison and bonds that survive a restart, and the Pebble protocol over reversed PPoGATT (version and ping answered). Tried with Gadgetbridge on Android ({doc}`phone`); not yet with the Pebble app or an iPhone |
 | **Runs on a watch, from the tether slot: workouts** | Run recorded indoors on the receiver with the replayed route (`gnss replay`): start, laps, pause and resume, a restart in the middle (nothing lost but what an orderly restart writes anyway), resuming it from the app, saving; the receiver off after; the FIT file downloaded with `workouts.py` and decoded by fitdecode and fitparse. A Run started without a fix records, without positions; the watch lying still, it auto-paused after 4 s, as it should. The clock set from the receiver's time on a ready screen, from 2010 to the right UTC. Power while recording in [](#unawatch-power). Not yet outdoors: a real fix, the GNSS's time in a workout, distance and pace against a known course, steps and cadence while moving, an upload to Strava or Garmin Connect |
 | **Stand-ins, which nothing feeds** | Ambient light, microphone and die temperature are simulators |
 | **Off** | No heart rate or buzzer; USB only for development, so workouts come off only through the developer access. No GNSS fix seen yet: the watch has only been indoors |
@@ -871,6 +883,7 @@ covers, and add a record for each new decision.
 ```{toctree}
 :hidden:
 
+phone.md
 hardware.md
 tether.md
 workouts.md
