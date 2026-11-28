@@ -1,6 +1,6 @@
 # Bluetooth through NimBLE, with the BlueNRG-2 as an HCI controller in link-layer-only mode
 
-- Status: Proposed
+- Status: Superseded by 261127-190543-01-bluenrg2-as-hci-controller-accepted
 - Date: 2026-11-27 15:22 UTC
 - Decided by: agent (proposal; the maintainer decides)
 

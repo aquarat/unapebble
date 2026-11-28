@@ -41,6 +41,10 @@ static void prv_cs_set(const struct pbl_spi_dev *dev, bool active) {
 }
 
 static void prv_end(const struct pbl_spi_bus *bus) {
+  if (bus->state->held != nullptr) {
+    return;
+  }
+
   prv_cs_set(bus->state->dev, false);
   bus->ops->disable(bus);
   pbl_sem_give(&bus->state->lock);
@@ -125,12 +129,15 @@ int pbl_spi_transfer_async(const struct pbl_spi_dev *dev, const struct pbl_spi_x
     return ret;
   }
 
-  (void)pbl_sem_take(&state->lock, PBL_FOREVER);
+  // A held bus is configured, enabled and selected already
+  if (state->held != dev) {
+    (void)pbl_sem_take(&state->lock, PBL_FOREVER);
 
-  ret = bus->ops->configure(bus, dev);
-  if (ret != 0) {
-    pbl_sem_give(&state->lock);
-    return ret;
+    ret = bus->ops->configure(bus, dev);
+    if (ret != 0) {
+      pbl_sem_give(&state->lock);
+      return ret;
+    }
   }
 
   state->dev = dev;
@@ -140,8 +147,10 @@ int pbl_spi_transfer_async(const struct pbl_spi_dev *dev, const struct pbl_spi_x
   state->cb = cb;
   state->arg = arg;
 
-  bus->ops->enable(bus);
-  prv_cs_set(dev, true);
+  if (state->held != dev) {
+    bus->ops->enable(bus);
+    prv_cs_set(dev, true);
+  }
 
   ret = bus->ops->start(bus, &xfers[0]);
   if (ret != 0) {
@@ -149,6 +158,47 @@ int pbl_spi_transfer_async(const struct pbl_spi_dev *dev, const struct pbl_spi_x
   }
 
   return ret;
+}
+
+int pbl_spi_hold(const struct pbl_spi_dev *dev) {
+  const struct pbl_spi_bus *bus = dev->bus;
+  struct pbl_spi_bus_state *state = bus->state;
+  int ret;
+
+  if (!pbl_device_is_ready(&bus->dev)) {
+    return -ENODEV;
+  }
+
+  if (dev->cs >= bus->num_cs) {
+    return -EINVAL;
+  }
+
+  (void)pbl_sem_take(&state->lock, PBL_FOREVER);
+
+  ret = bus->ops->configure(bus, dev);
+  if (ret != 0) {
+    pbl_sem_give(&state->lock);
+    return ret;
+  }
+
+  state->dev = dev;
+  state->held = dev;
+  bus->ops->enable(bus);
+  prv_cs_set(dev, true);
+
+  return 0;
+}
+
+void pbl_spi_release(const struct pbl_spi_dev *dev) {
+  const struct pbl_spi_bus *bus = dev->bus;
+
+  if (bus->state->held != dev) {
+    return;
+  }
+
+  bus->state->held = nullptr;
+  bus->state->dev = dev;
+  prv_end(bus);
 }
 
 static void prv_sync_complete(int status, void *arg) {

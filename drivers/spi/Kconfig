@@ -41,6 +41,25 @@ config SPI_SF32LB57_IRQ_PRIO
     help
       Priority of the controller interrupts.
 
+config SPI_STM32
+    bool "ST STM32 SPI controller"
+    default y
+    depends on DT_HAS_ST_STM32H7_SPI_ENABLED
+    select CLK
+    select GPIO
+    select PINCTRL
+    help
+      Support for the SPI controller of the ST STM32H7 and later, with
+      TSIZE and a FIFO, as on the STM32U5. Master only, interrupt driven,
+      without DMA.
+
+config SPI_STM32_IRQ_PRIO
+    int "Interrupt priority"
+    default 1
+    depends on SPI_STM32
+    help
+      Priority of the controller interrupt.
+
 config SPI_SHELL
     bool "Shell commands"
     default DRIVER_SHELL

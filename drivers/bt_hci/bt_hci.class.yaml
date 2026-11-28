@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 The unapebble authors
+# SPDX-License-Identifier: Apache-2.0
+
+class: bt_hci
+type: struct pbl_bt_hci
+include: pbl/drivers/bt_hci.h
+roles:
+  bt_hci: BT_HCI

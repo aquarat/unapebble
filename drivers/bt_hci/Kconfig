@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 The unapebble authors
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig BT_HCI
+    bool "Bluetooth HCI controllers"
+    help
+      Bluetooth controllers on a bus (pbl/drivers/bt_hci.h), described for
+      the HCI transport that drives them, which selects this.
+
+if BT_HCI
+
+config BT_HCI_BLUENRG2
+    bool "ST BlueNRG-2 on SPI"
+    default y
+    depends on DT_HAS_ST_BLUENRG_2_ENABLED
+    select GPIO
+    select SPI
+    help
+      The pins and SPI device of a BlueNRG-2 running ST's DTM firmware,
+      for the NimBLE transport that drives it (NIMBLE_HCI_BLUENRG2).
+
+endif # BT_HCI
