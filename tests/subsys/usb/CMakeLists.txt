@@ -72,3 +72,22 @@ pbl_clar_test(test_usbd_cdc_acm
     CONFIG_USB_CDC_ACM_TX_BUF_SIZE=1024
     "CONFIG_USB_CDC_ACM_NAME=\"Serial port\""
 )
+
+pbl_clar_test(test_usbd_msc
+  SOURCES
+    subsys/usb/usbd.c
+    subsys/usb/cdc_acm.c
+    subsys/usb/msc.c
+    drivers/uart/uart.c
+  DEFINES
+    ${usbd_defines}
+    CONFIG_USB_CDC_ACM_COUNT=2
+    CONFIG_USB_CDC_ACM_TX_BUF_SIZE=1024
+    "CONFIG_USB_CDC_ACM_NAME=\"Serial port\""
+    CONFIG_USB_MSC_BUF_SIZE=16384
+    CONFIG_USB_MSC_THREAD_PRIO=1
+    CONFIG_USB_MSC_LOG_LEVEL=4
+    "CONFIG_USB_MSC_NAME=\"Workouts\""
+    "CONFIG_USB_MSC_VENDOR=\"UNA\""
+    "CONFIG_USB_MSC_PRODUCT=\"Watch workouts\""
+)

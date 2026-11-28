@@ -130,9 +130,52 @@ config USB_DFU_TRANSFER_SIZE
       Largest block of a download or an upload, in bytes. The function
       keeps three blocks: the one it writes and two to upload from.
 
+config USB_MSC
+    bool "USB drive"
+    help
+      A read-only, removable USB drive (pbl/usb/msc.h): mass storage,
+      bulk-only transport, the SCSI commands hosts send. The application
+      gives it its medium, whose reads run in the drive's thread.
+
+if USB_MSC
+
+config USB_MSC_NAME
+    string "Interface name"
+    default "USB drive"
+
+config USB_MSC_VENDOR
+    string "Vendor, as the drive tells it"
+    default "PebbleOS"
+    help
+      Up to 8 characters.
+
+config USB_MSC_PRODUCT
+    string "Product, as the drive tells it"
+    default "USB drive"
+    help
+      Up to 16 characters.
+
+config USB_MSC_BUF_SIZE
+    int "Buffer size"
+    default 16384
+    range 512 65536
+    help
+      The drive reads into one of two buffers of this size while the
+      other goes to the host. A multiple of 512.
+
+config USB_MSC_THREAD_PRIO
+    int "Thread priority"
+    default 1
+
+module = USB_MSC
+module-str = USB drive
+source "subsys/logging/Kconfig.template.log_level"
+
+endif # USB_MSC
+
 config USB_TEST
     bool "Test function"
-    depends on !USB_CDC_ACM && !USB_DFU
+    depends on !USB_CDC_ACM && !USB_DFU && !USB_MSC
     help
       A vendor-class function, to test the stack and the controller from a
       host: bulk loopback, source and sink, an interrupt endpoint, and
