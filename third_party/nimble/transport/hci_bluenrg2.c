@@ -135,9 +135,9 @@ static int prv_hci_frame_cb(uint8_t pkt_type, void *data) {
         ble_transport_free(data);
         return 0;
       }
-      // The DTM answers some refusals, as Controller Busy for LE Read Remote Features just after a
-      // connection, with the opcode's OGF bits clear; the host would take it for another command's
-      // and reset
+      // A Command Status read with its last byte cut came with the opcode's OGF bits clear
+      // (decisions 261127-194000-01, 261128-092026-01); the host would take it for another
+      // command's and reset. Kept for a read that would still cut it
       if (ev->opcode == BLE_HCI_EVCODE_COMMAND_STATUS && ev->length >= 4U) {
         uint16_t op = (uint16_t)(ev->data[2] | (ev->data[3] << 8));
 

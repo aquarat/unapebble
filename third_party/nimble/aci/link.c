@@ -178,9 +178,8 @@ static void prv_complete(int status, const uint8_t *ret, size_t ret_len) {
   pbl_mutex_unlock(&s_state_lock);
 }
 
-// The DTM answers some refusals with the opcode's OGF bits clear (decision 261127-194000-01)
 static bool prv_is_cmd_op(uint16_t op) {
-  return op != 0U && (op == s_cmd.op || op == (s_cmd.op & 0x03ffU));
+  return op != 0U && op == s_cmd.op;
 }
 
 // A whole event: code, length, parameters

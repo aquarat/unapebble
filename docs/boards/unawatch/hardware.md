@@ -573,6 +573,57 @@ licences (PLLA, SLA0055), not open ones.
 page at 0x58. Both answered on I2C3. Stock UNA reads only its unique ID,
 to find out whether the module is fitted.
 
+#### 2.5.2 The chip's own stack, through ACI (measured)
+
+Measured on the watch on 2026-11-28 with the ACI transport
+(`third_party/nimble/aci`, decision 261128-081601-02) and a BlueZ central.
+The commands and events are those of ST's ACI for the BlueNRG-1 and -2, as
+X-CUBE-BLE2's headers give them (read for the interface only); DTM 3.2.0
+takes every one used here with those layouts.
+
+- **The last byte of a read.** Over the STM32's SPI the last byte of every
+  transfer comes back with only its two low bits, at 1.25 MHz as at
+  625 kHz; the bit-banged reads of the tether experiment are right. Each
+  read now clocks one dummy byte more (decision 261128-092026-01). Before
+  that, config 0x80 read `ce 45 ec e6 ce 01`: it is `ce 45 ec e6 ce cd`,
+  the static random address `CD:CE:E6:EC:45:CE`. The disconnection reason
+  `0x03` of every link, and the Command Status opcode `0x0016` in 2.5.1,
+  were that byte cut.
+- **Start.** `aci_gatt_init`, `aci_gap_init` (peripheral, no privacy, a
+  32-byte name: GAP service at `0x0005`, Device Name `0x0006`, Appearance
+  `0x0008`; the GATT service at `0x0001`), then
+  `aci_gatt_set_access_permission` makes the name and appearance read only
+  (the chip has them writable by peers).
+- **GATT database.** `aci_gatt_add_service` and `aci_gatt_add_char` give the
+  handles in order from `0x000c`; the value is at the declaration plus one,
+  the CCCD next. The values of every characteristic share about a kilobyte:
+  seven of 64 bytes, two of 244 and the GAP's fit, a third of 244 got
+  `0x48`, out of memory. The ATT MTU is at most **220**, whatever the
+  central offers (BlueZ asks 517).
+- **Reads and writes.** A characteristic with
+  `GATT_NOTIFY_READ_REQ_AND_WAIT_FOR_APPL_RESP` raises a read-permit event,
+  answered with `aci_gatt_update_char_value_ext` and `aci_gatt_allow_read`
+  or `aci_gatt_deny_read`; with `GATT_NOTIFY_WRITE_REQ_AND_WAIT_FOR_APPL_RESP`
+  a write-permit event, answered with `aci_gatt_write_resp`; with
+  `GATT_NOTIFY_ATTRIBUTE_WRITE` an attribute-modified event, the CCCD's
+  writes included.
+- **Pairing.** `aci_gap_set_io_capability(display yes/no)` and
+  `aci_gap_set_authentication_requirement(bonding, MITM, SC only, keys of
+  16)`: a BlueZ central pairs by numeric comparison
+  (`aci_gap_numeric_comparison_value_event`, answered with
+  `aci_gap_numeric_comparison_value_confirm_yesno`), then
+  `aci_gap_pairing_complete_event`; the encryption change comes before the
+  pairing's end, and `aci_gap_get_security_level` gives mode 1 level 3.
+  On a reconnection with a bond the chip raises
+  `aci_gap_pairing_complete_event` too, before the encryption change. The
+  bond is in `aci_gap_get_bonded_devices` and survives a restart of the
+  chip. No event comes before a pairing starts: it cannot be refused before
+  its first confirmation.
+- **Connections.** HCI LE advertising, as NimBLE sends it, works with the
+  stack on: the connection is the stack's. BlueZ connects at 45 ms and
+  grants the L2CAP parameter updates PebbleOS asks for (15 ms; 45 to 60 ms
+  with a latency of 4). Data length 251 both ways.
+
 ### 2.6 Link2 module (GNSS AG3335M, BMI270, BMM350)
 
 | Pin | Function / AF | Label | Use |

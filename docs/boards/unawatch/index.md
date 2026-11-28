@@ -21,9 +21,10 @@ The port runs the full firmware, on the gabbro platform of the Pebble Round
 unit, the buttons, the display, the haptics, storage on the eMMC and the
 battery: its charger and its fuel gauge, and the motion and environment
 sensors: the accelerometer, the magnetometer and the barometer, and the
-GNSS receiver. Bluetooth advertises and takes connections, but carries no
-data yet (see [](#unawatch-bluetooth)); the heart rate sensor and USB come
-next; see
+GNSS receiver. Bluetooth runs on the BlueNRG-2's own stack: GATT, pairing,
+bonds and the Pebble protocol over PPoGATT work with a BlueZ central, not
+yet tried with a phone (see [](#unawatch-bluetooth)); the heart rate sensor
+and USB come next; see
 [](#unawatch-status). The first port, with its storage in the embedded flash,
 boots on a watch, and so does the firmware with the storage on the eMMC,
 started from the tether slot: it ran 11 minutes without a reset.
@@ -344,15 +345,21 @@ counter agree with it.
 | The watchface, Bluetooth on the fake controller (`CONFIG_NIMBLE_HCI_FAKE=y`), the GNSS off, before the sensors' drivers | | 0.8 mA (AvgCurrent; Current 1.4 mA) |
 | The same, Bluetooth on the BlueNRG-2, advertising connectable every 20 ms (the first 5 minutes after a boot) | | 2.1 mA (Current 1.9 mA) |
 | The same, advertising every 1022 ms (after those 5 minutes) | | 1.0 mA (Current 1.2 mA) |
+| Bluetooth on the chip's own stack (ACI), bonded, advertising to reconnect every 1022 ms, empty payload | | 0.81 mA (Current 1.24 mA), 97.9% in Stop 2 |
+| The same, connected to a BlueZ central, idle, at 60 ms with a latency of 4 (PebbleOS's request, granted) | | 0.79 mA (Current 1.21 mA), 98.3% in Stop 2 |
+| The same, airplane mode: the chip held in reset | | 1.01 mA (Current 1.32 mA), 97.2% in Stop 2 |
 
 The Bluetooth figures are of 5-minute windows after 30 s, the gauge's
 AvgCurrent first: its Current, sampled every 2 s, had a spread of about
 5 mA, which the 20 ms advertising pulses add to. Advertising at 20 ms costs
 about 1.2 mA, at 1022 ms about 0.15 mA, which is at the limit of what the
 gauge resolves; the chip transmits at its default 8 dBm, as the stock
-firmware sets it. Connected idle could not be measured: no connection
-lasts past the central's service discovery, as no data passes yet
-([](#unawatch-bluetooth)).
+firmware sets it. On the chip's own stack (decision 261128-081601-02),
+advertising every second, connected idle and Bluetooth off all read 0.8 to
+1.0 mA: the differences are below what the gauge resolves over 5 minutes,
+the airplane-mode window reading highest. The chip's stack costs nothing
+measurable over the HCI controller it replaced. Advertising every 20 ms on
+the ACI, the first 5 minutes of discovery, was not measured again.
 
 The GNSS figures are of 3 to 4 minute windows (8 minutes for the default),
 the gauge's Current and AvgCurrent, which differ by up to 2 mA there: the
@@ -393,36 +400,76 @@ display, whose frames are clocked out on the CPU for 63 ms each.
 
 ## Bluetooth
 
-PebbleOS's NimBLE host runs on the STM32 and drives the BlueNRG-2 of the
-BLE module as an HCI controller, on the DTM firmware v3.2.0 it ships with,
-in link-layer-only mode (decision 261127-190543-01). The HCI transport,
-`third_party/nimble/transport/hci_bluenrg2.c`, speaks the chip's SPI
-protocol on SPI1 at 1.25 MHz (`drivers/spi/stm32.c`) and owns its quirks:
-it never sends `HCI_Reset`, which starts the chip's updater, and answers
-the host's itself; it checks each start's reason and restarts the chip with
-its SPI lines undriven, which is what keeps it out of the updater; it sets
-link-layer-only mode after each start; it gives the host the module's own
-address, `C1:CE:E6:EC:45:CE` on this watch (config 0x80 as a static random
-address), as the chip has no public one (decisions from 261127-191406-01).
-The chip starts 2.2 s after its reset is released: at boot it is set up
-about 2 s after the services have started, and the host synchronises at
-once.
+Bluetooth runs on the stack of the BlueNRG-2 itself, its host included,
+driven through ST's ACI over the chip's SPI protocol (decision
+261128-081601-01). PebbleOS's Bluetooth layer is the upstream one, written
+on NimBLE's host API; in this build that API is provided over the ACI by
+`third_party/nimble/aci` instead of NimBLE's host (`NIMBLE_ACI_BLUENRG2`,
+decision 261128-081601-02):
 
-On the watch the host synchronises, advertises connectable, and a BlueZ
-central connects, with a data length update. But the DTM, in
-link-layer-only mode, passes no ACL data either way (hardware.md, 2.5.1;
-decision 261127-204244-01), so there is no GATT, no pairing and no PPoGATT
-yet. Without the mode the chip's own stack answers over the air instead.
-Getting data through needs one of: an `HCI_Reset` before the mode, as
-STM32duinoBLE does (untried: the brief rules it out), a DTM built with
-ST's `LL_ONLY` option (reflashing, ruled out too), or ST's ACI with the
-stack on the chip (option (b)). An `HCI_Reset` first was tried, approved,
-and changed nothing (decision 261127-233959-01). The DTM, backed up and
-analysed, was built without the ACL paths; a binary patch adding them
-(`tools/una/bluenrg2`) wrote and verified, but the chip checks its code
-before running it and did not start; it was restored (decisions from
-261128-001034-01). `CONFIG_NIMBLE_HCI_FAKE=y` puts the fake controller
-back.
+- **The link** (`link.c`, on `transport/bluenrg2_spi.c`): one thread owns
+  the SPI, at 1.25 MHz on SPI1. Commands are synchronous; events go to
+  NimBLE's host thread, where PebbleOS's callbacks run as with NimBLE.
+- **Start and stop** (`hs.c`): the chip is held in reset while Bluetooth is
+  off and restarted at each start (2.2 s), which gives it a fresh GATT
+  database; then GATT and GAP init, the event masks, the device name, the
+  services, the address.
+- **GATT server** (`gatts.c`, `gatts_map.c`): PebbleOS's service tables are
+  added to the chip, which gives the handles; they are written to each
+  `val_handle` and mapped back to the access callbacks. Reads reach the
+  callbacks through the chip's read-permit requests, writes through its
+  write-permit requests or, for writes without response alone, its
+  attribute-modified events; CCCD writes become subscribe events;
+  notifications and indications go out with `aci_gatt_update_char_value_ext`.
+  The chip has about a kilobyte for every value: characteristics that carry
+  data get the 217 bytes its ATT MTU of 220 holds, those that are read their
+  value's length or 20 bytes.
+- **GATT client** (`gattc.c`): NimBLE's procedures, one at a time per
+  connection, as the chip runs them.
+- **GAP and security** (`gap.c`, `store.c`): advertising as HCI LE
+  commands, connections, parameter updates over L2CAP; the chip's security
+  manager set from NimBLE's configuration (LE Secure Connections only,
+  MITM, display yes/no, bonding), its numeric comparison given to PebbleOS
+  as NimBLE's passkey event. The chip keeps the bonds (up to 12, in its
+  stack's data page) and gives none of their keys out: PebbleOS's store
+  keeps a record per bond, written at pairing, deleted with the chip's
+  bond, and reconciled with the chip's list at each start.
+
+The watch's address is the module's static random address at config 0x80,
+`CD:CE:E6:EC:45:CE` on this watch. Every read from the chip clocks one byte
+more than it has: the last byte of a transfer comes back with only its two
+low bits (decision 261128-092026-01).
+
+On the watch, with a BlueZ central (BlueZ 5 on the development host, a
+Python client on bleak):
+
+- The host synchronises at each boot, adds PebbleOS's Device Information,
+  Pebble Pairing, Battery and reversed PPoGATT services, and advertises.
+- The central discovers them, reads the device information, battery level
+  and connectivity status, writes the pairing trigger, subscribes to the
+  reversed PPoGATT and Battery notifications.
+- Pairing by numeric comparison, confirmed on the watch with Up: the bond
+  is kept by the chip, in PebbleOS's store and its PRF store, and the
+  central reconnects encrypted, before and after the watch restarts.
+  Pairing again over an existing bond works.
+- The Pebble protocol over reversed PPoGATT: the central's reset request,
+  the session opened (version 1, windows of 25 and 18), a WatchVersion
+  request answered with the firmware's version, a ping answered.
+- The Pebble protocol over forward PPoGATT, with BlueZ hosting the phone's
+  PPoGATT service: the watch, as GATT client, finds it, reads its meta
+  characteristic, subscribes, sends its reset request and opens the
+  session; the same requests are answered. Its first large write without
+  response waited 2 s for its Command Complete and was sent again; the
+  next ones got insufficient resources (`0x64`), which PPoGATT retries.
+- Connection parameters: PebbleOS asks for 15 ms, then 45 to 60 ms with a
+  latency of 4, and BlueZ grants both.
+
+Not tested yet: ANCS and AMS against a real iPhone (their discovery,
+reads, writes and notifications are the paths the PPoGATT client takes),
+the Pebble phone app, throughput. The NimBLE host on the chip as
+an HCI controller (`NIMBLE_HCI_BLUENRG2`) stays, but passes no data
+(decision 261127-204244-01); `CONFIG_NIMBLE_HCI_FAKE=y` puts the fake
+controller back.
 
 ## Display
 
@@ -577,7 +624,7 @@ setting (`CONFIG_DEV_USB`): {doc}`tether` too.
 | **Built, not yet run on a watch** | The same firmware installed as one `.ota` through the bootloader (it differs only in its address); the Lab; the Battery test app (it is in the launcher, but no test has run); the USB Developer setting in a normal install |
 | **Runs on a watch, from the tether slot: the sensors** | The BMI270 accelerometer (FIFO and interrupt, shakes), the BMM350 magnetometer and the MS5837 barometer, read on the watch lying still (see [](#unawatch-sensors)); not yet moved: steps, shakes, the compass's calibration and the X and Y signs need someone to move the watch |
 | **Runs on a watch, from the tether slot: GNSS** | The AG3335M answers and starts, NMEA flows at 1 Hz and is parsed into epochs with the UART receiving in Stop 2 (no overrun nor bad sentence in 400 epochs); indoors, up to 4 satellites in view and 3 with a signal, the UTC time after about 4 minutes, no fix yet. Draw in [](#unawatch-power). The location service and the sport apps stay off (decision 261127-194525-03) |
-| **Runs on a watch, from the tether slot, in part** | Bluetooth on the BlueNRG-2 under NimBLE (see [](#unawatch-bluetooth)): the chip starts and is set up at every boot, the host synchronises, the watch advertises connectable as `Pebble 45CE` at its own static address and a BlueZ central connects, but no ACL data passes, so no GATT, pairing or phone connection: apps and updates only come with the image |
+| **Runs on a watch, from the tether slot: Bluetooth** | On the BlueNRG-2's own stack, through its ACI, under NimBLE's host API (see [](#unawatch-bluetooth)): advertising, PebbleOS's GATT services read, written and subscribed to from a BlueZ central, pairing by numeric comparison and bonds that survive a restart, and the Pebble protocol over reversed PPoGATT (version and ping answered). Not yet tried with a phone or the Pebble app |
 | **Stand-ins, which nothing feeds** | Ambient light, microphone and die temperature are simulators |
 | **Off** | No heart rate or buzzer; USB only for development. No GNSS fix seen yet: the watch has only been indoors |
 | **Unknown** | Whether the haptics work: their rail and driver have not been checked on the watch. The panel is round, and the computed round mask fits it (see the photos) |
