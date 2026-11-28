@@ -184,7 +184,6 @@ void sport_fit_stream_reopen(SportFitStream *s, uint32_t start_utc, uint32_t utc
   s->marks = marks;
   s->num_marks = num_marks;
   s->mark_every = mark_every;
-  memset(marks, 0, sizeof(*marks) * num_marks);
   s->info = (SportFitInfo){.utc_start = utc_start};
   if (sport_journal_reader_open(r, start_utc) == 0) {
     s->info.sport = r->sport;

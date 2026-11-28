@@ -70,7 +70,7 @@ int sport_fit_stream_open(SportFitStream *s, uint32_t start_utc, SportFitMark *m
                           uint16_t num_marks, uint32_t mark_every);
 
 //! Like sport_fit_stream_open(), from what an earlier stream of the activity found: no sizing
-//! pass, the marks come with the reads.
+//! pass. @p marks are kept, those of the earlier stream or zeros: more come with the reads.
 void sport_fit_stream_reopen(SportFitStream *s, uint32_t start_utc, uint32_t utc_start,
                              uint32_t size, bool crc_known, uint16_t crc, SportFitMark *marks,
                              uint16_t num_marks, uint32_t mark_every);

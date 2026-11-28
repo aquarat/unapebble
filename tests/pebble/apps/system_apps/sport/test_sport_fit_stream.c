@@ -195,7 +195,8 @@ void test_sport_fit_stream__reopened_from_what_was_found(void) {
   crc = s_stream.crc;
   sport_fit_stream_close(&s_stream);
 
-  // No sizing pass: marks come with the reads
+  // No sizing pass, no marks: they come with the reads
+  memset(s_marks, 0, sizeof(s_marks));
   sport_fit_stream_reopen(&s_stream, START_UTC, utc, size, true, crc, s_marks, NUM_MARKS,
                           MARK_EVERY);
   cl_assert_equal_i(s_marks[0].offset, 0);
