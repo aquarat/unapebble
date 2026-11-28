@@ -422,10 +422,15 @@
 };
 
 // The USB OTG HS on its internal high-speed PHY, on the 16 MHz crystal; VBUS is not wired to it.
-// Only the developer access (CONFIG_DEV_USB) drives it, which powers it up when it connects.
+// The developer access (CONFIG_DEV_USB) and the workouts' drive (CONFIG_USB_DRIVE) drive it,
+// powered up while one of them has it connected. The core has 952 words of FIFO (GHWCFG3, read
+// on the watch), not the 1024 of the reference manual. A 512-byte packet on endpoints 1 to 5: the
+// two serial ports' bulk and notification endpoints, then the drive's, or the drive's alone on 1;
+// 8 bytes on the three left, unused. 952 words in all.
 &usbotg_hs {
 	pinctrl-0 = <&usbotg_hs_default>;
 	pinctrl-names = "default";
+	g-tx-fifo-size = <128 128 128 128 128 2 2 2>;
 	status = "okay";
 };
 

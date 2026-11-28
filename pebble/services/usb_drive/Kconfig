@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 The unapebble authors
+# SPDX-License-Identifier: Apache-2.0
+
+config USB_DRIVE
+    bool "Workouts as a USB drive"
+    default y if BOARD_UNAWATCH && !BOARD_UNAWATCH_LAB && APP_SPORT
+    depends on APP_SPORT
+    select USB_DEVICE
+    select USB_MSC
+    select VFAT
+    select SERVICE_USB_POWER
+    select KERNEL_SYS_WORKQ
+    help
+      Plugged into a computer, the watch shows a read-only USB drive of
+      FIT files, one for each finished workout, encoded from the
+      journals as the computer reads them, nothing of it stored. On by
+      default, the "USB drive" toggle of Settings > System. See the
+      decision log (docs/boards/unawatch/decisions).
+
+if USB_DRIVE
+
+module = USB_DRIVE
+module-str = Workouts USB drive
+source "subsys/logging/Kconfig.template.log_level"
+
+endif

@@ -33,6 +33,7 @@
 #include <pbl/services/light.h>
 #include <pbl/services/music_internal.h>
 #include <pbl/services/put_bytes/put_bytes.h>
+#include <pbl/services/usb_drive.h>
 #include <pbl/task_wdt/task_wdt.h>
 
 #include <applib/app_launch_reason.h>
@@ -612,6 +613,10 @@ static PBL_NOINLINE void prv_launcher_main_loop_init(void) {
 
 #ifdef CONFIG_DEV_USB
   dev_usb_init();
+#endif
+
+#ifdef CONFIG_USB_DRIVE
+  usb_drive_init();
 #endif
 
 #ifdef CONFIG_SERVICE_STATIONARY_MODE

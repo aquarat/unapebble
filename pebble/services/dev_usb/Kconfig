@@ -7,6 +7,7 @@ config DEV_USB
     depends on BOARD_UNAWATCH
     select USB_DEVICE
     select USB_CDC_ACM
+    select SERVICE_USB_POWER
     select KERNEL_SYS_WORKQ
     help
       Two serial ports on the USB-C connector, behind the "USB developer"

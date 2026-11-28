@@ -10,6 +10,17 @@
 #include <pbl/kernel/malloc.h>
 #include <pbl/logging/logging.h>
 
+#ifdef CONFIG_USB_DRIVE
+#include <pbl/services/usb_drive.h>
+#endif
+
+// What the workouts' USB drive shows changes
+static void prv_changed(void) {
+#ifdef CONFIG_USB_DRIVE
+  usb_drive_contents_changed();
+#endif
+}
+
 static bool prv_header_ok(const SportJournalHeader *hdr, uint32_t start_utc, uint16_t segment) {
   return hdr->magic == SPORT_JOURNAL_MAGIC && hdr->version == SPORT_JOURNAL_VERSION &&
          hdr->record_size == SPORT_JOURNAL_RECORD_SIZE &&
@@ -289,6 +300,7 @@ int sport_store_write_summary(uint32_t start_utc, uint8_t sport, const SportJour
     ret = -EIO;
   }
   pbl_fs_close(&file);
+  prv_changed();
 
   return ret;
 }
@@ -314,6 +326,7 @@ void sport_store_delete(uint32_t start_utc) {
 
   sport_journal_summary_path(path, start_utc);
   pbl_fs_unlink(path);
+  prv_changed();
   for (uint16_t seg = 0; seg < SPORT_JOURNAL_MAX_SEGMENTS; seg++) {
     sport_journal_segment_path(path, start_utc, seg);
     if (pbl_fs_unlink(path) < 0) {

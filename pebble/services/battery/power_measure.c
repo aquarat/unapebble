@@ -23,8 +23,8 @@
 #include <pbl/util/math.h>
 #include <pbl/util/size.h>
 
-#ifdef CONFIG_DEV_USB
-#include <pbl/services/dev_usb.h>
+#ifdef CONFIG_SERVICE_USB_POWER
+#include <pbl/services/usb_power.h>
 #endif
 
 PBL_LOG_MODULE_DECLARE(service_battery, CONFIG_SERVICE_BATTERY_LOG_LEVEL);
@@ -96,9 +96,9 @@ static void prv_restore(void) {
     }
     s_suspended = false;
   }
-#ifdef CONFIG_DEV_USB
+#ifdef CONFIG_SERVICE_USB_POWER
   if (s_usb_held) {
-    dev_usb_hold_off(false);
+    usb_power_hold_off(false);
     s_usb_held = false;
   }
 #endif
@@ -226,9 +226,9 @@ static int prv_start(uint32_t secs, bool usb, const char *label) {
   // At a low draw the gauge would measure only every few seconds
   s_gauge_held = pbl_gauge_hold_full_rate(GAUGE, true) == 0;
 
-#ifdef CONFIG_DEV_USB
+#ifdef CONFIG_SERVICE_USB_POWER
   if (!usb) {
-    dev_usb_hold_off(true);
+    usb_power_hold_off(true);
     s_usb_held = true;
   }
 #endif

@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 The unapebble authors
+# SPDX-License-Identifier: Apache-2.0
+
+config SERVICE_USB_POWER
+    bool
+    select USB_DEVICE
+    select KERNEL_SYS_WORKQ
+    help
+      The USB device up while one of its users wants it: the developer
+      access, the drive (pbl/services/usb_power.h).
+
+if SERVICE_USB_POWER
+
+module = SERVICE_USB_POWER
+module-str = USB power
+source "subsys/logging/Kconfig.template.log_level"
+
+endif

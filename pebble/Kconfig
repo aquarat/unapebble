@@ -53,13 +53,22 @@ config USB_CDC_ACM_TX_BUF_SIZE
     default 4096 if DEV_USB
 
 config USB_DEVICE_PID
-    default 0x0002 if DEV_USB
+    default 0x0002 if DEV_USB || USB_DRIVE
 
 config USB_DEVICE_MANUFACTURER
-    default "unapebble" if DEV_USB
+    default "unapebble" if DEV_USB || USB_DRIVE
 
 config USB_DEVICE_PRODUCT
-    default "UNA Watch PebbleOS" if DEV_USB
+    default "UNA Watch PebbleOS" if DEV_USB || USB_DRIVE
+
+config USB_MSC_NAME
+    default "UNA Watch workouts" if USB_DRIVE
+
+config USB_MSC_VENDOR
+    default "UNA" if USB_DRIVE
+
+config USB_MSC_PRODUCT
+    default "Watch workouts" if USB_DRIVE
 
 config CONSOLE_IMAGING
     default y

@@ -15,6 +15,7 @@
 #include <pbl/logging/logging.h>
 #include <pbl/services/battery/battery_charger.h>
 #include <pbl/services/dev_usb.h>
+#include <pbl/services/usb_power.h>
 #include <pbl/settings/settings.h>
 #include <pbl/usb/cdc_acm.h>
 #include <pbl/usb/usbd.h>
@@ -39,7 +40,7 @@ PBL_LOG_MODULE_DEFINE(dev_usb, CONFIG_DEV_USB_LOG_LEVEL);
 static atomic_bool s_enabled;
 static atomic_bool s_plugged;
 static atomic_bool s_ready;
-static atomic_bool s_held_off;
+static atomic_bool s_wanted;
 static EventServiceInfo s_battery_event_info;
 
 static bool prv_load(void) {
@@ -77,9 +78,6 @@ bool dev_usb_is_forced(void) {
 }
 
 static bool prv_wanted(void) {
-  if (atomic_load(&s_held_off)) {
-    return false;
-  }
   if (dev_usb_is_forced()) {
     return true;
   }
@@ -93,29 +91,22 @@ static bool prv_wanted(void) {
 #endif
 }
 
-// On the system work queue, so that connecting and disconnecting never race
+// On the system work queue, as the USB itself follows its users there
 static void prv_apply(void *data) {
   const bool want = prv_wanted();
-  int ret;
 
-  if (!atomic_load(&s_ready) || want == pbl_usbd_is_enabled()) {
+  if (!atomic_load(&s_ready) || want == atomic_load(&s_wanted)) {
     return;
   }
 
-  if (want) {
-    ret = pbl_usbd_enable();
-    if (ret != 0) {
-      PBL_LOG_ERR("USB failed to come up (%d)", ret);
-      return;
-    }
+  atomic_store(&s_wanted, want);
+  usb_power_request(USB_POWER_DEV_ACCESS, want);
 #ifdef CONFIG_DEV_USB_TETHER
+  if (want) {
     dev_usb_tether_start();
-#endif
-    PBL_LOG_INFO("USB developer access on");
-  } else {
-    (void)pbl_usbd_disable();
-    PBL_LOG_INFO("USB developer access off");
   }
+#endif
+  PBL_LOG_INFO("USB developer access %s", want ? "on" : "off");
 }
 
 static void prv_schedule(void) {
@@ -152,12 +143,11 @@ void dev_usb_set_enabled(bool enabled) {
 }
 
 bool dev_usb_is_connected(void) {
-  return pbl_usbd_is_enabled();
+  return atomic_load(&s_wanted) && pbl_usbd_is_enabled();
 }
 
 void dev_usb_hold_off(bool hold) {
-  atomic_store(&s_held_off, hold);
-  prv_schedule();
+  usb_power_hold_off(hold);
 }
 
 // The host sees the device go before the restart, and gets what the console still had to send

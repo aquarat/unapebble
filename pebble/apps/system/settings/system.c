@@ -26,6 +26,7 @@
 #include <pbl/services/light.h>
 #include <pbl/services/stationary.h>
 #include <pbl/services/time.h>
+#include <pbl/services/usb_drive.h>
 #include <pbl/util/math.h>
 #include <pbl/util/size.h>
 #include <pbl/util/time.h>
@@ -160,6 +161,9 @@ typedef enum {
   SystemMenuItemInformation,
   SystemMenuItemCertification,
   SystemMenuItemStationaryToggle,
+#ifdef CONFIG_USB_DRIVE
+  SystemMenuItemUsbDrive,
+#endif
   SystemMenuItemDebugging,
   SystemMenuItemShutDown,
   SystemMenuItemFactoryReset,
@@ -170,6 +174,9 @@ static const char *s_item_titles[SystemMenuItem_Count] = {
   [SystemMenuItemInformation] = pbl_i18n_noop("Information"),
   [SystemMenuItemCertification] = pbl_i18n_noop("Certification"),
   [SystemMenuItemStationaryToggle] = pbl_i18n_noop("Stand-By Mode"),
+#ifdef CONFIG_USB_DRIVE
+  [SystemMenuItemUsbDrive] = pbl_i18n_noop("USB Drive"),
+#endif
   [SystemMenuItemDebugging] = pbl_i18n_noop("Debugging"),
   [SystemMenuItemShutDown] = pbl_i18n_noop("Shut Down"),
   [SystemMenuItemFactoryReset] = pbl_i18n_noop("Factory Reset"),
@@ -565,7 +572,7 @@ static void prv_debugging_draw_row_callback(GContext *ctx, const Layer *cell_lay
                                             : pbl_i18n_get("Disabled", data);
   } else
 #endif
-  if (cell_index->row == DebuggingItemCoreDumpShortcut) {
+      if (cell_index->row == DebuggingItemCoreDumpShortcut) {
     subtitle_text = shell_prefs_can_coredump_on_request()
                         ? pbl_i18n_get("10 back-button presses", data)
                         : pbl_i18n_get("Disabled", data);
@@ -1353,6 +1360,12 @@ static void prv_draw_row_cb(SettingsCallbacks *context, GContext *ctx, const Lay
     case SystemMenuItemStationaryToggle:
       subtitle = stationary_get_enabled() ? pbl_i18n_get("On", data) : pbl_i18n_get("Off", data);
       break;
+#ifdef CONFIG_USB_DRIVE
+    // The workouts as a drive, for whoever plugs the watch in
+    case SystemMenuItemUsbDrive:
+      subtitle = usb_drive_get_enabled() ? pbl_i18n_get("On", data) : pbl_i18n_get("Off", data);
+      break;
+#endif
     case SystemMenuItemShutDown:
     case SystemMenuItemInformation:
     case SystemMenuItemCertification:
@@ -1383,6 +1396,11 @@ static void prv_select_click_cb(SettingsCallbacks *context, uint16_t row) {
     case SystemMenuItemStationaryToggle:
       stationary_set_enabled(!stationary_get_enabled());
       break;
+#ifdef CONFIG_USB_DRIVE
+    case SystemMenuItemUsbDrive:
+      usb_drive_set_enabled(!usb_drive_get_enabled());
+      break;
+#endif
     case SystemMenuItemShutDown:
       launcher_task_add_callback(prv_shutdown_cb, 0);
       break;
