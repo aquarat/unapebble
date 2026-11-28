@@ -23,4 +23,10 @@ config VANHEES
     help
       Build the van Hees wrist angle sleep classifier.
 
+config VFAT
+    bool
+    help
+      A read-only FAT16 volume computed as it is read, from a list of
+      files and a callback for their data (pbl/vfat/vfat.h).
+
 endmenu
