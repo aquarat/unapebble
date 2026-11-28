@@ -88,8 +88,10 @@ static int prv_configure(const struct pbl_spi_bus *bus, const struct pbl_spi_dev
     return -EINVAL;
   }
 
+  // CRCSIZE kept at its reset value, 8 bits, with the CRC off: below that, the last frame of a
+  // transfer with TSIZE set comes in with only as many low bits right (an erratum of the SPI)
   state->cfg1 = PBL_FIELD_PREP(SPI_CFG1_MBR_MASK, mbr) | PBL_FIELD_PREP(SPI_CFG1_DSIZE_MASK, 7U) |
-                PBL_FIELD_PREP(SPI_CFG1_FTHLV_MASK, 0U);
+                PBL_FIELD_PREP(SPI_CFG1_FTHLV_MASK, 0U) | PBL_FIELD_PREP(SPI_CFG1_CRCSIZE_MASK, 7U);
   state->cfg2 = SPI_CFG2_MASTER | SPI_CFG2_SSM | SPI_CFG2_AFCNTR;
   if ((dev->mode & PBL_SPI_CPHA) != 0U) {
     state->cfg2 |= SPI_CFG2_CPHA;

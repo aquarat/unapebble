@@ -1,6 +1,6 @@
 # The last byte of each SPI read from the BlueNRG-2: one dummy byte more
 
-- Status: Accepted
+- Status: Superseded by 261128-100132-01-spi-crcsize-erratum
 - Date: 2026-11-28 09:20 UTC
 - Decided by: agent
 
