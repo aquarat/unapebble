@@ -464,10 +464,31 @@ Python client on bleak):
   next ones got insufficient resources (`0x64`), which PPoGATT retries.
 - Connection parameters: PebbleOS asks for 15 ms, then 45 to 60 ms with a
   latency of 4, and BlueZ grants both.
+- Rate from the watch over PPoGATT, version replies with 4 asked at a time:
+  14 kB/s through the watch's service, 13 kB/s through the phone's, once
+  notifications and writes without response wait for the chip's transmit
+  pool (`aci_gatt_tx_pool_available_event`) instead of failing to their
+  callers' 20 to 200 ms retries (1.5 kB/s before).
+
+With a phone: Gadgetbridge 2026.11.1 (F-Droid) on a Pixel 6a, Android 17
+(`tools/una/ble/phone.py`):
+
+- Found in its discovery as `Pebble 45CE`, paired by numeric comparison,
+  the code confirmed on both sides; the HCI snoop log shows the watch's
+  security request, LE Secure Connections with MITM and bonding, and the
+  chip distributing its identity address `CD:CE:E6:EC:45:CE`.
+- Gadgetbridge hosts the forward PPoGATT service: the session opens, the
+  phone app's version comes (`is_system=1, plf=0x2`), the watch's clock is
+  set from the phone, its battery level shows in Gadgetbridge.
+- Notifications posted on the phone, its screen off, reach the watch's
+  notification store, five of five one second apart.
+- After a restart of the watch, Gadgetbridge reconnects, encrypted with the
+  bond, and the session opens again within 2 s.
 
 Not tested yet: ANCS and AMS against a real iPhone (their discovery,
 reads, writes and notifications are the paths the PPoGATT client takes),
-the Pebble phone app, throughput. The NimBLE host on the chip as
+the Core Devices Pebble app, and with Gadgetbridge screenshots, the app
+manager and app messages. The NimBLE host on the chip as
 an HCI controller (`NIMBLE_HCI_BLUENRG2`) stays, but passes no data
 (decision 261127-204244-01); `CONFIG_NIMBLE_HCI_FAKE=y` puts the fake
 controller back.
