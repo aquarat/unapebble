@@ -51,3 +51,11 @@ config GNSS
 
 config GNSS_SHELL
     default y if SHELL
+
+# GPS workouts: the Run, Walk and Bike apps on the receiver, through the location service,
+# recording to the filesystem on the eMMC. Not in the experiments firmware.
+config SERVICE_LOCATION
+    default y if !BOARD_UNAWATCH_LAB
+
+config APP_SPORT
+    default y if !BOARD_UNAWATCH_LAB
