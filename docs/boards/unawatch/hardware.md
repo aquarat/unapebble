@@ -533,10 +533,18 @@ be read back through itself, or in the ROM (inferred). The reference value
 was not found: none of CRC-32, the updater's CRC, a sum or SHA-256 over the
 plausible ranges matches a word or the 32-byte block in the image.
 
+ST's own update flow (BLUE flag erased, the first page rewritten with the
+flag blank, the pages written, the flag set and read back) gives the same:
+no start. A word written in blank flash just after the code (0x10062cc0,
+0x10062ffc) does not stop the start; the length word at +0x18 changed to 0
+does. So the check covers the vector table and the code, and nothing
+after it, and its reference is made neither by the update flow nor kept in
+readable flash (decision 261128-004526-01).
+
 **The updater by its boot pin.** ST's updater source names the boot pin
 "IO3 -> SPI MOSI PIN", not MISO. With MOSI (PB5) driven high through the
-release of RESET, the updater starts (reason 4) whatever the DTM does: 5
-of 5, among them every time the patched DTM did not start. MISO pulled up
+release of RESET, the updater starts (reason 4) whatever the DTM does: 9
+of 9, among them every time the patched DTM did not start. MISO pulled up
 or driven high did nothing. That is the recovery for a DTM that does not
 start; each patched variant was restored this way and the chip started
 normally again. The flash read back as the original image at the end.

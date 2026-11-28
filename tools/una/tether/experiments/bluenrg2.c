@@ -46,6 +46,9 @@
  *                table and BLUE flag, nor the stack's data at 0x1007f000. Each page is read back
  *                and checked against the updater's CRC; the first failure stops the run, and
  *                the chip stays in its updater. Only when all pass, 0xfc21 and a normal start.
+ *   args[0] = 13 as mode 11, the way ST's updater tools do it: the BLUE flag erased (0xfc24) first,
+ *                the DTM's first page then allowed, given with its flag word blank, the pages
+ *                written and checked, the flag set (0xfc25) and read back, then the restart
  *   args[0] = 12 a probe of a chip that does not start: RESET held low args[1] ms (10000 by
  *                default) with every SPI line and IRQ analog, released, IRQ sampled every
  *                100 ms for 5 s, then a version query written blindly, an IRQ or not
@@ -721,7 +724,7 @@ static void prv_checks(void) {
 #define PAGE_LOW    0x10042800U
 #define PAGE_HIGH   0x1007f000U
 
-static void prv_write_pages(const volatile uint32_t *t) {
+static void prv_write_pages(const volatile uint32_t *t, bool official) {
   uint8_t r[260];
   uint32_t n;
   int st;
@@ -734,6 +737,12 @@ static void prv_write_pages(const volatile uint32_t *t) {
   const uint32_t count = t[1];
   for (uint32_t i = 0U; i < count; i++) {
     const uint32_t a = t[2U + i * 3U];
+    const volatile uint8_t *src = (const volatile uint8_t *)t[3U + i * 3U];
+    /* The official flow may rewrite the DTM's first page, its BLUE flag left blank for 0xfc25 */
+    if (official && a == FLASH_DTM && src[0x14] == 0xffU && src[0x15] == 0xffU &&
+        src[0x16] == 0xffU && src[0x17] == 0xffU) {
+      continue;
+    }
     if (a < PAGE_LOW || a >= PAGE_HIGH || (a & (FLASH_PAGE - 1U)) != 0U) {
       s_errors++;
       tprintf("page %08lx refused: outside 0x10042800..0x1007efff or not a page\n",
@@ -745,6 +754,17 @@ static void prv_write_pages(const volatile uint32_t *t) {
     s_errors++;
     tprintf("  no updater; recovery reason %d\n", prv_long_restart());
     return;
+  }
+
+  if (official) {
+    /* As ST's updater tools do: the flag cleared first, so that an interrupted update starts the
+       updater (reason 3) rather than a part-written DTM */
+    st = prv_cmd("updater_erase_blueflag", 0xfc24U, NULL, 0U, r, &n);
+    tprintf("  erase BLUE flag: status %d\n", st);
+    if (st != 0) {
+      s_errors++;
+      return;
+    }
   }
 
   for (uint32_t i = 0U; i < count; i++) {
@@ -822,6 +842,22 @@ static void prv_write_pages(const volatile uint32_t *t) {
     tprintf("  read back: %lu bytes differ; crc %08lx, expected %08lx\n", (unsigned long)diff,
             (unsigned long)chip, (unsigned long)want);
     if (diff != 0U || st != 0 || chip != want) {
+      s_errors++;
+      tprintf("  stopping, in the updater\n");
+      return;
+    }
+  }
+
+  if (official) {
+    st = prv_cmd("updater_reset_blueflag", 0xfc25U, NULL, 0U, r, &n);
+    uint8_t par[6];
+    prv_put_le32(par, FLASH_DTM + 0x14U);
+    par[4] = 4U;
+    par[5] = 0U;
+    const int st2 = prv_cmd("updater_read_data_block", 0xfc28U, par, 6U, r, &n);
+    const uint32_t flag = st2 == 0 ? prv_le32(&r[1]) : 0U;
+    tprintf("  set BLUE flag: status %d, flag now %08lx\n", st, (unsigned long)flag);
+    if (st != 0 || flag != 0x424c5545U) {
       s_errors++;
       tprintf("  stopping, in the updater\n");
       return;
@@ -976,7 +1012,9 @@ uint32_t blob_main(const uint32_t *args, uint32_t nargs) {
   } else if (mode == 10U) {
     prv_checks();
   } else if (mode == 11U) {
-    prv_write_pages((const volatile uint32_t *)(nargs > 1U ? args[1] : 0U));
+    prv_write_pages((const volatile uint32_t *)(nargs > 1U ? args[1] : 0U), false);
+  } else if (mode == 13U) {
+    prv_write_pages((const volatile uint32_t *)(nargs > 1U ? args[1] : 0U), true);
   } else if (mode == 9U) {
     prv_backup(nargs > 1U && args[1] != 0U ? args[1] : 0x20100000U);
   } else if (mode == 8U) {
