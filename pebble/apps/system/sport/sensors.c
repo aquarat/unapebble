@@ -196,6 +196,7 @@ static void prv_poll_baro(SportSample *sample) {
       sample->hdop_x10 != 0 && sample->hdop_x10 <= BARO_CAL_MAX_HDOP_X10) {
     s_sensors.baro_offset_cm = sample->gnss_alt_cm - alt_cm;
     s_sensors.baro_calibrated = true;
+    sample->flags |= SportSampleFlag_BaroRecal;
   }
 
   sample->flags |= SportSampleFlag_BaroAlt;

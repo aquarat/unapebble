@@ -46,6 +46,8 @@ typedef enum SportSampleFlag {
   SportSampleFlag_ExtSpeed = 1 << 7,
   //! Power.
   SportSampleFlag_Power = 1 << 8,
+  //! The barometric altitude's zero moved (calibrated on the GNSS): no climb from it.
+  SportSampleFlag_BaroRecal = 1 << 9,
 } SportSampleFlag;
 
 //! One second of sensor data.

@@ -323,7 +323,8 @@ static void prv_elevation(SportEngine *engine, const SportSample *s, bool fix_us
     return;
   }
 
-  if (!engine->alt_valid || engine->alt_baro != baro) {
+  if (!engine->alt_valid || engine->alt_baro != baro ||
+      (baro && (s->flags & SportSampleFlag_BaroRecal))) {
     engine->alt_valid = true;
     engine->alt_baro = baro;
     engine->alt_cm = raw;
