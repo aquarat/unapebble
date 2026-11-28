@@ -436,9 +436,10 @@ decision 261128-081601-02):
   bond, and reconciled with the chip's list at each start.
 
 The watch's address is the module's static random address at config 0x80,
-`CD:CE:E6:EC:45:CE` on this watch. Every read from the chip clocks one byte
-more than it has: the last byte of a transfer comes back with only its two
-low bits (decision 261128-092026-01).
+`CD:CE:E6:EC:45:CE` on this watch (decision 261128-100132-02). The SPI
+driver keeps CFG1's CRCSIZE at its reset value: below it, an erratum of the
+SPI cuts the last byte of each transfer to its two low bits, which first
+showed here (decision 261128-100132-01).
 
 On the watch, with a BlueZ central (BlueZ 5 on the development host, a
 Python client on bleak):

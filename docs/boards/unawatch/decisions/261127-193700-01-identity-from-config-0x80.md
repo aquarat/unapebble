@@ -1,6 +1,6 @@
 # The identity address: the BlueNRG-2's config 0x80, as a static random address
 
-- Status: Accepted
+- Status: Superseded by 261128-100132-02-identity-address-as-read
 - Date: 2026-11-27 19:37 UTC
 - Decided by: agent
 
