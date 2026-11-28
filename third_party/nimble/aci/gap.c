@@ -432,6 +432,11 @@ static void prv_enc_event(struct conn *c, int status) {
   event.enc_change.conn_handle = c->desc.conn_handle;
   event.enc_change.status = status;
   (void)aci_gap_event(&event, c->desc.conn_handle);
+
+  // The chip keeps a bonded peer's subscriptions: they are back
+  if (status == 0 && c->desc.sec_state.bonded) {
+    aci_gatts_bond_restored(c->desc.conn_handle);
+  }
 }
 
 static void prv_rx_enc_change(uint8_t status, uint16_t handle, bool enabled) {
