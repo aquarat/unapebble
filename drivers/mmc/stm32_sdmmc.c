@@ -161,12 +161,17 @@ static int prv_cmd(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t idx, uint32_t 
                  PBL_FIELD_PREP(SDMMC_CMD_WAITRESP_MASK, resp) | flags | SDMMC_CMD_CPSMEN);
 
   for (;;) {
+    // The time first, then the status: a thread preempted past the timeout between the two
+    // still sees a command that ended meanwhile
+    const bool late = prv_elapsed_us(start) > CMD_TIMEOUT_US;
+
     sta = prv_getreg(sd, STM32_SDMMC_STA_OFFSET);
     if ((sta & (done | errors)) != 0U) {
       break;
     }
-    if (prv_elapsed_us(start) > CMD_TIMEOUT_US) {
-      PBL_LOG_ERR("CMD%" PRIu32 " lost", idx);
+    if (late) {
+      PBL_LOG_ERR("CMD%" PRIu32 " lost, STA 0x%08" PRIx32, idx, sta);
+      PBL_BOOT_TRACE_NOTE(PBL_BT_NOTE_SDMMC_STA, (idx << 24) | (sta & 0x00FFFFFFU));
       return -ETIMEDOUT;
     }
   }
@@ -204,6 +209,9 @@ static int prv_wait_ready(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t timeout
   int ret;
 
   for (;;) {
+    // The time before the status, which then has the last word
+    const uint32_t elapsed_us = prv_elapsed_us(start);
+
     ret = prv_cmd(sd, CMD_SEND_STATUS, RCA << 16, SDMMC_CMD_WAITRESP_SHORT, 0U, &r1);
     if (ret != 0) {
       return ret;
@@ -212,7 +220,6 @@ static int prv_wait_ready(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t timeout
       return 0;
     }
 
-    const uint32_t elapsed_us = prv_elapsed_us(start);
     if (elapsed_us > timeout_ms * 1000U) {
       PBL_LOG_ERR("Card busy, status 0x%08" PRIx32, r1);
       return -ETIMEDOUT;
@@ -276,13 +283,15 @@ static int prv_data(const struct pbl_mmc_stm32_sdmmc *sd, uint32_t idx, uint32_t
   if (ret == 0) {
     start = pbl_cycle_get_32();
     for (;;) {
+      // As for a command: the time before the status
+      const uint32_t elapsed_us = prv_elapsed_us(start);
+
       sta = prv_getreg(sd, STM32_SDMMC_STA_OFFSET);
       if ((sta & (SDMMC_STA_DATAEND | errors)) != 0U) {
         break;
       }
-      const uint32_t elapsed_us = prv_elapsed_us(start);
       if (elapsed_us > timeout_us) {
-        sta = SDMMC_STA_DTIMEOUT;
+        sta |= SDMMC_STA_DTIMEOUT;
         break;
       }
       prv_poll_pause(sd, elapsed_us);
