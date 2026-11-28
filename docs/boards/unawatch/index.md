@@ -416,8 +416,13 @@ yet. Without the mode the chip's own stack answers over the air instead.
 Getting data through needs one of: an `HCI_Reset` before the mode, as
 STM32duinoBLE does (untried: the brief rules it out), a DTM built with
 ST's `LL_ONLY` option (reflashing, ruled out too), or ST's ACI with the
-stack on the chip (option (b)). `CONFIG_NIMBLE_HCI_FAKE=y` puts the fake
-controller back.
+stack on the chip (option (b)). An `HCI_Reset` first was tried, approved,
+and changed nothing (decision 261127-233959-01). The DTM, backed up and
+analysed, was built without the ACL paths; a binary patch adding them
+(`tools/una/bluenrg2`) wrote and verified, but the chip checks its code
+before running it and did not start; it was restored (decisions from
+261128-001034-01). `CONFIG_NIMBLE_HCI_FAKE=y` puts the fake controller
+back.
 
 ## Display
 

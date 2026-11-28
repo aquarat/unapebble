@@ -371,7 +371,8 @@ none.
 
 The DTM's reason codes are: 2, updater by ACI command; 3, bad BLUE flag;
 4, updater by boot pin. In ST's DTM the boot pin is the chip's IO3, which
-is the SPI MISO line. On this module the state of MISO doesn't decide it.
+ST's updater source gives as the SPI MOSI line; MOSI held high starts the
+updater (see the DTM image below), and the state of MISO doesn't decide it.
 What decides it is the state of the SPI lines during the reset: with SCK,
 MOSI and CS driven (CS high) a reset of any length after a start ends in
 the updater; with them undriven (analog), even a 5 ms reset straight after
@@ -488,11 +489,63 @@ DTM 3.2, of SDK 3.2.1, whose source was not found. Not checked on the chip.
   stack's data page at 0x1007F000, can. So the image could be backed up,
   64 bytes a read, before anything is written. Nothing of this was sent.
 
+**The DTM image, backed up and analysed (2026-11-28).** Read through the
+updater (`0xFC28`, 64-byte blocks) from 0x10042000 to the end of flash,
+three times, identical, and matching the updater's CRC in 8-page chunks
+(`0xFC29`); kept outside the repository, as it is ST's code, with its
+SHA-256 (`9a355e01…7393cb5`, which `tools/una/bluenrg2/patch.py` checks).
+The updater answered version 6, buffer size 64, hardware version 1, and
+refused a read below the DTM (0x10040000: status `0xFA`). What it holds:
+
+- The code from 0x10042000 to 0x10062cb8, blank flash after it, a block of
+  device data at 0x10067804 (32 bytes, then 6 that resemble the address at
+  config 0x80, then 0xAAAAAAAA), the rest blank, the page at 0x1007F000
+  too. The vector table has 0xAA5555AA at +0x10, the BLUE flag at +0x14 and
+  0x20BB8, the image's length, at +0x18.
+- Matched against the objects of ST's stack library (DK 3.2.3): about 420
+  functions are found as they are. **Both ACL paths are missing.** The HCI
+  parser's packet dispatch (at 0x1004e45a) handles commands and vendor
+  packets only: an ACL packet is accepted by the SPI framing and then
+  dropped. The stack's `hci_tx_acl_data` is not linked at all. On the way
+  up, the stack does hand received data to `hci_rx_acl_data` in
+  link-layer-only mode (the check is the bit 0 of its context at +0xA4),
+  which queues it, but the callback that would send it to the host
+  (0x10045e8e) calls a weak default that the linker reduced to
+  `movs r0, #0`. So the DTM was built without `LL_ONLY`, and no setting
+  can make it pass ACL data.
+- What a patch would use is there: the packet allocation, write, transmit
+  and release functions the stack's own L2CAP uses, `get_connection_no`,
+  the SPI event queue (`send_event_isr`, 0x100477ac), and the completion
+  path that reports Number Of Completed Packets.
+
+**A binary patch, tried and undone.** `tools/una/bluenrg2` holds our code
+for the two paths (268 bytes, for 0x10068000, in blank flash) and a tool
+that points the parser's dispatch and the callback at it, writing only the
+three pages concerned (decision 261128-003746-01). Written and read back
+exactly, page by page, CRC-checked: **the patched DTM never starts**, no
+start event in 3 s. Bisected, each time restored: the code page alone
+starts; either redirection alone does not; a single padding byte changed
+in the code (0x1004e492, never executed) does not either. So something
+checks the DTM's code before it runs, most likely over the 0x20BB8 bytes
+the vector table gives; the DTM's own code has no reference to that length
+or to a CRC of it, so the check is probably in the updater, which cannot
+be read back through itself, or in the ROM (inferred). The reference value
+was not found: none of CRC-32, the updater's CRC, a sum or SHA-256 over the
+plausible ranges matches a word or the 32-byte block in the image.
+
+**The updater by its boot pin.** ST's updater source names the boot pin
+"IO3 -> SPI MOSI PIN", not MISO. With MOSI (PB5) driven high through the
+release of RESET, the updater starts (reason 4) whatever the DTM does: 5
+of 5, among them every time the patched DTM did not start. MISO pulled up
+or driven high did nothing. That is the recovery for a DTM that does not
+start; each patched variant was restored this way and the chip started
+normally again. The flash read back as the original image at the end.
+
 **Replacing the firmware.** There are three ways:
 
 1. **The DTM's SPI updater.** It lives at 0x10040000 to 0x10042000 in the
    chip's flash. It starts by command (`aci_hal_updater_start`, 0xFC20),
-   when IO3/MISO is high at start-up, or when the BLUE flag is bad. Its
+   when IO3 (MOSI) is high at start-up, or when the BLUE flag is bad. Its
    commands 0xFC21 to 0xFC2A erase, program and CRC the application area
    only. Because a bad BLUE flag starts it, an interrupted update starts
    the updater again rather than a broken image. That makes it
