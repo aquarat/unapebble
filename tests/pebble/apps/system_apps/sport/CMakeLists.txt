@@ -7,3 +7,9 @@ pbl_clar_test(test_sport_engine
     pebble/apps/system/sport/engine.c
     pebble/apps/system/sport/fields.c
 )
+
+pbl_clar_test(test_sport_fit
+  SOURCES
+    pebble/apps/system/sport/fit.c
+    pebble/apps/system/sport/journal.c
+)
