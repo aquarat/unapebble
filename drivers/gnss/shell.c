@@ -129,6 +129,16 @@ static int prv_cmd_gnss(const struct pbl_shell *sh, size_t argc, char **argv) {
     return prv_cmd_status(sh);
   }
 
+#ifdef CONFIG_GNSS_REPLAY
+  if (argc >= 2 && strcmp(argv[1], "replay") == 0) {
+    if (argc >= 3) {
+      pbl_gnss_replay_set(strcmp(argv[2], "0") != 0 && strcmp(argv[2], "off") != 0);
+    }
+    pbl_shell_print(sh, "replay %s", pbl_gnss_replay_get() ? "on" : "off");
+    return 0;
+  }
+#endif
+
 #ifdef CONFIG_GNSS_AG3335
   if (argc >= 3 && strcmp(argv[1], "pair") == 0) {
     return prv_cmd_pair(sh, argv[2]);
@@ -156,6 +166,8 @@ static int prv_cmd_gnss(const struct pbl_shell *sh, size_t argc, char **argv) {
   return 0;
 }
 
-PBL_SHELL_CMD_REGISTER(gnss, nullptr,
-                       "GNSS receiver: gnss [on|off|status|pair PAIRnnn,...|signal 0|1|hold 0|1]",
-                       prv_cmd_gnss);
+PBL_SHELL_CMD_REGISTER(
+    gnss, nullptr,
+    "GNSS receiver: gnss [on|off|status|pair PAIRnnn,...|replay on|off|signal 0|1|"
+    "hold 0|1]",
+    prv_cmd_gnss);

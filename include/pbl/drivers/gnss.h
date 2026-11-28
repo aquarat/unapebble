@@ -269,4 +269,17 @@ int pbl_gnss_get_stats(const struct pbl_gnss *gnss, struct pbl_gnss_stats *stats
  */
 void pbl_gnss_report_fix(const struct pbl_gnss *gnss, const struct pbl_gnss_fix *fix);
 
+/**
+ * @brief Replay the simulator's route over the receiver's epochs (CONFIG_GNSS_REPLAY).
+ *
+ * While on, each epoch is reported as a 3D fix one second further along the route, with the
+ * receiver's time. For tests indoors.
+ *
+ * @param on Whether to replay; turning it on starts the route again.
+ */
+void pbl_gnss_replay_set(bool on);
+
+/** @brief Whether the route is being replayed. */
+bool pbl_gnss_replay_get(void);
+
 /** @} */
