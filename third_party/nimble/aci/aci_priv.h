@@ -40,6 +40,7 @@
 #define ACI_OP_GAP_GET_SECURITY_LEVEL  0xfc90U
 #define ACI_OP_GAP_SET_EVENT_MASK      0xfc91U
 #define ACI_OP_GAP_TERMINATE           0xfc93U
+#define ACI_OP_GAP_CLEAR_SECURITY_DB   0xfc94U
 #define ACI_OP_GAP_ALLOW_REBOND        0xfc95U
 #define ACI_OP_GAP_RESOLVE_PRIV_ADDR   0xfca0U
 #define ACI_OP_GAP_GET_BONDED_DEVICES  0xfca3U
@@ -223,6 +224,10 @@ bool aci_gattc_rx_vs(uint16_t code, const uint8_t *p, size_t len);
 void aci_store_reconcile(void);
 /** A bond made: its record in the store. */
 void aci_store_bonded(const ble_addr_t *peer, bool authenticated);
+/** The chip's bonds, up to max: their number, or -1. */
+int aci_chip_bonds(ble_addr_t *out, int max);
+/** Whether a bond the chip listed is of a peer. */
+bool aci_chip_bond_match(const ble_addr_t *listed, const ble_addr_t *addr);
 
 // --- Services (svc.c) --------------------------------------------------------------------------
 

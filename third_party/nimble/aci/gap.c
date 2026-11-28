@@ -12,9 +12,11 @@
 
 #include <errno.h>
 
+#include <pbl/bluetooth/types.h>
 #include <pbl/drivers/rng.h>
 #include <pbl/logging/logging.h>
 #include <pbl/util/math.h>
+#include <pbl/util/size.h>
 
 #include <host/ble_hs_adv.h>
 #include <host/ble_sm.h>
@@ -161,41 +163,34 @@ static bool prv_is_rpa(const ble_addr_t *addr) {
   return addr->type == BLE_ADDR_RANDOM && (addr->val[5] & 0xc0U) == 0x40U;
 }
 
-// The chip's bonds: their number, each an address type and an address, or -1
-static int prv_bonds(uint8_t list[1U + 12U * 7U]) {
-  size_t len = 1U + 12U * 7U;
-
-  if (aci_cmd(ACI_OP_GAP_GET_BONDED_DEVICES, nullptr, 0U, list, &len) != 0 || len < 1U) {
-    return -1;
-  }
-
-  return (int)PBL_MIN((size_t)list[0], (len - 1U) / 7U);
-}
-
 // The identity address of a peer: its own, or the one its resolvable address resolves to. Whether
 // the chip has a bond with it.
 static bool prv_identity(const ble_addr_t *ota, ble_addr_t *id) {
-  uint8_t list[1U + 12U * 7U];
+  ble_addr_t bonds[12];
   uint8_t rsp[6];
   size_t len = sizeof(rsp);
+  bool resolved = false;
   int num;
 
   *id = *ota;
   if (prv_is_rpa(ota) && aci_cmd(ACI_OP_GAP_RESOLVE_PRIV_ADDR, ota->val, 6U, rsp, &len) == 0 &&
       len >= 6U) {
     memcpy(id->val, rsp, 6U);
-    // Its type is the bond's
-    id->type = BLE_ADDR_PUBLIC;
+    resolved = true;
   }
 
-  num = prv_bonds(list);
+  num = aci_chip_bonds(bonds, PBL_ARRAY_SIZE(bonds));
   for (int i = 0; i < num; i++) {
-    const uint8_t *e = &list[1U + (size_t)i * 7U];
-
-    if (memcmp(&e[1], id->val, 6U) == 0) {
-      id->type = e[0] == 0x00U ? BLE_ADDR_PUBLIC : BLE_ADDR_RANDOM;
+    // Its type is the bond's
+    if (resolved) {
+      id->type = bonds[i].type;
+    }
+    if (aci_chip_bond_match(&bonds[i], id)) {
       return true;
     }
+  }
+  if (resolved) {
+    id->type = BLE_ADDR_PUBLIC;
   }
 
   return false;
@@ -441,7 +436,7 @@ static void prv_enc_event(struct conn *c, int status) {
 
 static void prv_rx_enc_change(uint8_t status, uint16_t handle, bool enabled) {
   uint8_t par[2];
-  uint8_t rsp[2];
+  uint8_t rsp[2] = {};
   size_t len = sizeof(rsp);
   struct conn *c;
   bool bonded;
@@ -475,6 +470,8 @@ static void prv_rx_enc_change(uint8_t status, uint16_t handle, bool enabled) {
     c->desc.sec_state.authenticated = rsp[1] >= 3U;
     aci_unlock();
   }
+  PBL_LOG_DBG("Encrypted %04x: mode %u level %u, %s", handle, rsp[0], rsp[1],
+              bonded ? "bonded" : "not bonded");
 
   // A link encrypted without a bond is being paired: the bond comes after the encryption, and
   // NimBLE reports the encryption once the keys are stored
@@ -676,6 +673,15 @@ static void prv_rx_pairing_complete(const uint8_t *p, size_t n) {
 
   PBL_LOG_DBG("Pairing of %04x complete: status %u, reason %u", handle, status, reason);
 
+  // The chip reports a link encrypted again with a bond's keys as a pairing too; NimBLE does not.
+  // Failed, the bond is no use: the encryption failed.
+  if (!c->pairing) {
+    if (err != 0) {
+      prv_enc_event(c, err);
+    }
+    return;
+  }
+
   if (err == 0) {
     ble_addr_t id;
     // The peer's identity is known once its keys are
@@ -685,6 +691,8 @@ static void prv_rx_pairing_complete(const uint8_t *p, size_t n) {
     c->desc.peer_id_addr = id;
     c->desc.sec_state.bonded = bonded;
     aci_unlock();
+    PBL_LOG_DBG("Paired with " PBL_BT_ADDR_FMT " (type %u), %s", PBL_BT_ADDR_XPLODE_VAL(id.val),
+                id.type, bonded ? "bonded" : "no bond on the chip");
     if (bonded) {
       aci_store_bonded(&id, c->desc.sec_state.authenticated);
     }
