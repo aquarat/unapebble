@@ -456,7 +456,8 @@ and ST's answer is a DTM built with its `LL_ONLY` option (decision
   bits clear (decision 261127-194000-01).
 - **Config 0x80** reads `ce 45 ec e6 ce 01` on this watch, least
   significant octet first: its top two bits are clear, so it is no static
-  random address as it stands (decision 261127-193700-01).
+  random address as it stands (decision 261127-193700-01). That last byte
+  was cut by the SPI: it is `0xcd` (2.5.2).
 - The connection came at an interval of 36 (45 ms) from BlueZ, and the
   link was updated to 251-byte PDUs.
 
@@ -582,13 +583,16 @@ X-CUBE-BLE2's headers give them (read for the interface only); DTM 3.2.0
 takes every one used here with those layouts.
 
 - **The last byte of a read.** Over the STM32's SPI the last byte of every
-  transfer comes back with only its two low bits, at 1.25 MHz as at
-  625 kHz; the bit-banged reads of the tether experiment are right. Each
-  read now clocks one dummy byte more (decision 261128-092026-01). Before
-  that, config 0x80 read `ce 45 ec e6 ce 01`: it is `ce 45 ec e6 ce cd`,
-  the static random address `CD:CE:E6:EC:45:CE`. The disconnection reason
-  `0x03` of every link, and the Command Status opcode `0x0016` in 2.5.1,
-  were that byte cut.
+  transfer came back with only its two low bits, at 1.25 MHz as at
+  625 kHz; the bit-banged reads of the tether experiment were right. The
+  cause is an erratum of the SPI: with the CRC off and TSIZE set, a CRCSIZE
+  below 8 bits corrupts the last frame received, and the driver wrote it 0;
+  it now keeps the reset value (decisions 261128-092026-01,
+  261128-100132-01). Before that, config 0x80 read `ce 45 ec e6 ce 01`: it
+  is `ce 45 ec e6 ce cd`, the static random address `CD:CE:E6:EC:45:CE`
+  (decision 261128-100132-02). The disconnection reason `0x03` of every
+  link, and the Command Status opcode `0x0016` in 2.5.1, were that byte
+  cut.
 - **Start.** `aci_gatt_init`, `aci_gap_init` (peripheral, no privacy, a
   32-byte name: GAP service at `0x0005`, Device Name `0x0006`, Appearance
   `0x0008`; the GATT service at `0x0001`), then

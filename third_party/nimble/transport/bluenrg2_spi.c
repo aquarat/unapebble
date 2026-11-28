@@ -141,14 +141,9 @@ int bnrg_read(uint8_t *buf, uint32_t size) {
   if (ret != 0 || len == 0xffffU) {
     len = 0U;
   }
-  len = PBL_MIN(len, PBL_MIN(size, (uint32_t)sizeof(s_ff) - 1U));
-  // One byte more than there is, dropped: the last byte of a transfer comes back with only its two
-  // low bits
+  len = PBL_MIN(len, PBL_MIN(size, (uint32_t)sizeof(s_ff)));
   if (len > 0U) {
-    static uint8_t s_rx[READ_MAX];
-
-    ret = prv_xfer(s_ff, s_rx, len + 1U);
-    memcpy(buf, s_rx, len);
+    ret = prv_xfer(s_ff, buf, len);
   }
 
   // Raising the chip select with IRQ still high sends the chip down an error path
