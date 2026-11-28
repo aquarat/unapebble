@@ -1,6 +1,6 @@
 # Set the RTC from the GNSS time
 
-- Status: Proposed
+- Status: Superseded by 261128-103913-01-clock-from-gnss-outside-workouts.md
 - Date: 2026-11-27 19:45 UTC
 - Decided by: agent
 

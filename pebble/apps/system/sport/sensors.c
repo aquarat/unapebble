@@ -34,6 +34,9 @@ typedef struct SportSensors {
   SportGnssStatus gnss;
   uint8_t sats;
   uint32_t cursor;
+  //! UTC of the last epoch with a time, and whether it followed the one before by a second.
+  uint64_t last_utc_ms;
+  bool utc_ok;
   int32_t last_steps;
   int32_t step_window[CADENCE_WINDOW_S];
   uint8_t step_pos;
@@ -56,15 +59,41 @@ int32_t sport_pressure_to_altitude_cm(uint32_t pa) {
   return (int32_t)(4433080.0f * (1.0f - pow_r));
 }
 
+void sport_sensors_gnss_start(void) {
+#ifdef CONFIG_SERVICE_LOCATION
+  if ((s_sensors.sensors & SportSensor_Gnss) && s_sensors.gnss == SportGnssStatus_None &&
+      location_service_start() == 0) {
+    s_sensors.gnss = SportGnssStatus_Searching;
+    s_sensors.cursor = location_service_get_cursor();
+    s_sensors.last_utc_ms = 0;
+    s_sensors.utc_ok = false;
+  }
+#endif
+}
+
+void sport_sensors_gnss_stop(void) {
+#ifdef CONFIG_SERVICE_LOCATION
+  if (s_sensors.gnss != SportGnssStatus_None) {
+    location_service_stop();
+  }
+#endif
+  s_sensors.gnss = SportGnssStatus_None;
+  s_sensors.utc_ok = false;
+}
+
+bool sport_sensors_gnss_utc(uint32_t *utc_s) {
+  if (!s_sensors.utc_ok) {
+    return false;
+  }
+  *utc_s = (uint32_t)(s_sensors.last_utc_ms / 1000U);
+
+  return true;
+}
+
 void sport_sensors_init(uint32_t sensors) {
   s_sensors = (SportSensors){.sensors = sensors};
 
-#ifdef CONFIG_SERVICE_LOCATION
-  if ((sensors & SportSensor_Gnss) && location_service_start() == 0) {
-    s_sensors.gnss = SportGnssStatus_Searching;
-    s_sensors.cursor = location_service_get_cursor();
-  }
-#endif
+  sport_sensors_gnss_start();
 
   if (sensors & SportSensor_Baro) {
     uint32_t pa;
@@ -75,12 +104,7 @@ void sport_sensors_init(uint32_t sensors) {
 }
 
 void sport_sensors_deinit(void) {
-#ifdef CONFIG_SERVICE_LOCATION
-  if (s_sensors.gnss != SportGnssStatus_None) {
-    location_service_stop();
-  }
-#endif
-  s_sensors.gnss = SportGnssStatus_None;
+  sport_sensors_gnss_stop();
 }
 
 void sport_sensors_set_workout(bool active) {
@@ -126,6 +150,15 @@ static void prv_poll_gnss(SportSample *sample) {
     return;
   }
 
+  // A time is trusted once two epochs a second apart agree on it.
+  for (size_t i = 0; i < n; i++) {
+    const uint64_t utc_ms = fixes[i].utc_ms;
+    s_sensors.utc_ok = utc_ms != 0 && s_sensors.last_utc_ms != 0 &&
+                       utc_ms - s_sensors.last_utc_ms >= 900U &&
+                       utc_ms - s_sensors.last_utc_ms <= 1100U;
+    s_sensors.last_utc_ms = utc_ms;
+  }
+
   // The engine counts from the last position it took, so the latest epoch is enough.
   const struct pbl_gnss_fix *fix = &fixes[n - 1];
 
@@ -163,6 +196,7 @@ static void prv_poll_baro(SportSample *sample) {
       sample->hdop_x10 != 0 && sample->hdop_x10 <= BARO_CAL_MAX_HDOP_X10) {
     s_sensors.baro_offset_cm = sample->gnss_alt_cm - alt_cm;
     s_sensors.baro_calibrated = true;
+    sample->flags |= SportSampleFlag_BaroRecal;
   }
 
   sample->flags |= SportSampleFlag_BaroAlt;

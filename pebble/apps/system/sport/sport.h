@@ -8,5 +8,8 @@
 //! Run activity, on the watch's own sensors.
 const PebbleProcessMd *sport_run_get_app_info(void);
 
+//! Walk activity.
+const PebbleProcessMd *sport_walk_get_app_info(void);
+
 //! Bike activity.
 const PebbleProcessMd *sport_bike_get_app_info(void);

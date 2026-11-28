@@ -407,6 +407,26 @@ void test_sport_engine__barometric_ascent(void) {
   assert_near(elev, 40000, 60);
 }
 
+// The barometer's zero set from the GNSS altitude mid-activity is no climb.
+void test_sport_engine__barometer_calibration_is_no_climb(void) {
+  int32_t alt = 10000;
+  prv_start(&s_run_cfg);
+
+  prv_climb(30, &alt, 0, 0, true);
+  alt = 40800;
+  SportSample s = prv_fix(3000, 0);
+  s.flags |= SportSampleFlag_BaroAlt | SportSampleFlag_BaroRecal;
+  s.baro_alt_cm = alt;
+  sport_engine_tick(&s_engine, &s);
+  prv_climb(60, &alt, 0, 0, true);
+  cl_assert_equal_i(s_engine.total.ascent_cm, 0);
+  cl_assert_equal_i(s_engine.total.descent_cm, 0);
+
+  int32_t elev;
+  cl_assert(sport_engine_elevation_cm(&s_engine, &elev));
+  cl_assert_equal_i(elev, 40800);
+}
+
 void test_sport_engine__gnss_altitude_fallback_ignores_its_noise(void) {
   int32_t alt = 40000;
   prv_start(&s_run_cfg);

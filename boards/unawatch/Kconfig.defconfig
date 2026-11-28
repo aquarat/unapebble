@@ -62,3 +62,11 @@ endchoice
 choice NIMBLE_ID_ADDR_SOURCE
     default NIMBLE_ID_ADDR_BLUENRG2 if NIMBLE_HCI_BLUENRG2 || NIMBLE_ACI_BLUENRG2
 endchoice
+
+# GPS workouts: the Run, Walk and Bike apps on the receiver, through the location service,
+# recording to the filesystem on the eMMC. Not in the experiments firmware.
+config SERVICE_LOCATION
+    default y if !BOARD_UNAWATCH_LAB
+
+config APP_SPORT
+    default y if !BOARD_UNAWATCH_LAB

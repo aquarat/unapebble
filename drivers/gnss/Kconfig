@@ -49,6 +49,16 @@ config GNSS_SIM
       1 Hz, or the fixes set through its simulator API
       (pbl/drivers/gnss/sim.h).
 
+config GNSS_REPLAY
+    bool "Replay the simulator's route over a receiver"
+    default y if !RELEASE
+    depends on GNSS_SHELL && !GNSS_SIM
+    help
+      The gnss replay command: while on, every epoch of the real
+      receiver is reported as a 3D fix on the simulator's route, one
+      second along it, keeping the receiver's time, its power and its
+      timing. For testing recorders indoors; off at every start.
+
 config GNSS_SIM_TIME_TO_FIX
     int "Simulated time to first fix (s)"
     default 8

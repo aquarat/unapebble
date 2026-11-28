@@ -27,10 +27,11 @@ typedef enum SportSensor {
   SportSensor_External = 1 << 4,
 } SportSensor;
 
-//! Sport recorded in the activity files; never renumber.
+//! Sport recorded in the journal, a SportJournalSport; never renumber.
 typedef enum SportType {
   SportType_Run = 1,
   SportType_Bike = 2,
+  SportType_Walk = 3,
 } SportType;
 
 typedef struct SportProfile {
